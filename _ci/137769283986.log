@@ -1,0 +1,1268 @@
+﻿2026-11-23T14:40:56.2315141Z Current runner version: '2.338.2'
+2026-11-23T14:40:56.2343093Z ##[group]Runner Image Provisioner
+2026-11-23T14:40:56.2344066Z Hosted Compute Agent
+2026-11-23T14:40:56.2344551Z Version: 20261111.635
+2026-11-23T14:40:56.2345140Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-23T14:40:56.2345794Z Build Date: 2026-11-11T01:49:01Z
+2026-11-23T14:40:56.2346482Z Worker ID: {6ce111d5-df2b-4161-975b-5a22a9a01234}
+2026-11-23T14:40:56.2347184Z Region: us-west-2
+2026-11-23T14:40:56.2347693Z Cloud: AWS
+2026-11-23T14:40:56.2348189Z ##[endgroup]
+2026-11-23T14:40:56.2349956Z ##[group]Operating System
+2026-11-23T14:40:56.2350581Z Ubuntu
+2026-11-23T14:40:56.2351345Z 26.04.1
+2026-11-23T14:40:56.2351822Z LTS
+2026-11-23T14:40:56.2352254Z ##[endgroup]
+2026-11-23T14:40:56.2371795Z ##[group]Runner Image
+2026-11-23T14:40:56.2372699Z Image: ubuntu-26.04
+2026-11-23T14:40:56.2373283Z Version: 20261116.88.1
+2026-11-23T14:40:56.2374531Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261116.88/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-23T14:40:56.2375948Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261116.88
+2026-11-23T14:40:56.2376857Z ##[endgroup]
+2026-11-23T14:40:56.2377863Z ##[group]GITHUB_TOKEN Permissions
+2026-11-23T14:40:56.2380627Z Contents: write
+2026-11-23T14:40:56.2381243Z Metadata: read
+2026-11-23T14:40:56.2381758Z ##[endgroup]
+2026-11-23T14:40:56.2384339Z Secret source: Actions
+2026-11-23T14:40:56.2385242Z Cache mode: write
+2026-11-23T14:40:56.2386021Z Prepare workflow directory
+2026-11-23T14:40:56.2668559Z Prepare all required actions
+2026-11-23T14:40:56.2709257Z Getting action download info
+2026-11-23T14:40:56.7089149Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-23T14:40:58.7586723Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-11-23T14:40:59.1519582Z Download action repository 'gradle/actions@v4' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
+2026-11-23T14:41:07.7366703Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-23T14:41:07.8621226Z Download action repository 'softprops/action-gh-release@v2' (SHA:3bb12739c298aeb8a4eeaf626c5b8d85266b0e65)
+2026-11-23T14:41:08.2634988Z Complete job name: Build APK
+2026-11-23T14:41:08.3209144Z ##[group]Run actions/checkout@v4
+2026-11-23T14:41:08.3209761Z with:
+2026-11-23T14:41:08.3210033Z   repository: 25283531/WLED
+2026-11-23T14:41:08.3212891Z   token: ***
+2026-11-23T14:41:08.3213223Z   ssh-strict: true
+2026-11-23T14:41:08.3213500Z   ssh-user: git
+2026-11-23T14:41:08.3213781Z   persist-credentials: true
+2026-11-23T14:41:08.3214106Z   clean: true
+2026-11-23T14:41:08.3214387Z   sparse-checkout-cone-mode: true
+2026-11-23T14:41:08.3214743Z   fetch-depth: 1
+2026-11-23T14:41:08.3215040Z   fetch-tags: false
+2026-11-23T14:41:08.3215445Z   show-progress: true
+2026-11-23T14:41:08.3215717Z   lfs: false
+2026-11-23T14:41:08.3215951Z   submodules: false
+2026-11-23T14:41:08.3216286Z   set-safe-directory: true
+2026-11-23T14:41:08.3216583Z   allow-unsafe-pr-checkout: false
+2026-11-23T14:41:08.3217271Z ##[endgroup]
+2026-11-23T14:41:12.6318663Z Syncing repository: 25283531/WLED
+2026-11-23T14:41:12.6320698Z ##[group]Getting Git version info
+2026-11-23T14:41:12.6321352Z Working directory is '/home/runner/work/WLED/WLED'
+2026-11-23T14:41:12.6322165Z [command]/usr/bin/git version
+2026-11-23T14:41:12.6326485Z git version 2.56.1
+2026-11-23T14:41:12.6339646Z ##[endgroup]
+2026-11-23T14:41:12.6351199Z Temporarily overriding HOME='/home/runner/work/_temp/384d3513-ceed-49bb-8988-aca61e003e10' before making global git config changes
+2026-11-23T14:41:12.6355011Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-23T14:41:12.6355858Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WLED/WLED
+2026-11-23T14:41:12.6800912Z Deleting the contents of '/home/runner/work/WLED/WLED'
+2026-11-23T14:41:12.6804372Z ##[group]Initializing the repository
+2026-11-23T14:41:12.6808287Z [command]/usr/bin/git init /home/runner/work/WLED/WLED
+2026-11-23T14:41:12.7906015Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-23T14:41:12.7906847Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-23T14:41:12.7907367Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-23T14:41:12.7907716Z hint: call:
+2026-11-23T14:41:12.7907962Z hint:
+2026-11-23T14:41:12.7908333Z hint: 	git config --global init.defaultBranch <name>
+2026-11-23T14:41:12.7908678Z hint:
+2026-11-23T14:41:12.7908967Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-23T14:41:12.7909381Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-23T14:41:12.7909738Z hint:
+2026-11-23T14:41:12.7909959Z hint: 	git branch -m <name>
+2026-11-23T14:41:12.7910219Z hint:
+2026-11-23T14:41:12.7910535Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-23T14:41:12.7929606Z Initialized empty Git repository in /home/runner/work/WLED/WLED/.git/
+2026-11-23T14:41:12.7939504Z [command]/usr/bin/git remote add origin https://github.com/25283531/WLED
+2026-11-23T14:41:12.8007799Z ##[endgroup]
+2026-11-23T14:41:12.8010999Z ##[group]Disabling automatic garbage collection
+2026-11-23T14:41:12.8011538Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-23T14:41:12.8041915Z ##[endgroup]
+2026-11-23T14:41:12.8042534Z ##[group]Setting up auth
+2026-11-23T14:41:12.8043067Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-23T14:41:12.8065042Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-23T14:41:13.3297933Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-23T14:41:13.3321038Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-23T14:41:13.3504750Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-23T14:41:13.3526086Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-23T14:41:13.3706160Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-23T14:41:13.3731196Z ##[endgroup]
+2026-11-23T14:41:13.3731838Z ##[group]Fetching the repository
+2026-11-23T14:41:13.3737759Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7f2400d02fb0f88bda9c76d647c115b37ec22901:refs/remotes/origin/main
+2026-11-23T14:41:14.6474019Z From https://github.com/25283531/WLED
+2026-11-23T14:41:14.6474714Z  * [new ref]         7f2400d02fb0f88bda9c76d647c115b37ec22901 -> origin/main
+2026-11-23T14:41:14.6477738Z ##[endgroup]
+2026-11-23T14:41:14.6478247Z ##[group]Determining the checkout info
+2026-11-23T14:41:14.6479913Z ##[endgroup]
+2026-11-23T14:41:14.6485534Z [command]/usr/bin/git sparse-checkout disable
+2026-11-23T14:41:14.6543879Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-23T14:41:14.6565028Z ##[group]Checking out the ref
+2026-11-23T14:41:14.6567384Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-23T14:41:14.7897168Z Switched to a new branch 'main'
+2026-11-23T14:41:14.7906482Z branch 'main' set up to track 'origin/main'.
+2026-11-23T14:41:14.7918092Z ##[endgroup]
+2026-11-23T14:41:14.7962722Z [command]/usr/bin/git log -1 --format=%H
+2026-11-23T14:41:14.7981735Z 7f2400d02fb0f88bda9c76d647c115b37ec22901
+2026-11-23T14:41:14.8221369Z ##[group]Run actions/setup-java@v4
+2026-11-23T14:41:14.8221656Z with:
+2026-11-23T14:41:14.8222005Z   distribution: temurin
+2026-11-23T14:41:14.8222243Z   java-version: 17
+2026-11-23T14:41:14.8222712Z   java-package: jdk
+2026-11-23T14:41:14.8222937Z   check-latest: false
+2026-11-23T14:41:14.8223153Z   server-id: github
+2026-11-23T14:41:14.8223430Z   server-username: GITHUB_ACTOR
+2026-11-23T14:41:14.8223726Z   server-password: GITHUB_TOKEN
+2026-11-23T14:41:14.8224031Z   overwrite-settings: true
+2026-11-23T14:41:14.8224268Z   job-status: success
+2026-11-23T14:41:14.8226241Z   token: ***
+2026-11-23T14:41:14.8226479Z ##[endgroup]
+2026-11-23T14:41:14.9928966Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-11-23T14:41:14.9937546Z ##[group]Installed distributions
+2026-11-23T14:41:15.0375304Z Resolved Java 17.0.21+9 from tool-cache
+2026-11-23T14:41:15.0375956Z Setting Java 17.0.21+9 as the default
+2026-11-23T14:41:15.0382282Z (node:2386) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-23T14:41:15.0383386Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-23T14:41:15.0384775Z Creating toolchains.xml for JDK version 17 from temurin
+2026-11-23T14:41:15.0441949Z Writing to /home/runner/.m2/toolchains.xml
+2026-11-23T14:41:15.0442710Z 
+2026-11-23T14:41:15.0442918Z Java configuration:
+2026-11-23T14:41:15.0443335Z   Distribution: temurin
+2026-11-23T14:41:15.0443608Z   Version: 17.0.21+9
+2026-11-23T14:41:15.0443930Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:15.0444198Z 
+2026-11-23T14:41:15.0444527Z ##[endgroup]
+2026-11-23T14:41:15.0460084Z Creating settings.xml with server-id: github
+2026-11-23T14:41:15.0475032Z Writing to /home/runner/.m2/settings.xml
+2026-11-23T14:41:15.0753016Z ##[group]Run gradle/actions/setup-gradle@v4
+2026-11-23T14:41:15.0754013Z with:
+2026-11-23T14:41:15.0754804Z   cache-disabled: false
+2026-11-23T14:41:15.0755545Z   cache-read-only: false
+2026-11-23T14:41:15.0756315Z   cache-write-only: false
+2026-11-23T14:41:15.0757118Z   cache-overwrite-existing: false
+2026-11-23T14:41:15.0757441Z   cache-cleanup: on-success
+2026-11-23T14:41:15.0758056Z   gradle-home-cache-includes: caches
+notifications
+
+2026-11-23T14:41:15.0758714Z   add-job-summary: always
+2026-11-23T14:41:15.0759748Z   add-job-summary-as-pr-comment: never
+2026-11-23T14:41:15.0760375Z   dependency-graph: disabled
+2026-11-23T14:41:15.0760919Z   dependency-graph-report-dir: dependency-graph-reports
+2026-11-23T14:41:15.0761542Z   dependency-graph-continue-on-failure: true
+2026-11-23T14:41:15.0762070Z   build-scan-publish: false
+2026-11-23T14:41:15.0762830Z   validate-wrappers: true
+2026-11-23T14:41:15.0763436Z   allow-snapshot-wrappers: false
+2026-11-23T14:41:15.0764275Z   gradle-home-cache-strict-match: false
+2026-11-23T14:41:15.0765105Z   workflow-job-context: null
+2026-11-23T14:41:15.0767852Z   github-token: ***
+2026-11-23T14:41:15.0768230Z env:
+2026-11-23T14:41:15.0768597Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:15.0769128Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:15.0769587Z ##[endgroup]
+2026-11-23T14:41:18.6470535Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-11-23T14:41:18.6471172Z Preparing cache for cleanup.
+2026-11-23T14:41:18.6479829Z ##[group]Restore Gradle state from cache
+2026-11-23T14:41:18.9732775Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build[4f01853a2d9ff6687d48e9643e834cb6]-fb1a19215cc8629e5e6736cafee0a63d7b322fcc
+2026-11-23T14:41:20.3144131Z Received 0 of 66031048 (0.0%), 0.0 MBs/sec
+2026-11-23T14:41:21.3113181Z Received 66031048 of 66031048 (100.0%), 31.5 MBs/sec
+2026-11-23T14:41:21.3115440Z Cache Size: ~63 MB (66031048 B)
+2026-11-23T14:41:21.3181386Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c83f60e7-fce5-40eb-aab4-08b9e5966114/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:21.4338629Z Cache restored successfully
+2026-11-23T14:41:21.4367675Z Restored cache entry with key gradle-home-v1|Linux-X64|build[4f01853a2d9ff6687d48e9643e834cb6]-7f2400d02fb0f88bda9c76d647c115b37ec22901 to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 2787ms
+2026-11-23T14:41:21.6799451Z Cache hit for: gradle-dependencies-v1-aa6efde0b3a8d28aa3badfa8ad5d0488
+2026-11-23T14:41:21.7026115Z Cache hit for: gradle-groovy-dsl-v1-02a625488fa804aa81dcadef352bacd9
+2026-11-23T14:41:21.7195869Z Cache hit for: gradle-wrapper-zips-v1-0745be66ec2c2a083a82d587fa4f7d57
+2026-11-23T14:41:21.7241338Z Cache hit for: gradle-instrumented-jars-v1-9e9a0b6b056b36cc95b1a82ad2114a08
+2026-11-23T14:41:21.7565237Z Cache hit for: gradle-java-toolchains-v1-57802292e8354a989f6e3bf59419e75e
+2026-11-23T14:41:21.7584623Z Cache hit for: gradle-kotlin-dsl-v1-fdcc9b06edba6a6eb05ff4425a840c7f
+2026-11-23T14:41:21.7711332Z Cache hit for: gradle-transforms-v1-a3131214d9f13d3dfd3856195ae9eba3
+2026-11-23T14:41:22.5252887Z Received 64734 of 64734 (100.0%), 0.1 MBs/sec
+2026-11-23T14:41:22.5253845Z Cache Size: ~0 MB (64734 B)
+2026-11-23T14:41:22.5268385Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ee50b99b-fad1-49d3-9da4-4ee7d40459e2/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:22.5335026Z Cache restored successfully
+2026-11-23T14:41:22.5335916Z Restored cache entry with key gradle-instrumented-jars-v1-9e9a0b6b056b36cc95b1a82ad2114a08 to /home/runner/.gradle/caches/jars-*/*/ in 1095ms
+2026-11-23T14:41:22.5996265Z Received 111272 of 111272 (100.0%), 0.2 MBs/sec
+2026-11-23T14:41:22.5997067Z Cache Size: ~0 MB (111272 B)
+2026-11-23T14:41:22.6011218Z [command]/usr/bin/tar -xf /home/runner/work/_temp/cc110d5b-0ea3-4236-946c-1e519981ec56/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:22.6125685Z Cache restored successfully
+2026-11-23T14:41:22.6127094Z Restored cache entry with key gradle-groovy-dsl-v1-02a625488fa804aa81dcadef352bacd9 to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 1174ms
+2026-11-23T14:41:22.6714254Z Received 175830 of 175830 (100.0%), 0.3 MBs/sec
+2026-11-23T14:41:22.6715188Z Cache Size: ~0 MB (175830 B)
+2026-11-23T14:41:22.6733817Z [command]/usr/bin/tar -xf /home/runner/work/_temp/142be050-3948-474f-9af9-f71d0dd9ced1/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:22.6842156Z Cache restored successfully
+2026-11-23T14:41:22.6843841Z Restored cache entry with key gradle-kotlin-dsl-v1-fdcc9b06edba6a6eb05ff4425a840c7f to /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 1246ms
+2026-11-23T14:41:23.0162905Z Received 0 of 481360682 (0.0%), 0.0 MBs/sec
+2026-11-23T14:41:23.0545895Z Received 0 of 150880240 (0.0%), 0.0 MBs/sec
+2026-11-23T14:41:23.0765960Z Received 0 of 516846282 (0.0%), 0.0 MBs/sec
+2026-11-23T14:41:23.0942647Z Received 0 of 197164081 (0.0%), 0.0 MBs/sec
+2026-11-23T14:41:24.0204915Z Received 83886080 of 481360682 (17.4%), 39.9 MBs/sec
+2026-11-23T14:41:24.0553645Z Received 83886080 of 150880240 (55.6%), 40.0 MBs/sec
+2026-11-23T14:41:24.0774680Z Received 79691776 of 516846282 (15.4%), 38.0 MBs/sec
+2026-11-23T14:41:24.1023859Z Received 88080384 of 197164081 (44.7%), 42.0 MBs/sec
+2026-11-23T14:41:24.8980392Z Received 150880240 of 150880240 (100.0%), 50.6 MBs/sec
+2026-11-23T14:41:24.8982257Z Cache Size: ~144 MB (150880240 B)
+2026-11-23T14:41:24.9248877Z [command]/usr/bin/tar -xf /home/runner/work/_temp/6c9a85b6-6df6-4cd0-a496-f286bdb68464/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:25.0228846Z Received 201326592 of 481360682 (41.8%), 63.9 MBs/sec
+2026-11-23T14:41:25.0952732Z Received 171966464 of 516846282 (33.3%), 54.4 MBs/sec
+2026-11-23T14:41:25.1086769Z Received 184581169 of 197164081 (93.6%), 58.4 MBs/sec
+2026-11-23T14:41:25.1155079Z Cache restored successfully
+2026-11-23T14:41:25.1207096Z Restored cache entry with key gradle-wrapper-zips-v1-0745be66ec2c2a083a82d587fa4f7d57 to /home/runner/.gradle/wrapper/dists/gradle-9.8.2-bin/8wepis63pzuhrlfaiy04bagwu in 3683ms
+2026-11-23T14:41:25.2843300Z Received 197164081 of 197164081 (100.0%), 58.9 MBs/sec
+2026-11-23T14:41:25.2844789Z Cache Size: ~188 MB (197164081 B)
+2026-11-23T14:41:25.2964640Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e09f07fb-e367-476d-be72-6ec7bede7564/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:26.0235211Z Received 306184192 of 481360682 (63.6%), 72.9 MBs/sec
+2026-11-23T14:41:26.0967901Z Received 268435456 of 516846282 (51.9%), 63.7 MBs/sec
+2026-11-23T14:41:26.7792038Z Cache restored successfully
+2026-11-23T14:41:26.8239738Z Restored cache entry with key gradle-transforms-v1-a3131214d9f13d3dfd3856195ae9eba3 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 5385ms
+2026-11-23T14:41:27.0230776Z Received 406847488 of 481360682 (84.5%), 77.5 MBs/sec
+2026-11-23T14:41:27.0995365Z Received 402653184 of 516846282 (77.9%), 76.5 MBs/sec
+2026-11-23T14:41:27.6279856Z Received 481360682 of 481360682 (100.0%), 81.8 MBs/sec
+2026-11-23T14:41:27.6280486Z Cache Size: ~459 MB (481360682 B)
+2026-11-23T14:41:27.6336683Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ee418a94-112f-453b-a533-c791d03464e4/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:27.9994750Z Cache restored successfully
+2026-11-23T14:41:28.0233947Z Restored cache entry with key gradle-dependencies-v1-aa6efde0b3a8d28aa3badfa8ad5d0488 to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 6585ms
+2026-11-23T14:41:28.0980871Z Received 494927872 of 516846282 (95.8%), 78.4 MBs/sec
+2026-11-23T14:41:28.3404807Z Received 516846282 of 516846282 (100.0%), 78.7 MBs/sec
+2026-11-23T14:41:28.3405655Z Cache Size: ~493 MB (516846282 B)
+2026-11-23T14:41:28.3463565Z [command]/usr/bin/tar -xf /home/runner/work/_temp/0dc11e09-d13c-4606-8652-a7598a48ace4/cache.tzst -P -C /home/runner/work/WLED/WLED --use-compress-program unzstd
+2026-11-23T14:41:29.0836492Z Cache restored successfully
+2026-11-23T14:41:29.1005835Z Restored cache entry with key gradle-java-toolchains-v1-57802292e8354a989f6e3bf59419e75e to /home/runner/.gradle/jdks/jetbrains_s_r_o_-21-amd64-linux.2 in 7663ms
+2026-11-23T14:41:29.1070869Z ##[endgroup]
+2026-11-23T14:41:29.1258311Z ##[group]All Gradle Wrapper jars are valid
+2026-11-23T14:41:29.1259537Z ✓ Found known Gradle Wrapper JAR files:
+2026-11-23T14:41:29.1260153Z   3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98 app/gradle/wrapper/gradle-wrapper.jar
+2026-11-23T14:41:29.1260969Z ##[endgroup]
+2026-11-23T14:41:29.1620008Z ##[group]Run chmod +x gradlew
+2026-11-23T14:41:29.1620734Z [36;1mchmod +x gradlew[0m
+2026-11-23T14:41:29.1643785Z shell: /usr/bin/bash -e {0}
+2026-11-23T14:41:29.1644123Z env:
+2026-11-23T14:41:29.1644585Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.1645074Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.1645564Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-23T14:41:29.1645941Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-23T14:41:29.1646336Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-23T14:41:29.1646677Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-23T14:41:29.1647168Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-23T14:41:29.1647678Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-23T14:41:29.1648039Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-23T14:41:29.1648371Z ##[endgroup]
+2026-11-23T14:41:29.1950640Z ##[group]Run if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+2026-11-23T14:41:29.1951272Z [36;1mif [ -n "$ANDROID_KEYSTORE_BASE64" ]; then[0m
+2026-11-23T14:41:29.1951933Z [36;1m  echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"[0m
+2026-11-23T14:41:29.1952892Z [36;1m  echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"[0m
+2026-11-23T14:41:29.1953525Z [36;1mfi[0m
+2026-11-23T14:41:29.1977114Z shell: /usr/bin/bash -e {0}
+2026-11-23T14:41:29.1977581Z env:
+2026-11-23T14:41:29.1977973Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.1978545Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.1979135Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-23T14:41:29.1979505Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-23T14:41:29.1979863Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-23T14:41:29.1980347Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-23T14:41:29.1980841Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-23T14:41:29.1981360Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-23T14:41:29.1981743Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-23T14:41:29.1982114Z   ANDROID_KEYSTORE_BASE64: 
+2026-11-23T14:41:29.1982631Z ##[endgroup]
+2026-11-23T14:41:29.2326939Z ##[group]Run ./gradlew :app:testDebugUnitTest :shared:testAndroidHostTest --continue
+2026-11-23T14:41:29.2327852Z [36;1m./gradlew :app:testDebugUnitTest :shared:testAndroidHostTest --continue[0m
+2026-11-23T14:41:29.2351585Z shell: /usr/bin/bash -e {0}
+2026-11-23T14:41:29.2352643Z env:
+2026-11-23T14:41:29.2353126Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.2353702Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:41:29.2354190Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-23T14:41:29.2354599Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-23T14:41:29.2355013Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-23T14:41:29.2355403Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-23T14:41:29.2355949Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-23T14:41:29.2356560Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-23T14:41:29.2357146Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-23T14:41:29.2357559Z ##[endgroup]
+2026-11-23T14:41:30.9513574Z Starting a Gradle Daemon (subsequent builds will be faster)
+2026-11-23T14:41:38.2524237Z Parallel Configuration Cache is an incubating feature.
+2026-11-23T14:41:39.1535047Z Calculating task graph as no cached configuration is available for tasks: :app:testDebugUnitTest :shared:testAndroidHostTest
+2026-11-23T14:41:46.3513194Z 
+2026-11-23T14:41:46.3543447Z > Configure project :app
+2026-11-23T14:41:46.3544352Z WARNING: The option setting 'android.experimental.enableScreenshotTest=true' is experimental.
+2026-11-23T14:41:46.3547496Z The current default is 'false'.
+2026-11-23T14:41:46.3548386Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:41:46.3549233Z WARNING: The option setting 'android.experimental.testSuiteSupport=true' is experimental.
+2026-11-23T14:41:46.3549879Z The current default is 'false'.
+2026-11-23T14:41:46.3550553Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:41:49.9513323Z w: file:///home/runner/work/WLED/WLED/app/app/build.gradle.kts:36:41: 'fun srcDir(srcDir: Any): Any' is deprecated. Use `directories` mutable set instead.
+2026-11-23T14:41:50.0510703Z WARNING: *Important* Test suite support is experimental and subject to change
+2026-11-23T14:41:50.0511458Z 
+2026-11-23T14:41:50.0513008Z Add android.sync.suppressAgpWarnings=TEST_SUITE_SUPPORT_EXPERIMENTAL to the gradle.properties file to suppress this warning.
+2026-11-23T14:41:53.3534514Z Configuration 'kotlinCompilerPluginClasspathAndroidMain' was resolved during configuration time.
+2026-11-23T14:41:53.3563216Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.3564044Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.3564614Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.3573079Z Configuration 'kotlinBuildToolsApiClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.3574223Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.3574728Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.3575144Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.3575609Z Configuration 'androidCompileClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.3576055Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.3576475Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.3576883Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.3577338Z Configuration 'kspAndroidMainProcessorClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.3577823Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.3578215Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.3578605Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.5521694Z Configuration 'androidApis' was resolved during configuration time.
+2026-11-23T14:41:53.5530395Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.5537634Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.5538385Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.5539319Z Configuration 'androidHostTestRuntimeClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.5540192Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.5544527Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.5566172Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.6511931Z Configuration 'kotlinCompilerPluginClasspathAndroidHostTest' was resolved during configuration time.
+2026-11-23T14:41:53.6513442Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.6513968Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.6517876Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.6518424Z Configuration 'androidHostTestCompileClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.6518923Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.6519332Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.6519769Z Run with --info for a stacktrace.
+2026-11-23T14:41:53.6520228Z Configuration 'kspAndroidHostTestProcessorClasspath' was resolved during configuration time.
+2026-11-23T14:41:53.6520750Z This is a build performance and scalability issue.
+2026-11-23T14:41:53.6521126Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:41:53.6521513Z Run with --info for a stacktrace.
+2026-11-23T14:41:54.7534087Z 
+2026-11-23T14:41:54.7561979Z > Task :app:protobufDummy UP-TO-DATE
+2026-11-23T14:41:54.7563140Z > Task :app:preBuild UP-TO-DATE
+2026-11-23T14:41:54.7623760Z > Task :app:preDebugBuild UP-TO-DATE
+2026-11-23T14:41:54.8533752Z > Task :shared:kmpPartiallyResolvedDependenciesChecker
+2026-11-23T14:41:54.8534734Z > Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+2026-11-23T14:41:54.8563870Z > Task :shared:androidPreBuild UP-TO-DATE
+2026-11-23T14:41:54.8594071Z > Task :shared:preAndroidMainBuild UP-TO-DATE
+2026-11-23T14:41:54.8653370Z > Task :app:extractDebugProto
+2026-11-23T14:41:54.8664220Z > Task :app:extractProto
+2026-11-23T14:41:54.8693330Z > Task :shared:generateAndroidMainEmptyResourceFiles
+2026-11-23T14:41:54.8763179Z > Task :app:generateDebugBuildConfig
+2026-11-23T14:41:54.9524349Z > Task :app:javaPreCompileDebug FROM-CACHE
+2026-11-23T14:41:54.9573732Z > Task :app:generateDebugResources
+2026-11-23T14:41:54.9603481Z > Task :shared:writeAndroidMainAarMetadata
+2026-11-23T14:41:55.1514070Z > Task :app:packageDebugResources
+2026-11-23T14:41:55.1517134Z > Task :app:mapDebugSourceSetPaths
+2026-11-23T14:41:57.8555147Z > Task :app:checkDebugAarMetadata
+2026-11-23T14:41:57.8556242Z > Task :app:processDebugNavigationResources
+2026-11-23T14:41:57.8574871Z > Task :app:createDebugCompatibleScreenManifests
+2026-11-23T14:41:57.8589310Z > Task :app:compileDebugNavigationResources FROM-CACHE
+2026-11-23T14:41:57.8590054Z > Task :app:extractDeepLinksDebug FROM-CACHE
+2026-11-23T14:41:57.8591343Z > Task :shared:processAndroidMainManifest FROM-CACHE
+2026-11-23T14:41:58.2516556Z > Task :shared:kspAndroidMain FROM-CACHE
+2026-11-23T14:41:58.5574164Z > Task :app:parseDebugLocalResources
+2026-11-23T14:41:58.5575556Z > Task :shared:compileAndroidMain FROM-CACHE
+2026-11-23T14:41:58.6534456Z > Task :app:generateDebugRFile
+2026-11-23T14:41:58.6583967Z > Task :shared:bundleAndroidMainClassesToCompileJar
+2026-11-23T14:41:58.6643757Z > Task :shared:bundleAndroidMainClassesToRuntimeJar
+2026-11-23T14:41:58.7527591Z > Task :shared:compressAndroidMainJavaRes FROM-CACHE
+2026-11-23T14:41:58.7528391Z > Task :shared:createFullJarAndroidMain
+2026-11-23T14:41:58.7529093Z > Task :shared:kspAndroidHostTest FROM-CACHE
+2026-11-23T14:41:58.8514022Z > Task :shared:copyRoomSchemas
+2026-11-23T14:41:58.8603935Z > Task :app:extractTestProto
+2026-11-23T14:41:58.8625747Z > Task :app:preDebugUnitTestBuild UP-TO-DATE
+2026-11-23T14:41:58.8654301Z > Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+2026-11-23T14:41:58.8738423Z > Task :app:processDebugMainManifest
+2026-11-23T14:41:58.9550578Z > Task :shared:androidJar
+2026-11-23T14:41:59.0564190Z > Task :app:processDebugManifest
+2026-11-23T14:41:59.0594104Z > Task :shared:compileAndroidHostTest FROM-CACHE
+2026-11-23T14:41:59.0623652Z > Task :shared:preAndroidHostTestBuild UP-TO-DATE
+2026-11-23T14:41:59.0646984Z > Task :shared:compressAndroidHostTestJavaRes NO-SOURCE
+2026-11-23T14:41:59.0673465Z > Task :shared:extractAndroidHostTestJavaRes
+2026-11-23T14:41:59.0703252Z > Task :app:processDebugManifestForPackage
+2026-11-23T14:41:59.1535229Z > Task :shared:testAndroidHostTest FROM-CACHE
+2026-11-23T14:41:59.5515627Z > Task :app:extractIncludeDebugProto
+2026-11-23T14:41:59.5543638Z > Task :app:generateDebugProto FROM-CACHE
+2026-11-23T14:42:01.3549728Z > Task :app:mergeDebugResources
+2026-11-23T14:42:02.5518164Z > Task :app:processDebugResources
+2026-11-23T14:42:22.2518547Z 
+2026-11-23T14:42:22.2520339Z > Task :app:compileDebugKotlin
+2026-11-23T14:42:22.2543230Z w: file:///home/runner/work/WLED/WLED/app/app/src/main/java/ca/cgagnier/wlednativeandroid/ui/control/ControlScreen.kt:393:96 Unnecessary safe call on a non-null receiver of type 'Nightlight'.
+2026-11-23T14:42:22.2545323Z w: file:///home/runner/work/WLED/WLED/app/app/src/main/java/ca/cgagnier/wlednativeandroid/ui/homeScreen/DeviceListDetail.kt:54:67 'fun currentWindowAdaptiveInfo(supportLargeAndXLargeWidth: Boolean = ...): WindowAdaptiveInfo' is deprecated. Please use V2 version of this function to support L and XL width size classes.
+2026-11-23T14:42:22.9528570Z 
+2026-11-23T14:42:22.9531885Z > Task :app:compressDebugJavaRes FROM-CACHE
+2026-11-23T14:42:24.4514287Z > Task :app:compileDebugJavaWithJavac
+2026-11-23T14:42:24.4534090Z > Task :app:bundleDebugClassesToCompileJar
+2026-11-23T14:42:24.4553941Z > Task :app:bundleDebugClassesToRuntimeJar
+2026-11-23T14:42:25.1534387Z > Task :app:extractIncludeDebugUnitTestProto
+2026-11-23T14:42:25.1547025Z > Task :app:generateDebugUnitTestProto NO-SOURCE
+2026-11-23T14:42:30.0519923Z > Task :app:compileDebugUnitTestKotlin
+2026-11-23T14:42:30.1520149Z > Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+2026-11-23T14:42:30.1543950Z > Task :app:compressDebugUnitTestJavaRes FROM-CACHE
+2026-11-23T14:42:30.1544814Z > Task :app:extractDebugUnitTestJavaRes
+2026-11-23T14:42:32.0585009Z OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+2026-11-23T14:42:32.0604006Z OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+2026-11-23T14:42:34.1533352Z 
+2026-11-23T14:42:34.1544036Z > Task :app:testDebugUnitTest
+2026-11-23T14:42:34.1579131Z 
+2026-11-23T14:42:34.2555628Z ChangelogProviderTest > getChangelog skips asset when opening file throws IOException() PASSED
+2026-11-23T14:42:34.2585078Z 
+2026-11-23T14:42:34.2588103Z ChangelogProviderTest > getChangelog returns empty list when listing assets throws IOException() PASSED
+2026-11-23T14:42:34.2588870Z 
+2026-11-23T14:42:34.2589999Z ChangelogProviderTest > getChangelog reads localized asset matching active language() PASSED
+2026-11-23T14:42:34.2590628Z 
+2026-11-23T14:42:34.2591124Z ChangelogProviderTest > getChangelog lists and reads matching assets from AssetManager() PASSED
+2026-11-23T14:42:34.4509210Z 
+2026-11-23T14:42:34.4511009Z GithubApiSerializationTest > test Release deserialization with real WLED 16_0_1 data() PASSED
+2026-11-23T14:42:34.4511757Z 
+2026-11-23T14:42:34.4512560Z GithubApiSerializationTest > test Release deserialization without optional reactions or mentions() PASSED
+2026-11-23T14:42:34.4514798Z 
+2026-11-23T14:42:34.4515429Z JsonPostTest > test JsonPost defaults() PASSED
+2026-11-23T14:42:34.4515847Z 
+2026-11-23T14:42:34.4516199Z JsonPostTest > test JsonPost serialization with all values set() PASSED
+2026-11-23T14:42:34.4516784Z 
+2026-11-23T14:42:34.4517081Z JsonPostTest > test JsonPost deserialization() PASSED
+2026-11-23T14:42:34.4519716Z 
+2026-11-23T14:42:34.4520855Z JsonPostTest > test JsonPost custom values() PASSED
+2026-11-23T14:42:34.4526746Z 
+2026-11-23T14:42:34.4527582Z JsonPostTest > test JsonPost serialization omits null values() PASSED
+2026-11-23T14:42:34.4528080Z 
+2026-11-23T14:42:34.4528673Z VersionWithAssetsRepositoryTest > semVerComparator_breaksTieUsingPublishedDateWhenSemverIsEqual() PASSED
+2026-11-23T14:42:34.4529416Z 
+2026-11-23T14:42:34.4529815Z VersionWithAssetsRepositoryTest > semVerComparator_sortsCorrectly() PASSED
+2026-11-23T14:42:34.5553119Z 
+2026-11-23T14:42:34.5554403Z UserPreferencesV0ToV1Test > migrate_setsExpectedDefaultsAndVersion1() PASSED
+2026-11-23T14:42:34.5554927Z 
+2026-11-23T14:42:34.5555482Z UserPreferencesV0ToV1Test > shouldMigrate_whenVersionZeroOrNegative_returnsTrue() PASSED
+2026-11-23T14:42:34.5556019Z 
+2026-11-23T14:42:34.5556367Z UserPreferencesV0ToV1Test > shouldMigrate_whenVersionPositive_returnsFalse() PASSED
+2026-11-23T14:42:34.8533333Z 
+2026-11-23T14:42:34.8556022Z KoinModuleTest > resolveAppServices() PASSED
+2026-11-23T14:42:34.8635976Z 
+2026-11-23T14:42:34.8643763Z DeviceApiResponseSnapshotTest > getInfo decodes WLED 16_0_1 response() PASSED
+2026-11-23T14:42:34.9593318Z 
+2026-11-23T14:42:34.9664249Z DeviceApiResponseSnapshotTest > postJson decodes WLED 16_0_1 state response() PASSED
+2026-11-23T14:42:35.0533230Z 
+2026-11-23T14:42:35.0546032Z GithubApiTest > downloadReleaseBinary cleans up file and rethrows CancellationException on cancellation() PASSED
+2026-11-23T14:42:35.0546541Z 
+2026-11-23T14:42:35.0546902Z GithubApiTest > getAllReleases returns successful release list() PASSED
+2026-11-23T14:42:35.0547189Z 
+2026-11-23T14:42:35.0547406Z GithubApiTest > getAllReleases handles network error gracefully() PASSED
+2026-11-23T14:42:35.0547685Z 
+2026-11-23T14:42:35.0547890Z KoinModuleTest > resolveAllViewModels() PASSED
+2026-11-23T14:42:35.1553299Z 
+2026-11-23T14:42:35.1604822Z GithubApiTest > downloadReleaseBinary requests octet-stream without JSON Accept() PASSED
+2026-11-23T14:42:35.1662894Z 
+2026-11-23T14:42:35.1689788Z GithubApiTest > downloadReleaseBinary streams bytes and reports progress() PASSED
+2026-11-23T14:42:35.1733191Z 
+2026-11-23T14:42:35.1774133Z GithubApiTest > downloadReleaseBinary preserves file when collector cancels after Finished() PASSED
+2026-11-23T14:42:35.2523518Z 
+2026-11-23T14:42:35.2525455Z GithubApiTest > downloadReleaseBinary fails and cleans up files on invalid response(FailedDownloadCase) > HTTP error PASSED
+2026-11-23T14:42:35.2526525Z 
+2026-11-23T14:42:35.2527070Z DeepLinkHandlerTest > parseUri with http scheme and AP mode IP returns ApMode() PASSED
+2026-11-23T14:42:35.2527876Z 
+2026-11-23T14:42:35.2528562Z GithubApiTest > downloadReleaseBinary fails and cleans up files on invalid response(FailedDownloadCase) > JSON metadata response PASSED
+2026-11-23T14:42:35.2529351Z 
+2026-11-23T14:42:35.2529774Z DeepLinkHandlerTest > parseUri with null returns null() PASSED
+2026-11-23T14:42:35.2530425Z 
+2026-11-23T14:42:35.2531057Z DeepLinkHandlerTest > parseUri with wled scheme and mixed case MAC address returns uppercase MacAddress() PASSED
+2026-11-23T14:42:35.2533043Z 
+2026-11-23T14:42:35.2533843Z GithubApiTest > downloadReleaseBinary fails and cleans up files on invalid response(FailedDownloadCase) > truncated before Content-Length PASSED
+2026-11-23T14:42:35.2534739Z 
+2026-11-23T14:42:35.2535493Z GithubApiTest > downloadReleaseBinary fails and cleans up files on invalid response(FailedDownloadCase) > chunked stream closed with error PASSED
+2026-11-23T14:42:35.2536300Z 
+2026-11-23T14:42:35.2537058Z GithubApiTest > downloadReleaseBinary fails and cleans up files on invalid response(FailedDownloadCase) > empty response body PASSED
+2026-11-23T14:42:35.5545361Z 
+2026-11-23T14:42:35.5584561Z DeepLinkHandlerTest > parseIntent with ACTION_VIEW and valid wled uri returns DeepLink() PASSED
+2026-11-23T14:42:35.5621029Z 
+2026-11-23T14:42:35.5635000Z DeepLinkHandlerTest > parseUri with https scheme returns null() PASSED
+2026-11-23T14:42:35.5681115Z 
+2026-11-23T14:42:35.5718971Z DeepLinkHandlerTest > isMacAddress with hostname returns false() PASSED
+2026-11-23T14:42:35.5742817Z 
+2026-11-23T14:42:35.5751109Z DeepLinkHandlerTest > isMacAddress with 11 chars returns false() PASSED
+2026-11-23T14:42:35.5768969Z 
+2026-11-23T14:42:35.5883898Z DeepLinkHandlerTest > parseUri with wled scheme and hostname returns Address() PASSED
+2026-11-23T14:42:35.5912895Z 
+2026-11-23T14:42:35.5920616Z DeepLinkHandlerTest > isMacAddress with valid mixed case 12 hex chars returns true() PASSED
+2026-11-23T14:42:35.5942855Z 
+2026-11-23T14:42:35.5963467Z DeepLinkHandlerTest > isMacAddress with 13 chars returns false() PASSED
+2026-11-23T14:42:35.5994536Z 
+2026-11-23T14:42:35.6023434Z DeepLinkHandlerTest > parseIntent with ACTION_MAIN returns null() PASSED
+2026-11-23T14:42:35.6044655Z 
+2026-11-23T14:42:35.6073635Z DeepLinkHandlerTest > parseUri with wled scheme and complex hostname returns Address() PASSED
+2026-11-23T14:42:35.6112750Z 
+2026-11-23T14:42:35.6143381Z DeepLinkHandlerTest > isMacAddress with valid 12 hex chars returns true() PASSED
+2026-11-23T14:42:35.6172721Z 
+2026-11-23T14:42:35.6217931Z DeepLinkHandlerTest > parseUri with http scheme and AP mode IP with path returns ApMode() PASSED
+2026-11-23T14:42:35.6272760Z 
+2026-11-23T14:42:35.6353376Z DeepLinkHandlerTest > isMacAddress with dashes returns false() PASSED
+2026-11-23T14:42:35.6388361Z 
+2026-11-23T14:42:35.6409173Z DeepLinkHandlerTest > isMacAddress with empty string returns false() PASSED
+2026-11-23T14:42:35.6512953Z 
+2026-11-23T14:42:35.6529889Z DeepLinkHandlerTest > parseIntent with ACTION_VIEW but no data returns null() PASSED
+2026-11-23T14:42:35.6543957Z 
+2026-11-23T14:42:35.6573511Z DeepLinkHandlerTest > parseIntent with null intent returns null() PASSED
+2026-11-23T14:42:35.6602933Z 
+2026-11-23T14:42:35.6603593Z ReleaseServiceTest > refreshVersionsForDevice refreshes device repository() PASSED
+2026-11-23T14:42:35.6604073Z 
+2026-11-23T14:42:35.6604485Z DeepLinkHandlerTest > isMacAddress with colons returns false() PASSED
+2026-11-23T14:42:35.6604982Z 
+2026-11-23T14:42:35.6605361Z DeepLinkHandlerTest > isMacAddress with valid lowercase 12 hex chars returns true() PASSED
+2026-11-23T14:42:35.6605859Z 
+2026-11-23T14:42:35.6606385Z DeepLinkHandlerTest > parseUri with wled scheme and lowercase MAC address returns uppercase MacAddress() PASSED
+2026-11-23T14:42:35.6606984Z 
+2026-11-23T14:42:35.6607278Z DeepLinkHandlerTest > isMacAddress with IP address returns false() PASSED
+2026-11-23T14:42:35.6608375Z 
+2026-11-23T14:42:35.6608774Z DeepLinkHandlerTest > parseUri with wled scheme and MAC address returns MacAddress() PASSED
+2026-11-23T14:42:35.6609270Z 
+2026-11-23T14:42:35.6609608Z DeepLinkHandlerTest > parseUri with wled scheme and empty host returns null() PASSED
+2026-11-23T14:42:35.6610046Z 
+2026-11-23T14:42:35.6610406Z DeepLinkHandlerTest > parseUri with http scheme and non-AP IP returns null() PASSED
+2026-11-23T14:42:35.6610874Z 
+2026-11-23T14:42:35.6611186Z DeepLinkHandlerTest > parseUri with unsupported scheme returns null() PASSED
+2026-11-23T14:42:35.6611667Z 
+2026-11-23T14:42:35.6611991Z DeepLinkHandlerTest > isMacAddress with non-hex chars returns false() PASSED
+2026-11-23T14:42:35.6613045Z 
+2026-11-23T14:42:35.6613354Z DeepLinkHandlerTest > parseUri with wled scheme and IPv4 address returns Address() PASSED
+2026-11-23T14:42:35.6613962Z 
+2026-11-23T14:42:35.6614473Z ReleaseServiceTest > getNewerReleaseTag returns null when device has a newer version than repo() PASSED
+2026-11-23T14:42:35.6615083Z 
+2026-11-23T14:42:35.6615519Z ReleaseServiceTest > getNewerReleaseTag returns null when deviceInfo version is null() PASSED
+2026-11-23T14:42:35.6616047Z 
+2026-11-23T14:42:35.6616451Z WledApiSerializationTest > test Info with unknown fields ignores extra keys() PASSED
+2026-11-23T14:42:35.7542239Z 
+2026-11-23T14:42:35.7588936Z ReleaseServiceTest > getNewerReleaseTag returns null when newer release matches ignored version() PASSED
+2026-11-23T14:42:35.7699213Z 
+2026-11-23T14:42:35.7764008Z WledApiSerializationTest > test DeviceStateInfo full deserialization with real WLED 16_0_1 data() PASSED
+2026-11-23T14:42:35.7764928Z 
+2026-11-23T14:42:35.7765438Z WledApiSerializationTest > test Nightlight deserialization with unsigned 32-bit overflow remainingTime() PASSED
+2026-11-23T14:42:35.7766043Z 
+2026-11-23T14:42:35.7766436Z WledApiSerializationTest > test State with multiple segments and nightlight serialization() PASSED
+2026-11-23T14:42:35.7767460Z 
+2026-11-23T14:42:35.7767779Z WledApiSerializationTest > test Info isOtaEnabled computation() PASSED
+2026-11-23T14:42:35.7768223Z 
+2026-11-23T14:42:35.7768777Z WledApiSerializationTest > test State serialization omits null fields() PASSED
+2026-11-23T14:42:35.7769228Z 
+2026-11-23T14:42:35.7769609Z UserPreferencesSerializerTest > roundTrip_serializesAndDeserializesCorrectly() PASSED
+2026-11-23T14:42:35.7770127Z 
+2026-11-23T14:42:35.7770516Z UserPreferencesSerializerTest > readFrom_emptyInput_returnsDefaultValue() PASSED
+2026-11-23T14:42:35.8533146Z 
+2026-11-23T14:42:35.8550314Z UserPreferencesSerializerTest > readFrom_partialJson_usesDefaultValuesForMissingFields() PASSED
+2026-11-23T14:42:35.8567220Z 
+2026-11-23T14:42:35.8594087Z UserPreferencesSerializerTest > readFrom_unknownKeys_ignoresThemGracefully() PASSED
+2026-11-23T14:42:35.8622819Z 
+2026-11-23T14:42:35.8627582Z UserPreferencesSerializerTest > readFrom_blankInput_returnsDefaultValue() PASSED
+2026-11-23T14:42:35.8682773Z 
+2026-11-23T14:42:35.8697214Z UserPreferencesSerializerTest > readFrom_corruptedInput_throwsCorruptionException() PASSED
+2026-11-23T14:42:35.8722849Z 
+2026-11-23T14:42:35.8751798Z UserPreferencesSerializerTest > defaultValue_hasExpectedValues() PASSED
+2026-11-23T14:42:35.8760433Z 
+2026-11-23T14:42:35.8795113Z LegacyProtoToKotlinxPreferencesMigrationTest > migrate_withEmptyLastChangelogVersionSeen_seedsBaselineVersion() PASSED
+2026-11-23T14:42:35.8821167Z 
+2026-11-23T14:42:35.8843784Z LegacyProtoToKotlinxPreferencesMigrationTest > migrate_withV0LegacyProto_setsExpectedDefaultsAndResetsDataSharingFlags() PASSED
+2026-11-23T14:42:35.8872989Z 
+2026-11-23T14:42:35.8903609Z LegacyProtoToKotlinxPreferencesMigrationTest > shouldMigrate_whenFileHasContent_returnsTrue() PASSED
+2026-11-23T14:42:35.8932712Z 
+2026-11-23T14:42:35.8933820Z LegacyProtoToKotlinxPreferencesMigrationTest > migrate_withLegacyProto_migratesAllFieldsAccurately() PASSED
+2026-11-23T14:42:35.9537040Z 
+2026-11-23T14:42:35.9584453Z LegacyProtoToKotlinxPreferencesMigrationTest > shouldMigrate_whenFileIsEmpty_returnsFalse() PASSED
+2026-11-23T14:42:35.9612915Z 
+2026-11-23T14:42:35.9678563Z LegacyProtoToKotlinxPreferencesMigrationTest > cleanUp_deletesLegacyFile() PASSED
+2026-11-23T14:42:35.9693032Z 
+2026-11-23T14:42:35.9754453Z LegacyProtoToKotlinxPreferencesMigrationTest > migrate_withCorruptFile_throwsExceptionAndRetainsFile() PASSED
+2026-11-23T14:42:35.9813099Z 
+2026-11-23T14:42:35.9823385Z LegacyProtoToKotlinxPreferencesMigrationTest > migrate_withLightAndAutoThemes_mapsCorrectly() PASSED
+2026-11-23T14:42:35.9824518Z 
+2026-11-23T14:42:35.9825251Z LegacyProtoToKotlinxPreferencesMigrationTest > cleanUp_whenDeleteFails_throwsIOException() PASSED
+2026-11-23T14:42:35.9842965Z 
+2026-11-23T14:42:35.9843894Z LegacyProtoToKotlinxPreferencesMigrationTest > shouldMigrate_whenFileDoesNotExist_returnsFalse() PASSED
+2026-11-23T14:42:35.9845057Z 
+2026-11-23T14:42:35.9845678Z ReleaseServiceTest > refreshVersionsForUsedRepositories returns false when no repositories are used() PASSED
+2026-11-23T14:42:35.9846333Z 
+2026-11-23T14:42:35.9846736Z ReleaseServiceTest > getNewerReleaseTag returns null when OTA is disabled() PASSED
+2026-11-23T14:42:35.9847249Z 
+2026-11-23T14:42:35.9847820Z ReleaseServiceTest > getNewerReleaseTag offers transition from beta to stable branch() PASSED
+2026-11-23T14:42:36.0531235Z 
+2026-11-23T14:42:36.0564285Z ReleaseServiceTest > syncBuiltInRepositories clears default flag on non-built-in repositories() PASSED
+2026-11-23T14:42:36.0564941Z 
+2026-11-23T14:42:36.0565874Z ReleaseServiceTest > getNewerReleaseTag offers update when latest release has non-semver tag() PASSED
+2026-11-23T14:42:36.0566354Z 
+2026-11-23T14:42:36.0567066Z ReleaseServiceTest > getNewerReleaseTag offers newer beta release() PASSED
+2026-11-23T14:42:36.0567514Z 
+2026-11-23T14:42:36.0567931Z ReleaseServiceTest > getNewerReleaseTag offers newer stable release() PASSED
+2026-11-23T14:42:36.3526294Z 
+2026-11-23T14:42:36.3574575Z ReleaseServiceTest > refreshVersions returns false when a repository fails and still updates successful ones() PASSED
+2026-11-23T14:42:36.3582943Z 
+2026-11-23T14:42:36.3604124Z ReleaseServiceTest > syncBuiltInRepositories inserts missing built-in repositories() PASSED
+2026-11-23T14:42:36.3632817Z 
+2026-11-23T14:42:36.3640580Z ReleaseServiceTest > getNewerReleaseTag returns null when device is already up to date() PASSED
+2026-11-23T14:42:36.4584647Z 
+2026-11-23T14:42:36.4628411Z ReleaseServiceTest > refreshVersionsForUsedRepositories only refreshes enabled and used repositories() PASSED
+2026-11-23T14:42:36.4682870Z 
+2026-11-23T14:42:36.4734302Z WidgetStateSyncTest > re-pushes widget state after stop and start() PASSED
+2026-11-23T14:42:36.4772860Z 
+2026-11-23T14:42:36.4793948Z WidgetStateSyncTest > does not mark widget offline on disconnect and refreshes when reconnected() PASSED
+2026-11-23T14:42:36.4794549Z 
+2026-11-23T14:42:36.4795012Z WidgetStateSyncTest > deletes widgets when online device is removed() PASSED
+2026-11-23T14:42:36.4795433Z 
+2026-11-23T14:42:36.4795912Z WidgetStateSyncTest > skips widget update when only brightness changes within refresh interval() PASSED
+2026-11-23T14:42:36.4796457Z 
+2026-11-23T14:42:36.4796878Z WidgetStateSyncTest > skips widget update when RSSI changes within the same signal level bucket() PASSED
+2026-11-23T14:42:36.4797409Z 
+2026-11-23T14:42:36.4797830Z ChangelogBottomSheetTest > buildSteppedGradientText handles single visible character() PASSED
+2026-11-23T14:42:36.4798364Z 
+2026-11-23T14:42:36.4798831Z WidgetStateSyncTest > refreshes widget timer when refresh interval elapses without visible changes() PASSED
+2026-11-23T14:42:36.5512961Z 
+2026-11-23T14:42:36.5570980Z ChangelogBottomSheetTest > buildSteppedGradientText returns plain string when colors are empty() PASSED
+2026-11-23T14:42:36.5592922Z 
+2026-11-23T14:42:36.5594890Z ChangelogBottomSheetTest > buildSteppedGradientText assigns discrete color spans to non-whitespace characters() PASSED
+2026-11-23T14:42:36.5641543Z 
+2026-11-23T14:42:36.5669369Z WidgetStateSyncTest > updates widget when WiFi signal level bucket changes() PASSED
+2026-11-23T14:42:36.5682892Z 
+2026-11-23T14:42:36.5683964Z WidgetStateSyncTest > deletes widgets when offline device without stateInfo is removed() PASSED
+2026-11-23T14:42:36.5684600Z 
+2026-11-23T14:42:36.5685012Z WidgetStateSyncTest > updates widget when device state first arrives() PASSED
+2026-11-23T14:42:36.6513625Z 
+2026-11-23T14:42:36.6534493Z DeviceApiTest > updateDevice with File uses the file name() PASSED
+2026-11-23T14:42:36.6535475Z 
+2026-11-23T14:42:36.6560037Z DeviceApiTest > DeviceApiFactory can be built from an OkHttpClient() PASSED
+2026-11-23T14:42:36.6582860Z 
+2026-11-23T14:42:36.6613606Z DeviceApiTest > updateDevice with File posts to update endpoint() PASSED
+2026-11-23T14:42:36.8508222Z 
+2026-11-23T14:42:36.8511367Z DeviceUpdateManagerTest > checkForUpdate returns null when device is up to date() PASSED
+2026-11-23T14:42:36.8512104Z 
+2026-11-23T14:42:36.8512919Z DeviceUpdateManagerTest > checkForUpdate queries releaseService with device properties and returns tag() PASSED
+2026-11-23T14:42:36.8513589Z 
+2026-11-23T14:42:36.8514112Z DeviceUpdateManagerTest > checkForUpdate returns null when stateInfo is null() PASSED
+2026-11-23T14:42:36.8514664Z 
+2026-11-23T14:42:36.8515129Z DeviceUpdateManagerTest > checkForUpdate with DeviceWithState delegates to device and stateInfo() PASSED
+2026-11-23T14:42:36.9511740Z 
+2026-11-23T14:42:36.9534696Z CustomWebViewClientTest > onReceivedError preserves loading state for subframe resource error() PASSED
+2026-11-23T14:42:36.9562827Z 
+2026-11-23T14:42:36.9593276Z CustomWebViewClientTest > onReceivedError marks loading finished and sets isError for main frame error() PASSED
+2026-11-23T14:42:36.9608869Z 
+2026-11-23T14:42:36.9610088Z WebsocketClientFactoryTest > create returns client with initial disconnected status() PASSED
+2026-11-23T14:42:36.9618956Z 
+2026-11-23T14:42:36.9619861Z WebsocketClientFactoryTest > create returns WebsocketClient with correct device() PASSED
+2026-11-23T14:42:36.9620486Z 
+2026-11-23T14:42:36.9620996Z WebsocketClientFactoryTest > create returns different instances for different devices() PASSED
+2026-11-23T14:42:36.9621550Z 
+2026-11-23T14:42:36.9622191Z WebViewViewModelTest > onReceiveFileUploadResult delivers selected URIs to pending callback once() PASSED
+2026-11-23T14:42:36.9623078Z 
+2026-11-23T14:42:36.9623582Z WebViewViewModelTest > onStartFileUpload cancels previous pending callback when a new upload starts() PASSED
+2026-11-23T14:42:36.9624216Z 
+2026-11-23T14:42:36.9624625Z WebViewViewModelTest > onCleared cancels pending file upload callback() PASSED
+2026-11-23T14:42:37.1542037Z 
+2026-11-23T14:42:37.1594688Z DeviceEditViewModelTest > skipUpdate persists targeted skipUpdateTag and clears details dialog() PASSED
+2026-11-23T14:42:37.2543100Z 
+2026-11-23T14:42:37.2607572Z DeviceEditViewModelTest > stopUpdateInstall does not mark update installed when device is null() PASSED
+2026-11-23T14:42:37.2652874Z 
+2026-11-23T14:42:37.2684211Z DeviceEditViewModelTest > updateCustomName persists targeted custom name and updates widgets() PASSED
+2026-11-23T14:42:37.2713388Z 
+2026-11-23T14:42:37.2743990Z DeviceEditViewModelTest > showUpdateDisclaimer sets disclaimer version and hideUpdateDisclaimer clears it() PASSED
+2026-11-23T14:42:37.2789274Z 
+2026-11-23T14:42:37.2833592Z DeviceEditViewModelTest > updateDeviceHidden persists targeted hidden state() PASSED
+2026-11-23T14:42:37.3550805Z 
+2026-11-23T14:42:37.3586772Z DeviceEditViewModelTest > updateDeviceBranch persists targeted branch() PASSED
+2026-11-23T14:42:37.3621795Z 
+2026-11-23T14:42:37.3653010Z DeviceEditViewModelTest > stopUpdateInstall marks update installed on success() PASSED
+2026-11-23T14:42:37.3668523Z 
+2026-11-23T14:42:37.3714025Z DeviceEditViewModelTest > startUpdateInstall sets install version and stopUpdateInstall clears it() PASSED
+2026-11-23T14:42:37.3714677Z 
+2026-11-23T14:42:37.3745792Z DeviceEditViewModelTest > stopUpdateInstall does not mark update installed when unsuccessful() PASSED
+2026-11-23T14:42:37.3797895Z 
+2026-11-23T14:42:37.3826495Z WebsocketClientTest > calling connect while sleeping in backoff delay interrupts sleep and reconnects immediately() PASSED
+2026-11-23T14:42:37.3832878Z 
+2026-11-23T14:42:37.3874619Z DeviceEditViewModelTest > checkForUpdates clears skipUpdateTag refreshes releases and rechecks updates() PASSED
+2026-11-23T14:42:37.3902761Z 
+2026-11-23T14:42:37.3935094Z WebsocketClientTest > handleTextFrame successfully parses valid DeviceStateInfo JSON and emits to incomingStateInfo() PASSED
+2026-11-23T14:42:37.3952849Z 
+2026-11-23T14:42:37.3978763Z WebsocketClientTest > pause followed by resume reconnects without manual disconnect() PASSED
+2026-11-23T14:42:37.3992688Z 
+2026-11-23T14:42:37.4018055Z WebsocketClientTest > disconnect synchronously cancels underlying session() PASSED
+2026-11-23T14:42:37.4526778Z 
+2026-11-23T14:42:37.4604495Z WebsocketClientTest > calculateBackoffWithJitter respects strict mathematical bounds for attempts 0 to 4() PASSED
+2026-11-23T14:42:37.4613595Z 
+2026-11-23T14:42:37.4614757Z WebsocketClientTest > calculateBackoffWithJitter is strictly capped at 60000ms for attempts 5 and higher() PASSED
+2026-11-23T14:42:37.4615470Z 
+2026-11-23T14:42:37.4628203Z UpdateInstallingViewModelTest > successful install clears skipUpdateTag for updated device() PASSED
+2026-11-23T14:42:37.4644805Z 
+2026-11-23T14:42:37.4665050Z WebsocketClientTest > disconnect keeps manual disconnect sticky across resume() PASSED
+2026-11-23T14:42:37.4703704Z 
+2026-11-23T14:42:37.4767741Z WebsocketClientTest > handleTextFrame handles malformed, partial, and garbage JSON without throwing() PASSED
+2026-11-23T14:42:37.4783786Z 
+2026-11-23T14:42:37.4793996Z UpdateInstallingViewModelTest > startUpdate invalidates size-mismatched cached file and downloads binary before installing() PASSED
+2026-11-23T14:42:37.4822740Z 
+2026-11-23T14:42:37.4853342Z WebsocketClientTest > sendState returns false and does not reconnect when paused() PASSED
+2026-11-23T14:42:37.4882761Z 
+2026-11-23T14:42:37.4908324Z UpdateInstallingViewModelTest > startUpdate reuses valid cached binary without downloading() PASSED
+2026-11-23T14:42:37.4926557Z 
+2026-11-23T14:42:37.4958376Z UpdateInstallingViewModelTest > resetState restores initial UpdateInstallingState after completed update() PASSED
+2026-11-23T14:42:37.5517196Z 
+2026-11-23T14:42:37.5554222Z UpdateInstallingViewModelTest > startUpdate succeeds after cancelling previous download with resetState() PASSED
+2026-11-23T14:42:37.5554905Z 
+2026-11-23T14:42:37.5587632Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [1] "192.168.1.100", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5612858Z 
+2026-11-23T14:42:37.5637616Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [2] "http://192.168.1.100", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5657525Z 
+2026-11-23T14:42:37.5674386Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [3] "https://192.168.1.100", "wss://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5703066Z 
+2026-11-23T14:42:37.5734079Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [4] "ws://192.168.1.100", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5752772Z 
+2026-11-23T14:42:37.5775423Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [5] "wss://192.168.1.100", "wss://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5802822Z 
+2026-11-23T14:42:37.5834003Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [6] "192.168.1.100/", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5862692Z 
+2026-11-23T14:42:37.5865138Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [7] "http://192.168.1.100/", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5894892Z 
+2026-11-23T14:42:37.5924773Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [8] "https://192.168.1.100/", "wss://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5952829Z 
+2026-11-23T14:42:37.5983626Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [9] "192.168.1.100///", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.5985084Z 
+2026-11-23T14:42:37.6013638Z UpdateInstallingViewModelTest > startUpdate awaits original download job after chained resetState() PASSED
+2026-11-23T14:42:37.6047405Z 
+2026-11-23T14:42:37.6048651Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [10] "192.168.1.100:8080", "ws://192.168.1.100:8080/ws" PASSED
+2026-11-23T14:42:37.6072890Z 
+2026-11-23T14:42:37.6105718Z UpdateInstallingViewModelTest > startUpdate awaits completion of previously cancelled download job() PASSED
+2026-11-23T14:42:37.6122925Z 
+2026-11-23T14:42:37.6124081Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [11] "http://192.168.1.100:8080/", "ws://192.168.1.100:8080/ws" PASSED
+2026-11-23T14:42:37.6125146Z 
+2026-11-23T14:42:37.6125931Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [12] "https://192.168.1.100:8443/", "wss://192.168.1.100:8443/ws" PASSED
+2026-11-23T14:42:37.6126843Z 
+2026-11-23T14:42:37.6127579Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [13] "wled-device.local", "ws://wled-device.local/ws" PASSED
+2026-11-23T14:42:37.6128513Z 
+2026-11-23T14:42:37.6129360Z UpdateInstallingViewModelTest > resetState cancels in-flight download without installing update() PASSED
+2026-11-23T14:42:37.6129991Z 
+2026-11-23T14:42:37.6130990Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [14] "http://wled-device.local", "ws://wled-device.local/ws" PASSED
+2026-11-23T14:42:37.6131914Z 
+2026-11-23T14:42:37.6132927Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [15] "https://wled-device.local", "wss://wled-device.local/ws" PASSED
+2026-11-23T14:42:37.6154888Z 
+2026-11-23T14:42:37.6223884Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [16] "192.168.1.100/ws", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.6224775Z 
+2026-11-23T14:42:37.6273720Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [17] "http://192.168.1.100/ws/", "ws://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.6330848Z 
+2026-11-23T14:42:37.6353523Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [18] "https://192.168.1.100/ws", "wss://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.6382765Z 
+2026-11-23T14:42:37.6413747Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [19] "wss://192.168.1.100/ws/", "wss://192.168.1.100/ws" PASSED
+2026-11-23T14:42:37.6432644Z 
+2026-11-23T14:42:37.6442775Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [20] "[fe80::1]", "ws://[fe80::1]/ws" PASSED
+2026-11-23T14:42:37.6542687Z 
+2026-11-23T14:42:37.6573698Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [21] "http://[fe80::1]:80/", "ws://[fe80::1]:80/ws" PASSED
+2026-11-23T14:42:37.6592798Z 
+2026-11-23T14:42:37.6623779Z WebsocketClientTest > buildWebsocketUrl correctly formats diverse host and IP address inputs(String, String) > [22] "https://[fe80::1]:443/", "wss://[fe80::1]:443/ws" PASSED
+2026-11-23T14:42:37.6642993Z 
+2026-11-23T14:42:37.6653683Z WebsocketClientTest > calculateBackoffWithJitter throws IllegalArgumentException for negative attempt() PASSED
+2026-11-23T14:42:37.6654314Z 
+2026-11-23T14:42:37.6654651Z WebsocketClientTest > sendState returns false when client is destroyed() PASSED
+2026-11-23T14:42:37.6655246Z 
+2026-11-23T14:42:37.6655635Z WebsocketClientTest > calling connect on destroyed client does not connect() PASSED
+2026-11-23T14:42:37.6656071Z 
+2026-11-23T14:42:37.6656482Z WebsocketClientTest > sendState returns false when disconnected without throwing() PASSED
+2026-11-23T14:42:37.6656975Z 
+2026-11-23T14:42:37.6657500Z WebsocketClientTest > handleTextFrame successfully parses DeviceStateInfo when nightlight rem overflows 32-bit int() PASSED
+2026-11-23T14:42:37.6658121Z 
+2026-11-23T14:42:37.6658508Z UriUtilsTest > openUriSafely calls openUri with correct uri() PASSED
+2026-11-23T14:42:37.6658871Z 
+2026-11-23T14:42:37.6659728Z UriUtilsTest > openUriSafely handles ActivityNotFoundException without crashing() PASSED
+2026-11-23T14:42:37.6660249Z 
+2026-11-23T14:42:37.6660675Z UriUtilsTest > openUriSafely handles IllegalArgumentException without crashing() PASSED
+2026-11-23T14:42:37.6661171Z 
+2026-11-23T14:42:37.6661474Z WidgetStateDataTest > WidgetStateData with custom values() PASSED
+2026-11-23T14:42:37.6662074Z 
+2026-11-23T14:42:37.6673112Z WidgetStateDataTest > WifiSignalLevel toIconRes maps each level to its drawable(WifiSignalLevel, int) > [1] OFFLINE, 2131165549 PASSED
+2026-11-23T14:42:37.6673836Z 
+2026-11-23T14:42:37.6674404Z WidgetStateDataTest > WifiSignalLevel toIconRes maps each level to its drawable(WifiSignalLevel, int) > [2] GOOD, 2131165548 PASSED
+2026-11-23T14:42:37.6675090Z 
+2026-11-23T14:42:37.6675903Z WidgetStateDataTest > WifiSignalLevel toIconRes maps each level to its drawable(WifiSignalLevel, int) > [3] FAIR, 2131165547 PASSED
+2026-11-23T14:42:37.6676527Z 
+2026-11-23T14:42:37.6677020Z WidgetStateDataTest > WifiSignalLevel toIconRes maps each level to its drawable(WifiSignalLevel, int) > [4] WEAK, 2131165546 PASSED
+2026-11-23T14:42:37.6677697Z 
+2026-11-23T14:42:37.6678222Z WidgetStateDataTest > WifiSignalLevel toIconRes maps each level to its drawable(WifiSignalLevel, int) > [5] NONE, 2131165545 PASSED
+2026-11-23T14:42:37.6682807Z 
+2026-11-23T14:42:37.6713261Z WidgetStateDataTest > WidgetStateData defaults are correct() PASSED
+2026-11-23T14:42:37.6719412Z 
+2026-11-23T14:42:37.6743694Z WidgetStateDataTest > WidgetStateData different MAC addresses are not equal() PASSED
+2026-11-23T14:42:37.6770938Z 
+2026-11-23T14:42:37.6783382Z WidgetStateDataTest > WidgetStateData equality works correctly() PASSED
+2026-11-23T14:42:37.6802800Z 
+2026-11-23T14:42:37.6833450Z WidgetStateDataTest > WidgetStateData copy preserves unchanged fields() PASSED
+2026-11-23T14:42:37.6842874Z 
+2026-11-23T14:42:37.6873457Z WidgetStateDataTest > WidgetStateData defaults signalLevel to OFFLINE when isOnline is false() PASSED
+2026-11-23T14:42:37.6892803Z 
+2026-11-23T14:42:37.6923453Z WebsocketClientTest > sendState returns false when session channel is closed without cancelling caller coroutine() PASSED
+2026-11-23T14:42:37.6924488Z 
+2026-11-23T14:42:37.6963345Z WebsocketClientTest > disconnect when already disconnected is safe and idempotent() PASSED
+2026-11-23T14:42:37.8526269Z 
+2026-11-23T14:42:37.8537590Z WebsocketClientTest > retryCount resets to 0 after successful connection drops() PASSED
+2026-11-23T14:42:37.8551499Z 
+2026-11-23T14:42:37.8586622Z WebsocketClientTest > sendState sends JSON text frame over active session() PASSED
+2026-11-23T14:42:37.8587412Z 
+2026-11-23T14:42:37.8627699Z WebsocketClientTest > destroy shuts down client cleanly() PASSED
+2026-11-23T14:42:37.8652934Z 
+2026-11-23T14:42:37.8664429Z WebsocketClientTest > userAgent complies with WLED requirements() PASSED
+2026-11-23T14:42:37.8692799Z 
+2026-11-23T14:42:37.8723606Z SharedModuleLinkTest > shared module is accessible and returns expected platform() PASSED
+2026-11-23T14:42:37.8752742Z 
+2026-11-23T14:42:37.8753451Z MainNavHostTest > initial back stack contains HomeKey as root destination() PASSED
+2026-11-23T14:42:37.8782686Z 
+2026-11-23T14:42:37.8813377Z MainNavHostTest > navigating back from settings restores HomeKey() PASSED
+2026-11-23T14:42:37.8813913Z 
+2026-11-23T14:42:37.8843387Z MainNavHostTest > back navigation on root destination does not remove last destination() PASSED
+2026-11-23T14:42:37.8872771Z 
+2026-11-23T14:42:37.8903359Z MainNavHostTest > navigation keys are distinct and identify destinations correctly() PASSED
+2026-11-23T14:42:37.8903954Z 
+2026-11-23T14:42:37.8928628Z MainNavHostTest > navigating to settings pushes SettingsKey on top of back stack() PASSED
+2026-11-23T14:42:37.9533490Z 
+2026-11-23T14:42:37.9555438Z WledWidgetManagerTest > refreshWidget preserves cached signalLevel when HTTP response succeeds() PASSED
+2026-11-23T14:42:38.0507993Z 
+2026-11-23T14:42:38.0509198Z CustomWebChromeClientTest > launchFileChooser preserves image mime type for image inputs() PASSED
+2026-11-23T14:42:38.0510357Z 
+2026-11-23T14:42:38.0510845Z CustomWebChromeClientTest > onShowFileChooser returns false without invoking callback when no handler is registered() PASSED
+2026-11-23T14:42:38.0511406Z 
+2026-11-23T14:42:38.0511913Z WledWidgetManagerTest > updateAllWidgets refreshes widgets concurrently so offline timeout does not block online widget() PASSED
+2026-11-23T14:42:38.0512913Z 
+2026-11-23T14:42:38.0513918Z CustomWebChromeClientTest > launchFileChooser configures wildcard mime type for non-image inputs() PASSED
+2026-11-23T14:42:38.0514683Z 
+2026-11-23T14:42:38.0515267Z CustomWebChromeClientTest > launchFileChooser cancels callback and returns true when ActivityNotFoundException is thrown() PASSED
+2026-11-23T14:42:38.0515978Z 
+2026-11-23T14:42:38.0516836Z WledWidgetManagerTest > refreshWidget creates DeviceApi with 5s timeout and marks widget offline on non-2xx response() PASSED
+2026-11-23T14:42:38.2531178Z 
+2026-11-23T14:42:38.2540180Z DeviceListDetailViewModelTest > enablingAutoDiscoveryStartsDiscovery() PASSED
+2026-11-23T14:42:38.2551963Z 
+2026-11-23T14:42:38.2553806Z DeviceListDetailViewModelTest > disablingAutoDiscoveryStopsDiscovery() PASSED
+2026-11-23T14:42:38.2566311Z 
+2026-11-23T14:42:38.2567172Z DeviceListDetailViewModelTest > onStartSkipsDiscoveryWhenAutoDiscoveryDisabled() PASSED
+2026-11-23T14:42:38.2571986Z 
+2026-11-23T14:42:38.2573141Z DeviceListDetailViewModelTest > onStopBeforeAutoDiscoveryStartsPreventsDiscovery() PASSED
+2026-11-23T14:42:38.2573786Z 
+2026-11-23T14:42:38.2574368Z DeviceListDetailViewModelTest > onLocalNetworkPermissionGrantedStartsDiscoveryWhenAutoDiscoveryEnabled() PASSED
+2026-11-23T14:42:38.3508123Z 
+2026-11-23T14:42:38.3509361Z DeviceListDetailViewModelTest > discoveredDeviceForwardsToFirstContactService() PASSED
+2026-11-23T14:42:38.3509781Z 
+2026-11-23T14:42:38.3510155Z DeviceListDetailViewModelTest > startDiscoveryServiceTimedCancelsPreviousTimerBeforeStopping() PASSED
+2026-11-23T14:42:38.3510547Z 
+2026-11-23T14:42:38.3510907Z DeviceListDetailViewModelTest > manualRefreshStartsDiscoveryWhenAutoDiscoveryDisabled() PASSED
+2026-11-23T14:42:38.3511285Z 
+2026-11-23T14:42:38.3511585Z DeviceListDetailViewModelTest > onStartStartsDiscoveryWhenAutoDiscoveryEnabled() PASSED
+2026-11-23T14:42:38.3511936Z 
+2026-11-23T14:42:38.3512209Z DeviceWebsocketListViewModelTest > setBrightness delegates to connection manager() PASSED
+2026-11-23T14:42:38.3512769Z 
+2026-11-23T14:42:38.3513043Z DeviceWebsocketListViewModelTest > isPaused reflects connection manager flow() PASSED
+2026-11-23T14:42:38.3513400Z 
+2026-11-23T14:42:38.3513654Z DeviceWebsocketListViewModelTest > deleteDevice delegates to connection manager() PASSED
+2026-11-23T14:42:38.3513991Z 
+2026-11-23T14:42:38.3514238Z DeviceWebsocketListViewModelTest > setDevicePower delegates to connection manager() PASSED
+2026-11-23T14:42:38.3514586Z 
+2026-11-23T14:42:38.3514897Z DeviceWebsocketListViewModelTest > refreshOfflineDevices delegates to connection manager() PASSED
+2026-11-23T14:42:38.3515246Z 
+2026-11-23T14:42:38.3515527Z DeviceWebsocketListViewModelTest > allDevicesWithState reflects connection manager flow() PASSED
+2026-11-23T14:42:38.3515872Z 
+2026-11-23T14:42:38.3516124Z ThemeViewModelTest > theme is initially null before preferences emit() PASSED
+2026-11-23T14:42:38.3516406Z 
+2026-11-23T14:42:38.3516663Z ThemeViewModelTest > theme reflects stored preference once loaded() PASSED
+2026-11-23T14:42:38.7510311Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1795444899801.json
+2026-11-23T14:42:38.7510926Z 
+2026-11-23T14:42:38.7511507Z [Incubating] Problems report is available at: file:///home/runner/work/WLED/WLED/app/build/reports/problems/problems-report.html
+2026-11-23T14:42:38.7512108Z 
+2026-11-23T14:42:38.7512704Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+2026-11-23T14:42:38.7513130Z 
+2026-11-23T14:42:38.7513978Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+2026-11-23T14:42:38.7514762Z 
+2026-11-23T14:42:38.7515361Z For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+2026-11-23T14:42:38.7515898Z 
+2026-11-23T14:42:38.7516217Z BUILD SUCCESSFUL in 1m 9s
+2026-11-23T14:42:38.7516638Z 49 actionable tasks: 35 executed, 14 from cache
+2026-11-23T14:42:38.7517135Z Configuration cache entry stored.
+2026-11-23T14:42:39.0843962Z ##[group]Run ./gradlew :app:assembleDebug
+2026-11-23T14:42:39.0844406Z [36;1m./gradlew :app:assembleDebug[0m
+2026-11-23T14:42:39.0864415Z shell: /usr/bin/bash -e {0}
+2026-11-23T14:42:39.0864880Z env:
+2026-11-23T14:42:39.0865259Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:42:39.0865818Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:42:39.0866271Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-23T14:42:39.0866682Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-23T14:42:39.0867063Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-23T14:42:39.0867424Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-23T14:42:39.0867899Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-23T14:42:39.0868420Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-23T14:42:39.0868820Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-23T14:42:39.0869260Z ##[endgroup]
+2026-11-23T14:42:39.6198422Z Parallel Configuration Cache is an incubating feature.
+2026-11-23T14:42:39.6199713Z Calculating task graph as no cached configuration is available for tasks: :app:assembleDebug
+2026-11-23T14:42:40.0181754Z 
+2026-11-23T14:42:40.0187384Z > Configure project :app
+2026-11-23T14:42:40.0188294Z WARNING: The option setting 'android.experimental.enableScreenshotTest=true' is experimental.
+2026-11-23T14:42:40.0189277Z The current default is 'false'.
+2026-11-23T14:42:40.0190144Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:42:40.0191286Z WARNING: The option setting 'android.experimental.testSuiteSupport=true' is experimental.
+2026-11-23T14:42:40.0191999Z The current default is 'false'.
+2026-11-23T14:42:40.0193195Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:42:40.2184126Z Configuration 'kotlinCompilerPluginClasspathAndroidMain' was resolved during configuration time.
+2026-11-23T14:42:40.2203782Z This is a build performance and scalability issue.
+2026-11-23T14:42:40.2204673Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:40.2205393Z Run with --info for a stacktrace.
+2026-11-23T14:42:40.2206272Z Configuration 'kotlinBuildToolsApiClasspath' was resolved during configuration time.
+2026-11-23T14:42:40.2207035Z This is a build performance and scalability issue.
+2026-11-23T14:42:40.2207646Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:40.2208291Z Run with --info for a stacktrace.
+2026-11-23T14:42:40.2209038Z Configuration 'androidCompileClasspath' was resolved during configuration time.
+2026-11-23T14:42:40.2209792Z This is a build performance and scalability issue.
+2026-11-23T14:42:40.2210471Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:40.2211109Z Run with --info for a stacktrace.
+2026-11-23T14:42:40.2211901Z Configuration 'kspAndroidMainProcessorClasspath' was resolved during configuration time.
+2026-11-23T14:42:40.2212979Z This is a build performance and scalability issue.
+2026-11-23T14:42:40.2371368Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:40.2372046Z Run with --info for a stacktrace.
+2026-11-23T14:42:40.7179192Z 
+2026-11-23T14:42:40.7211097Z > Task :app:preBuild UP-TO-DATE
+2026-11-23T14:42:40.7241958Z > Task :app:protobufDummy UP-TO-DATE
+2026-11-23T14:42:40.7277822Z > Task :shared:kmpPartiallyResolvedDependenciesChecker
+2026-11-23T14:42:40.7292900Z > Task :app:preDebugBuild UP-TO-DATE
+2026-11-23T14:42:40.7344432Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-11-23T14:42:40.7370786Z > Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+2026-11-23T14:42:40.7389448Z > Task :shared:androidPreBuild UP-TO-DATE
+2026-11-23T14:42:40.7406060Z > Task :shared:preAndroidMainBuild UP-TO-DATE
+2026-11-23T14:42:40.7441219Z > Task :app:extractDebugProto UP-TO-DATE
+2026-11-23T14:42:40.7483551Z > Task :app:generateDebugBuildConfig UP-TO-DATE
+2026-11-23T14:42:40.7498147Z > Task :app:extractProto UP-TO-DATE
+2026-11-23T14:42:40.7498721Z > Task :app:generateDebugResources UP-TO-DATE
+2026-11-23T14:42:40.7499317Z > Task :shared:generateAndroidMainEmptyResourceFiles UP-TO-DATE
+2026-11-23T14:42:40.7499883Z > Task :app:javaPreCompileDebug UP-TO-DATE
+2026-11-23T14:42:40.7500377Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-11-23T14:42:40.7500862Z > Task :app:packageDebugResources UP-TO-DATE
+2026-11-23T14:42:40.7501388Z > Task :app:generateDebugGlobalSynthetics FROM-CACHE
+2026-11-23T14:42:40.7502094Z > Task :shared:kspAndroidMain FROM-CACHE
+2026-11-23T14:42:40.8184753Z > Task :shared:copyRoomSchemas NO-SOURCE
+2026-11-23T14:42:40.8203888Z > Task :app:processDebugNavigationResources UP-TO-DATE
+2026-11-23T14:42:40.8236479Z > Task :app:parseDebugLocalResources UP-TO-DATE
+2026-11-23T14:42:40.8263325Z > Task :app:generateDebugRFile UP-TO-DATE
+2026-11-23T14:42:40.8313459Z > Task :shared:compileAndroidMain UP-TO-DATE
+2026-11-23T14:42:40.8334459Z > Task :shared:bundleAndroidMainClassesToRuntimeJar UP-TO-DATE
+2026-11-23T14:42:40.8363225Z > Task :shared:compressAndroidMainJavaRes UP-TO-DATE
+2026-11-23T14:42:40.8367541Z > Task :shared:createFullJarAndroidMain UP-TO-DATE
+2026-11-23T14:42:40.8384107Z > Task :app:desugarDebugFileDependencies FROM-CACHE
+2026-11-23T14:42:40.8384678Z > Task :shared:bundleAndroidMainClassesToCompileJar UP-TO-DATE
+2026-11-23T14:42:40.8385218Z > Task :app:extractIncludeDebugProto UP-TO-DATE
+2026-11-23T14:42:40.8385648Z > Task :app:generateDebugProto UP-TO-DATE
+2026-11-23T14:42:40.8386065Z > Task :app:compileDebugKotlin UP-TO-DATE
+2026-11-23T14:42:40.8386462Z > Task :app:compileDebugJavaWithJavac UP-TO-DATE
+2026-11-23T14:42:40.8386874Z > Task :app:compressDebugJavaRes UP-TO-DATE
+2026-11-23T14:42:41.0174807Z > Task :app:mergeDebugAssets
+2026-11-23T14:42:41.0175899Z > Task :app:compressDebugAssets FROM-CACHE
+2026-11-23T14:42:41.0199310Z > Task :shared:bundleLibRuntimeToDirAndroidMain
+2026-11-23T14:42:41.0200094Z > Task :shared:writeAndroidMainAarMetadata UP-TO-DATE
+2026-11-23T14:42:41.0200625Z > Task :app:mergeDebugJavaResource
+2026-11-23T14:42:41.0201102Z > Task :app:mapDebugSourceSetPaths UP-TO-DATE
+2026-11-23T14:42:41.0201603Z > Task :app:compileDebugNavigationResources UP-TO-DATE
+2026-11-23T14:42:41.0202179Z > Task :app:checkDebugDuplicateClasses
+2026-11-23T14:42:41.0202861Z > Task :app:checkDebugAarMetadata UP-TO-DATE
+2026-11-23T14:42:41.0203395Z > Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+2026-11-23T14:42:41.0203964Z > Task :app:extractDeepLinksDebug UP-TO-DATE
+2026-11-23T14:42:41.1204221Z > Task :app:mergeDebugResources UP-TO-DATE
+2026-11-23T14:42:41.1214810Z > Task :shared:processAndroidMainManifest UP-TO-DATE
+2026-11-23T14:42:41.1216701Z > Task :app:processDebugMainManifest UP-TO-DATE
+2026-11-23T14:42:41.1217285Z > Task :app:processDebugManifest UP-TO-DATE
+2026-11-23T14:42:41.1217837Z > Task :app:processDebugManifestForPackage UP-TO-DATE
+2026-11-23T14:42:41.1218383Z > Task :app:processDebugResources UP-TO-DATE
+2026-11-23T14:42:41.1218851Z > Task :app:mergeLibDexDebug FROM-CACHE
+2026-11-23T14:42:41.2223936Z > Task :app:mergeDebugJniLibFolders
+2026-11-23T14:42:41.2283569Z > Task :shared:mergeAndroidMainJniLibFolders
+2026-11-23T14:42:41.2313260Z > Task :shared:mergeAndroidMainNativeLibs NO-SOURCE
+2026-11-23T14:42:41.7204155Z > Task :app:mergeExtDexDebug FROM-CACHE
+2026-11-23T14:42:41.7213086Z > Task :app:writeDebugAppMetadata
+2026-11-23T14:42:41.7244225Z > Task :app:writeDebugSigningConfigVersions
+2026-11-23T14:42:42.7217868Z > Task :app:validateSigningDebug
+2026-11-23T14:42:43.7194030Z > Task :shared:copyAndroidMainJniLibsProjectOnly
+2026-11-23T14:42:43.9174360Z > Task :app:mergeDebugNativeLibs
+2026-11-23T14:42:44.1183893Z 
+2026-11-23T14:42:44.1208795Z > Task :app:stripDebugDebugSymbols
+2026-11-23T14:42:44.1244056Z Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so, libsqliteJni.so. Run with --info option to learn more.
+2026-11-23T14:42:47.1173970Z 
+2026-11-23T14:42:47.1188604Z > Task :app:dexBuilderDebug
+2026-11-23T14:42:47.6174500Z > Task :app:mergeProjectDexDebug
+2026-11-23T14:42:48.1174252Z > Task :app:packageDebug
+2026-11-23T14:42:48.1174621Z > Task :app:assembleDebug
+2026-11-23T14:42:48.1174952Z > Task :app:createDebugApkListingFileRedirect
+2026-11-23T14:42:48.1175453Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1795444959621.json
+2026-11-23T14:42:48.1175807Z 
+2026-11-23T14:42:48.1176164Z [Incubating] Problems report is available at: file:///home/runner/work/WLED/WLED/app/build/reports/problems/problems-report.html
+2026-11-23T14:42:48.1176633Z 
+2026-11-23T14:42:48.1176886Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+2026-11-23T14:42:48.1177230Z 
+2026-11-23T14:42:48.1177635Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+2026-11-23T14:42:48.1178101Z 
+2026-11-23T14:42:48.1178595Z For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+2026-11-23T14:42:48.1453244Z 
+2026-11-23T14:42:48.1454029Z BUILD SUCCESSFUL in 8s
+2026-11-23T14:42:48.1454684Z 55 actionable tasks: 17 executed, 6 from cache, 32 up-to-date
+2026-11-23T14:42:48.1455348Z Configuration cache entry stored.
+2026-11-23T14:42:48.1574084Z ##[group]Run ./gradlew :app:assembleRelease
+2026-11-23T14:42:48.1574416Z [36;1m./gradlew :app:assembleRelease[0m
+2026-11-23T14:42:48.1593163Z shell: /usr/bin/bash -e {0}
+2026-11-23T14:42:48.1593414Z env:
+2026-11-23T14:42:48.1593731Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:42:48.1594157Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+2026-11-23T14:42:48.1594522Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-23T14:42:48.1594801Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-23T14:42:48.1595071Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-23T14:42:48.1595340Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-23T14:42:48.1595722Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-23T14:42:48.1596126Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-23T14:42:48.1596423Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-23T14:42:48.1596731Z   ANDROID_KEYSTORE_PASSWORD: 
+2026-11-23T14:42:48.1596964Z   ANDROID_KEY_ALIAS: 
+2026-11-23T14:42:48.1597195Z   ANDROID_KEY_PASSWORD: 
+2026-11-23T14:42:48.1597415Z ##[endgroup]
+2026-11-23T14:42:48.7193529Z Parallel Configuration Cache is an incubating feature.
+2026-11-23T14:42:48.7194364Z Calculating task graph as no cached configuration is available for tasks: :app:assembleRelease
+2026-11-23T14:42:49.0153373Z 
+2026-11-23T14:42:49.0195808Z > Configure project :app
+2026-11-23T14:42:49.0227731Z WARNING: The option setting 'android.experimental.enableScreenshotTest=true' is experimental.
+2026-11-23T14:42:49.0253551Z The current default is 'false'.
+2026-11-23T14:42:49.0283823Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:42:49.0325508Z WARNING: The option setting 'android.experimental.testSuiteSupport=true' is experimental.
+2026-11-23T14:42:49.0343335Z The current default is 'false'.
+2026-11-23T14:42:49.0344270Z Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+2026-11-23T14:42:49.5162767Z Configuration 'kotlinCompilerPluginClasspathAndroidMain' was resolved during configuration time.
+2026-11-23T14:42:49.5166397Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.5167124Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.5167801Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.5168737Z Configuration 'kotlinBuildToolsApiClasspath' was resolved during configuration time.
+2026-11-23T14:42:49.5169862Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.5170561Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.5171190Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.5171923Z Configuration 'androidCompileClasspath' was resolved during configuration time.
+2026-11-23T14:42:49.5172973Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.5173721Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.5174327Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.6171763Z Configuration 'kspAndroidMainProcessorClasspath' was resolved during configuration time.
+2026-11-23T14:42:49.6177022Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.6177891Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.6178616Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.6179436Z Configuration 'lintPublish' was resolved during configuration time.
+2026-11-23T14:42:49.6180200Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.6180849Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.6181568Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.7174223Z Configuration 'androidRuntimeClasspath' was resolved during configuration time.
+2026-11-23T14:42:49.7184291Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.7188943Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.7189786Z Run with --info for a stacktrace.
+2026-11-23T14:42:49.7190649Z Configuration 'androidLintTool' was resolved during configuration time.
+2026-11-23T14:42:49.7191504Z This is a build performance and scalability issue.
+2026-11-23T14:42:49.7192250Z See https://github.com/gradle/gradle/issues/2298
+2026-11-23T14:42:49.7196542Z Run with --info for a stacktrace.
+2026-11-23T14:42:50.2160535Z 
+2026-11-23T14:42:50.2194107Z > Task :shared:androidPreBuild UP-TO-DATE
+2026-11-23T14:42:50.2223920Z > Task :app:preBuild UP-TO-DATE
+2026-11-23T14:42:50.2228981Z > Task :app:preReleaseBuild UP-TO-DATE
+2026-11-23T14:42:50.2245117Z > Task :shared:kmpPartiallyResolvedDependenciesChecker
+2026-11-23T14:42:50.2246009Z > Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+2026-11-23T14:42:50.2247047Z > Task :shared:preAndroidMainBuild UP-TO-DATE
+2026-11-23T14:42:50.2247764Z > Task :shared:mergeAndroidMainJniLibFolders UP-TO-DATE
+2026-11-23T14:42:50.2248550Z > Task :shared:mergeAndroidMainNativeLibs NO-SOURCE
+2026-11-23T14:42:50.2249318Z > Task :shared:copyAndroidMainJniLibsProjectOnly UP-TO-DATE
+2026-11-23T14:42:50.2250115Z > Task :shared:kspAndroidMain UP-TO-DATE
+2026-11-23T14:42:50.2250734Z > Task :shared:copyRoomSchemas NO-SOURCE
+2026-11-23T14:42:50.2251355Z > Task :app:mergeReleaseJniLibFolders
+2026-11-23T14:42:50.2252010Z > Task :app:generateReleaseBuildConfig
+2026-11-23T14:42:50.2253046Z > Task :app:protobufDummy UP-TO-DATE
+2026-11-23T14:42:50.2291876Z > Task :app:extractProto UP-TO-DATE
+2026-11-23T14:42:50.2347211Z > Task :shared:compileAndroidMain UP-TO-DATE
+2026-11-23T14:42:50.2393245Z > Task :app:extractReleaseProto
+2026-11-23T14:42:50.2446483Z > Task :shared:bundleAndroidMainClassesToRuntimeJar UP-TO-DATE
+2026-11-23T14:42:50.2503527Z > Task :shared:compressAndroidMainJavaRes UP-TO-DATE
+2026-11-23T14:42:50.2563427Z > Task :shared:mergeAndroidMainGeneratedProguardFiles
+2026-11-23T14:42:50.2623185Z > Task :shared:createFullJarAndroidMain UP-TO-DATE
+2026-11-23T14:42:50.3183813Z > Task :app:checkReleaseDuplicateClasses
+2026-11-23T14:42:50.3213701Z > Task :app:generateReleaseResources FROM-CACHE
+2026-11-23T14:42:50.3253320Z > Task :shared:exportAndroidMainConsumerProguardFiles
+2026-11-23T14:42:50.3303404Z > Task :shared:generateAndroidMainEmptyResourceFiles UP-TO-DATE
+2026-11-23T14:42:50.3333260Z > Task :app:mergeReleaseNativeLibs
+2026-11-23T14:42:50.3393204Z > Task :app:processReleaseNavigationResources FROM-CACHE
+2026-11-23T14:42:50.3423509Z > Task :shared:bundleAndroidMainClassesToCompileJar UP-TO-DATE
+2026-11-23T14:42:50.3444531Z > Task :app:javaPreCompileRelease FROM-CACHE
+2026-11-23T14:42:50.3463144Z 
+2026-11-23T14:42:50.3493497Z > Task :app:stripReleaseDebugSymbols
+2026-11-23T14:42:50.3523742Z Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so, libsqliteJni.so. Run with --info option to learn more.
+2026-11-23T14:42:50.3545740Z 
+2026-11-23T14:42:50.3553445Z > Task :shared:prepareAndroidMainArtProfile
+2026-11-23T14:42:50.3583139Z > Task :app:extractReleaseNativeDebugMetadata FROM-CACHE
+2026-11-23T14:42:50.3613180Z > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+2026-11-23T14:42:50.3616302Z > Task :shared:writeAndroidMainAarMetadata UP-TO-DATE
+2026-11-23T14:42:50.4195086Z > Task :app:packageReleaseResources
+2026-11-23T14:42:50.4223561Z > Task :app:parseReleaseLocalResources FROM-CACHE
+2026-11-23T14:42:50.4253027Z > Task :app:checkReleaseAarMetadata
+2026-11-23T14:42:50.4263335Z > Task :app:mergeReleaseArtProfile
+2026-11-23T14:42:50.4300259Z > Task :app:mapReleaseSourceSetPaths
+2026-11-23T14:42:50.4353155Z > Task :app:generateReleaseRFile FROM-CACHE
+2026-11-23T14:42:50.4403199Z > Task :app:compileReleaseNavigationResources FROM-CACHE
+2026-11-23T14:42:50.4462988Z > Task :app:createReleaseCompatibleScreenManifests
+2026-11-23T14:42:50.4478716Z > Task :shared:processAndroidMainManifest UP-TO-DATE
+2026-11-23T14:42:50.4518775Z > Task :app:extractDeepLinksRelease FROM-CACHE
+2026-11-23T14:42:50.5156352Z > Task :app:extractProguardFiles
+2026-11-23T14:42:50.5180423Z > Task :app:mergeReleaseStartupProfile
+2026-11-23T14:42:50.5203845Z > Task :app:generateReleaseAssets UP-TO-DATE
+2026-11-23T14:42:50.5233252Z > Task :app:mergeReleaseAssets
+2026-11-23T14:42:50.5253286Z > Task :app:compressReleaseAssets FROM-CACHE
+2026-11-23T14:42:50.6218824Z > Task :app:processReleaseMainManifest
+2026-11-23T14:42:50.6263262Z > Task :app:processReleaseManifest
+2026-11-23T14:42:50.6312059Z > Task :app:processReleaseManifestForPackage
+2026-11-23T14:42:50.6345933Z > Task :shared:prepareLintJarForPublish
+2026-11-23T14:42:50.6368196Z > Task :shared:checkAndroidMainAarMetadata
+2026-11-23T14:42:50.6407689Z > Task :shared:extractAndroidMainAnnotations FROM-CACHE
+2026-11-23T14:42:50.6443100Z > Task :shared:mergeAndroidMainJavaResource
+2026-11-23T14:42:50.6473156Z > Task :shared:syncAndroidMainLibJars FROM-CACHE
+2026-11-23T14:42:50.7154128Z > Task :shared:bundleAndroidMainLocalLintAar
+2026-11-23T14:42:50.7187691Z > Task :app:extractReleaseVersionControlInfo
+2026-11-23T14:42:50.7213434Z > Task :app:extractIncludeReleaseProto
+2026-11-23T14:42:50.7214177Z > Task :app:generateReleaseProto FROM-CACHE
+2026-11-23T14:42:50.7218270Z > Task :app:validateSigningRelease
+2026-11-23T14:42:50.7264610Z > Task :app:writeReleaseAppMetadata
+2026-11-23T14:42:50.7273264Z > Task :app:writeReleaseSigningConfigVersions
+2026-11-23T14:42:53.1154406Z > Task :app:mergeReleaseResources
+2026-11-23T14:42:54.5153835Z > Task :app:processReleaseResources
+2026-11-23T14:43:01.1171977Z 
+2026-11-23T14:43:01.1173250Z > Task :app:compileReleaseKotlin
+2026-11-23T14:43:01.1174329Z w: file:///home/runner/work/WLED/WLED/app/app/src/main/java/ca/cgagnier/wlednativeandroid/ui/control/ControlScreen.kt:393:96 Unnecessary safe call on a non-null receiver of type 'Nightlight'.
+2026-11-23T14:43:01.1194984Z w: file:///home/runner/work/WLED/WLED/app/app/src/main/java/ca/cgagnier/wlednativeandroid/ui/homeScreen/DeviceListDetail.kt:54:67 'fun currentWindowAdaptiveInfo(supportLargeAndXLargeWidth: Boolean = ...): WindowAdaptiveInfo' is deprecated. Please use V2 version of this function to support L and XL width size classes.
+2026-11-23T14:43:01.5160634Z 
+2026-11-23T14:43:01.5213580Z > Task :app:compressReleaseJavaRes FROM-CACHE
+2026-11-23T14:43:01.6157112Z > Task :app:mergeReleaseJavaResource
+2026-11-23T14:43:01.8154126Z > Task :app:compileReleaseJavaWithJavac
+2026-11-23T14:43:01.9203980Z > Task :app:mergeReleaseGeneratedProguardFiles
+2026-11-23T14:43:02.4163783Z > Task :app:generateReleaseLintVitalReportModel
+2026-11-23T14:43:03.1163794Z > Task :app:expandReleaseArtProfileWildcards
+2026-11-23T14:43:05.6183715Z > Task :app:produceReleaseComposeMapping
+2026-11-23T14:43:05.6243545Z > Task :app:reportReleaseComposeMappingErrors
+2026-11-23T14:43:31.8173503Z > Task :app:lintVitalAnalyzeRelease
+2026-11-23T14:43:33.1183647Z > Task :app:minifyReleaseWithR8
+2026-11-23T14:43:55.5158658Z /home/runner/work/WLED/WLED/app/app/src/main/res/values/strings.xml:2: Error: "app_name" is not translated in "de" (German) or "fr" (French) [MissingTranslation]
+2026-11-23T14:43:55.5159384Z 
+2026-11-23T14:43:55.5183638Z     <string name="app_name">LumiIsle</string>
+2026-11-23T14:43:55.5184136Z > Task :app:lintVitalReportRelease
+2026-11-23T14:43:55.5213513Z             ~~~~~~~~~~~~~~~
+2026-11-23T14:43:55.5213964Z Lint found 1 error. First failure:
+2026-11-23T14:43:55.5214399Z 
+2026-11-23T14:43:55.5214985Z /home/runner/work/WLED/WLED/app/app/src/main/res/values/strings.xml:2: Error: "app_name" is not translated in "de" (German) or "fr" (French) [MissingTranslation]
+2026-11-23T14:43:55.5243360Z     <string name="app_name">LumiIsle</string>
+2026-11-23T14:43:55.5243819Z             ~~~~~~~~~~~~~~~
+2026-11-23T14:43:55.5244026Z 
+2026-11-23T14:43:55.5244030Z 
+2026-11-23T14:43:55.5244186Z > Task :app:lintVitalRelease FAILED
+2026-11-23T14:43:55.5244651Z    Explanation for issues of type "MissingTranslation":
+2026-11-23T14:43:55.5273636Z    If an application has more than one locale, then all the strings declared
+2026-11-23T14:43:55.5287696Z    in one language should also be translated in all other languages.
+2026-11-23T14:43:55.5288164Z 
+2026-11-23T14:43:55.5288447Z    If the string should not be translated, you can add the attribute
+2026-11-23T14:43:55.5289036Z    translatable="false" on the <string> element, or you can define all your
+2026-11-23T14:43:55.5289676Z    non-translatable strings in a resource file called donottranslate.xml. Or,
+2026-11-23T14:43:55.5290298Z    you can ignore the issue with a tools:ignore="MissingTranslation"
+2026-11-23T14:43:55.5290750Z    attribute.
+2026-11-23T14:43:55.5290949Z 
+2026-11-23T14:43:55.5291237Z    You can tell lint (and other tools) which language is the default language
+2026-11-23T14:43:55.5291858Z    in your res/values/ folder by specifying tools:locale="languageCode" for
+2026-11-23T14:43:55.5292834Z    the root <resources> element in your resource file. (The tools prefix
+2026-11-23T14:43:55.5293518Z    refers to the namespace declaration http://schemas.android.com/tools.)
+2026-11-23T14:43:55.5293885Z 
+2026-11-23T14:43:55.5294059Z 1 error
+2026-11-23T14:43:55.5294239Z 
+2026-11-23T14:44:47.2166714Z 
+2026-11-23T14:44:47.2167731Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_5-1795444968672.json
+2026-11-23T14:44:47.2193683Z FAILURE: Build failed with an exception.
+2026-11-23T14:44:47.2194029Z 
+2026-11-23T14:44:47.2243375Z 
+2026-11-23T14:44:47.2244128Z [Incubating] Problems report is available at: file:///home/runner/work/WLED/WLED/app/build/reports/problems/problems-report.html
+2026-11-23T14:44:47.2263201Z * What went wrong:
+2026-11-23T14:44:47.2263435Z 
+2026-11-23T14:44:47.2283508Z Execution failed for task ':app:lintVitalRelease' (registered by plugin 'com.android.internal.application').
+2026-11-23T14:44:47.2284405Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+2026-11-23T14:44:47.2323174Z > Lint found fatal errors while assembling a release target.
+2026-11-23T14:44:47.2323560Z 
+2026-11-23T14:44:47.2353142Z   
+2026-11-23T14:44:47.2353900Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+2026-11-23T14:44:47.2383368Z   Fix the issues identified by lint, or create a baseline to see only new errors.
+2026-11-23T14:44:47.2384341Z   To create a baseline, run `gradlew updateLintBaseline` after adding the following to the module's build.gradle file:
+2026-11-23T14:44:47.2385101Z   ```
+2026-11-23T14:44:47.2385407Z   android {
+2026-11-23T14:44:47.2385722Z       lint {
+2026-11-23T14:44:47.2386081Z           baseline = file("lint-baseline.xml")
+2026-11-23T14:44:47.2386427Z       }
+2026-11-23T14:44:47.2386675Z   }
+2026-11-23T14:44:47.2386914Z   ```
+2026-11-23T14:44:47.2387367Z   For more details, see https://developer.android.com/studio/write/lint#snapshot
+2026-11-23T14:44:47.2387875Z   
+2026-11-23T14:44:47.2388633Z   /home/runner/work/WLED/WLED/app/app/src/main/res/values/strings.xml:2: Error: "app_name" is not translated in "de" (German) or "fr" (French) [MissingTranslation]
+2026-11-23T14:44:47.2389477Z       <string name="app_name">LumiIsle</string>
+2026-11-23T14:44:47.2389876Z               ~~~~~~~~~~~~~~~
+2026-11-23T14:44:47.2390194Z   
+2026-11-23T14:44:47.2390530Z      Explanation for issues of type "MissingTranslation":
+2026-11-23T14:44:47.2391083Z      If an application has more than one locale, then all the strings declared
+2026-11-23T14:44:47.2391675Z      in one language should also be translated in all other languages.
+2026-11-23T14:44:47.2392106Z   
+2026-11-23T14:44:47.2392717Z      If the string should not be translated, you can add the attribute
+2026-11-23T14:44:47.2393320Z      translatable="false" on the <string> element, or you can define all your
+2026-11-23T14:44:47.2393692Z 
+2026-11-23T14:44:47.2394000Z      non-translatable strings in a resource file called donottranslate.xml. Or,
+2026-11-23T14:44:47.2394635Z      you can ignore the issue with a tools:ignore="MissingTranslation"
+2026-11-23T14:44:47.2395816Z For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+2026-11-23T14:44:47.2396628Z      attribute.
+2026-11-23T14:44:47.2396895Z   
+2026-11-23T14:44:47.2397280Z      You can tell lint (and other tools) which language is the default language
+2026-11-23T14:44:47.2397891Z      in your res/values/ folder by specifying tools:locale="languageCode" for
+2026-11-23T14:44:47.2398498Z      the root <resources> element in your resource file. (The tools prefix
+2026-11-23T14:44:47.2399101Z      refers to the namespace declaration http://schemas.android.com/tools.)
+2026-11-23T14:44:47.2399567Z   
+2026-11-23T14:44:47.2399813Z   1 error
+2026-11-23T14:44:47.2399959Z 
+2026-11-23T14:44:47.2400070Z * Try:
+2026-11-23T14:44:47.2400411Z > Run with --stacktrace option to get the stack trace.
+2026-11-23T14:44:47.2400898Z > Run with --info or --debug option to get more log output.
+2026-11-23T14:44:47.2401480Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+2026-11-23T14:44:47.2402010Z > Get more help at https://help.gradle.org.
+2026-11-23T14:44:47.2402272Z 
+2026-11-23T14:44:47.2402609Z BUILD FAILED in 1m 58s
+2026-11-23T14:44:47.2403023Z 69 actionable tasks: 44 executed, 13 from cache, 12 up-to-date
+2026-11-23T14:44:47.2403430Z Configuration cache entry stored.
+2026-11-23T14:44:47.3224858Z ##[error]Process completed with exit code 1.
+2026-11-23T14:44:47.3443764Z Post job cleanup.
+2026-11-23T14:44:47.5380117Z In post-action step
+2026-11-23T14:44:47.5389431Z ##[group]Stopping Gradle daemons
+2026-11-23T14:44:47.5390210Z Stopping Gradle daemons for /home/runner/.gradle/wrapper/dists/gradle-9.8.2-bin/8wepis63pzuhrlfaiy04bagwu/gradle-9.8.2
+2026-11-23T14:44:47.5401900Z [command]/home/runner/.gradle/wrapper/dists/gradle-9.8.2-bin/8wepis63pzuhrlfaiy04bagwu/gradle-9.8.2/bin/gradle --stop
+2026-11-23T14:44:48.0270464Z Stopping Daemon(s)
+2026-11-23T14:44:48.0384163Z 1 Daemon stopped
+2026-11-23T14:44:48.0523736Z ##[endgroup]
+2026-11-23T14:44:48.0524405Z Not performing cache-cleanup due to build failure
+2026-11-23T14:44:48.0525203Z ##[group]Caching Gradle state
+2026-11-23T14:44:48.0626857Z Not saving configuration-cache state, as no encryption key was provided
+2026-11-23T14:44:48.3209415Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/WLED/WLED --files-from manifest.txt --use-compress-program zstdmt
+2026-11-23T14:44:49.1385894Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/WLED/WLED --files-from manifest.txt --use-compress-program zstdmt
+2026-11-23T14:44:49.1831688Z Sent 181853 of 181853 (100.0%), 0.3 MBs/sec
+2026-11-23T14:44:49.5091952Z Saved cache entry with key gradle-kotlin-dsl-v1-e6a46ed26d1a8b25c9ceb2d7abe18cbb from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 1207ms
+2026-11-23T14:44:51.8278320Z Sent 0 of 197657877 (0.0%), 0.0 MBs/sec
+2026-11-23T14:44:52.8281465Z Sent 0 of 197657877 (0.0%), 0.0 MBs/sec
+2026-11-23T14:44:53.3834014Z Sent 197657877 of 197657877 (100.0%), 73.7 MBs/sec
+2026-11-23T14:44:53.7017683Z Saved cache entry with key gradle-transforms-v1-564e33906cccd9abfa0f0b99d1ef6a19 from /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 5005ms
+2026-11-23T14:44:54.0229151Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/WLED/WLED --files-from manifest.txt --use-compress-program zstdmt
+2026-11-23T14:44:55.5095297Z Sent 33685504 of 98335678 (34.3%), 32.2 MBs/sec
+2026-11-23T14:44:56.5102548Z Sent 73596928 of 98335678 (74.8%), 35.1 MBs/sec
+2026-11-23T14:44:57.2587732Z Sent 98335678 of 98335678 (100.0%), 34.1 MBs/sec
+2026-11-23T14:44:57.5596127Z Saved cache entry with key gradle-home-v1|Linux-X64|build[4f01853a2d9ff6687d48e9643e834cb6]-7f2400d02fb0f88bda9c76d647c115b37ec22901 from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 3545ms
+2026-11-23T14:44:57.5597140Z ##[endgroup]
+2026-11-23T14:44:57.5602547Z Generating Job Summary
+2026-11-23T14:44:57.5614308Z Completed post-action step
+2026-11-23T14:44:57.5794896Z Post job cleanup.
+2026-11-23T14:44:57.6853354Z (node:3207) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-23T14:44:57.6853953Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-23T14:44:57.7011626Z Post job cleanup.
+2026-11-23T14:44:57.7691242Z [command]/usr/bin/git version
+2026-11-23T14:44:57.7723666Z git version 2.56.1
+2026-11-23T14:44:57.7756201Z Temporarily overriding HOME='/home/runner/work/_temp/939aaa20-2471-4022-a946-2659c892cfe5' before making global git config changes
+2026-11-23T14:44:57.7757248Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-23T14:44:57.7760846Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WLED/WLED
+2026-11-23T14:44:57.7809582Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-23T14:44:57.7842564Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-23T14:44:57.8117481Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-23T14:44:57.8140008Z http.https://github.com/.extraheader
+2026-11-23T14:44:57.8148176Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-23T14:44:57.8180936Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-23T14:44:57.8378556Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-23T14:44:57.8413675Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-23T14:44:57.8733430Z Cleaning up orphan processes
+2026-11-23T14:44:57.8927087Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
