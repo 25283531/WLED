@@ -11,6 +11,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import ca.cgagnier.wlednativeandroid.model.Asset
 import ca.cgagnier.wlednativeandroid.model.Device
+import ca.cgagnier.wlednativeandroid.model.FavoriteEffect
 import ca.cgagnier.wlednativeandroid.model.Repository
 import ca.cgagnier.wlednativeandroid.model.Version
 import ca.cgagnier.wlednativeandroid.repository.migrations.DbMigration7To8
@@ -25,8 +26,9 @@ import kotlinx.coroutines.IO
         Repository::class,
         Version::class,
         Asset::class,
+        FavoriteEffect::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -37,6 +39,7 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8, spec = DbMigration7To8::class),
         AutoMigration(from = 8, to = 9, spec = DbMigration8To9::class),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 @TypeConverters(Converters::class)
@@ -46,6 +49,7 @@ abstract class DevicesDatabase : RoomDatabase() {
     abstract fun repositoryDao(): RepositoryDao
     abstract fun versionDao(): VersionDao
     abstract fun assetDao(): AssetDao
+    abstract fun favoriteEffectDao(): FavoriteEffectDao
 
     companion object
 }

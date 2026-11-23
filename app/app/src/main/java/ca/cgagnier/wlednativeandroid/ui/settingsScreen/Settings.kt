@@ -60,6 +60,7 @@ fun Settings(navigateUp: () -> Unit, viewModel: SettingsViewModel = koinViewMode
     val context = LocalContext.current
     val activity = LocalActivity.current
     val currentLanguage = remember(context) { AppLanguageManager.current(context) }
+    val isFollowingSystem = remember(context) { AppLanguageManager.isFollowingSystem(context) }
     val actions = remember(viewModel, activity) {
         SettingsActions(
             setShowHiddenDevices = { viewModel.setShowHiddenDevices(it) },
@@ -67,10 +68,14 @@ fun Settings(navigateUp: () -> Unit, viewModel: SettingsViewModel = koinViewMode
             setShowOfflineDevicesLast = { viewModel.setShowOfflineDevicesLast(it) },
             setTheme = { viewModel.setTheme(it) },
             setLanguage = { lang -> activity?.let { AppLanguageManager.set(it, lang) } },
+            followSystem = { activity?.let { AppLanguageManager.followSystem(it) } },
         )
     }
     SettingsContent(
-        settingsState = settingsState.copy(language = currentLanguage),
+        settingsState = settingsState.copy(
+            language = currentLanguage,
+            isFollowingSystem = isFollowingSystem,
+        ),
         actions = actions,
         navigateUp = navigateUp,
     )
@@ -84,6 +89,7 @@ data class SettingsActions(
     val setShowOfflineDevicesLast: (Boolean) -> Unit = {},
     val setTheme: (ThemeSettings) -> Unit = {},
     val setLanguage: (AppLanguage) -> Unit = {},
+    val followSystem: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,8 +119,10 @@ fun SettingsContent(
                 firstColumn = {
                     GeneralOptions(
                         currentLanguage = settingsState.language,
+                        isFollowingSystem = settingsState.isFollowingSystem,
                         currentTheme = settingsState.theme,
                         setLanguage = actions.setLanguage,
+                        followSystem = actions.followSystem,
                         setTheme = actions.setTheme,
                     )
                 },
@@ -203,20 +211,32 @@ fun RadioRow(label: String, checked: Boolean, onSelected: () -> Unit) {
 @Composable
 fun GeneralOptions(
     currentLanguage: AppLanguage,
+    isFollowingSystem: Boolean,
     currentTheme: ThemeSettings,
     setLanguage: (AppLanguage) -> Unit,
+    followSystem: () -> Unit,
     setTheme: (ThemeSettings) -> Unit,
 ) {
     SettingsSection(stringResource(R.string.settings_general)) {
         ListItem(
             leadingContent = { Icon(painterResource(R.drawable.outline_translate_24), contentDescription = null) },
             headlineContent = { Text(stringResource(R.string.language)) },
-            supportingContent = { Text(currentLanguage.nativeName) },
+            supportingContent = { Text(stringResource(R.string.settings_language_current, currentLanguage.nativeName)) },
             colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
         )
-        AppLanguage.entries.forEach { lang ->
-            RadioRow(label = lang.nativeName, checked = lang == currentLanguage) {
-                if (lang != currentLanguage) setLanguage(lang)
+        SwitchRow(
+            label = stringResource(R.string.settings_language_follow_system),
+            checked = isFollowingSystem,
+            onCheckedChange = { follow ->
+                if (follow) followSystem() else setLanguage(currentLanguage)
+            },
+            description = stringResource(R.string.settings_language_follow_system_description),
+        )
+        if (!isFollowingSystem) {
+            AppLanguage.entries.forEach { lang ->
+                RadioRow(label = lang.nativeName, checked = lang == currentLanguage) {
+                    if (lang != currentLanguage) setLanguage(lang)
+                }
             }
         }
         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))

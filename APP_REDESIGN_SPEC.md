@@ -467,3 +467,43 @@ WLED 本身是设备自描述的，规格通过 API 暴露：
 - 本地化：`res/values{, -zh, -fr, -de}/strings.xml`、`res/xml/locales_config.xml`、`app/build.gradle.kts:30`
 - 固件硬件常量：`firmware/platformio_override.ini:31-34`
 - 固件网页设置：`firmware/wled00/data/settings_leds.htm` 等
+
+---
+
+## 12. 实现记录（v8.1.0-test1，Android 首版）
+
+本节记录**实际落地**的代码，与上文设计不一致处以本节为准。
+
+### 12.1 已完成
+
+| 项 | 实现 |
+|---|---|
+| 底部导航 | `ui/HomeScaffold.kt`：设备 / 灯效 / 控制 / 收藏 四个页签，各页签用 `SaveableStateHolder` 独立保存状态 |
+| 去 WebView | `ui/homeScreen/detail/DeviceDetail.kt` 改为原生控制页；固件网页保留为标题栏「网页设置」，用系统浏览器打开（极客入口） |
+| 灯效库 | `ui/effects/`：`EffectCatalog`（187 条，由固件生成）+ 搜索 + 分类 chips + GIF 预览网格 + 收藏 |
+| 控制页 | `ui/control/`：开关、亮度、常用灯效 chips、速度/强度、颜色、多灯同步、定时关灯 |
+| 收藏页 | `ui/favorites/` + Room `FavoriteEffect`（DB v11，`effectId` 唯一索引，`AutoMigration(10,11)`） |
+| 语言 | `util/AppLanguage.kt` 改为跟随系统；系统语言不在 zh/en/fr/de 内时回落中文。设置页提供「跟随系统语言」开关 |
+| 规格自适应 | 无任何硬编码灯珠数；`ui/components/DeviceSelector.kt` 的 `deviceSpecSummary()` 从 `leds.count` / `leds.matrix` 现算 |
+| 设备 API | `DeviceApi` 新增 `getState()`、`getEffects()`、`uploadFile()`（`/upload`，字段名 `file`，为字画上传铺路） |
+| 下发通道 | `DeviceConnectionManager.sendSegmentPatch()`：把单个段落变换合并进完整 `seg` 列表后经 WebSocket 下发，避免覆盖其他段落 |
+
+### 12.2 与设计的偏离
+
+- **分类改为「全部 / 常用 / 1D / 2D / 字画」**。原设计的「静态 / 动态 / 音频」无法从固件数据可靠推导：`/json/effects` 只给名称，`effects_enabled.json` 里也没有音频标记。宁可少一个分类，也不做猜错的分类。
+- **灯效名与 id 固化在 App 里**（`EffectCatalog`），不依赖运行时 `/json/effects`。好处是离线可列、分类稳定；代价是固件增删灯效后需重新跑 `tools/gen_effect_catalog.py`。
+- **收藏以「灯效」为单位**（每个 `effectId` 只有一条），不区分设备。收藏时快照当前的速度/强度/调色板/三色，调出时可复现观感。
+- **GIF 打包进 APK assets**（612KB / 15 张），走 `ImageDecoder` 播放（API 28+），低版本退回首帧静态图。
+
+### 12.3 未做（下一批）
+
+1. **字画的自定义图片/文字上传**：`DeviceApi.uploadFile()` 已就绪，但缺少「选图 → 按 `matrix.w×h` 重采样 → 编码 GIF → 上传」的前端链路。编码是难点（KMP 无标准 GIF 编码器，需纯 Kotlin 实现或平台侧 `CGImageDestination`/`Bitmap` 方案）。
+2. **WebView 死代码清理**：`ui/components/DeviceWebview.kt`、`WebViewViewModel.kt`、`WebViewHolder.kt` 及 3 个对应测试已无调用方，但为控制首版风险暂留，待构建验证通过后整体删除。
+3. **iOS**：按要求搁置（其 CI 在 `Build app (no code signing)` 一步失败，属既有问题）。
+4. **剩余 172 个灯效的 GIF**：目前 15 张覆盖常用效果，其余显示占位块。
+
+### 12.4 相关脚本
+
+- `tools/gen_effect_catalog.py`：从 `firmware/effects_enabled.json` 生成 `EffectCatalog.kt`
+- `tools/gen_effect_gifs.py`：生成通用规格（256×144）预览 GIF
+- `tools/add_android_strings.py`：四语言字符串同步（幂等）

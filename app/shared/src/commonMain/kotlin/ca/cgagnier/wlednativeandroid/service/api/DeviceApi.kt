@@ -39,10 +39,29 @@ interface DeviceApi {
     suspend fun getInfo(): ApiResponse<Info>
 
     @Throws(Exception::class)
+    suspend fun getState(): ApiResponse<State>
+
+    /**
+     * Effect names as advertised by the firmware (`GET /json/effects`).
+     *
+     * The array index is the effect id used in `seg.fx`, so the returned list doubles as the
+     * id -> name table for the device. Entries are never null; reserved slots surface as `RSVD`.
+     */
+    @Throws(Exception::class)
+    suspend fun getEffects(): ApiResponse<List<String>>
+
+    @Throws(Exception::class)
     suspend fun postJson(state: JsonPost): ApiResponse<State>
 
     @Throws(Exception::class)
     suspend fun updateDevice(fileData: ByteArray, fileName: String): ApiResponse<String>
+
+    /**
+     * Upload a file to the device filesystem (`POST /upload`), used for custom images and
+     * playlists. The firmware expects the multipart field name `file`.
+     */
+    @Throws(Exception::class)
+    suspend fun uploadFile(fileData: ByteArray, fileName: String): ApiResponse<String>
 }
 
 @Throws(Exception::class)
@@ -76,6 +95,26 @@ class KtorDeviceApi(private val baseUrl: String, private val httpClient: HttpCli
     }
 
     @Throws(Exception::class)
+    override suspend fun getState(): ApiResponse<State> {
+        val response = httpClient.get(normalizeUrl("json/state"))
+        return if (response.status.isSuccess()) {
+            ApiResponse(code = response.status.value, body = response.body<State>())
+        } else {
+            ApiResponse(code = response.status.value, errorBody = response.bodyAsText())
+        }
+    }
+
+    @Throws(Exception::class)
+    override suspend fun getEffects(): ApiResponse<List<String>> {
+        val response = httpClient.get(normalizeUrl("json/effects"))
+        return if (response.status.isSuccess()) {
+            ApiResponse(code = response.status.value, body = response.body<List<String>>())
+        } else {
+            ApiResponse(code = response.status.value, errorBody = response.bodyAsText())
+        }
+    }
+
+    @Throws(Exception::class)
     override suspend fun postJson(state: JsonPost): ApiResponse<State> {
         val response = httpClient.post(normalizeUrl("json/state")) {
             contentType(ContentType.Application.Json)
@@ -89,12 +128,25 @@ class KtorDeviceApi(private val baseUrl: String, private val httpClient: HttpCli
     }
 
     @Throws(Exception::class)
-    override suspend fun updateDevice(fileData: ByteArray, fileName: String): ApiResponse<String> {
+    override suspend fun updateDevice(fileData: ByteArray, fileName: String): ApiResponse<String> =
+        postMultipart("update", fieldName = FILE_FIELD_NAME, fileName = fileName, fileData = fileData)
+
+    @Throws(Exception::class)
+    override suspend fun uploadFile(fileData: ByteArray, fileName: String): ApiResponse<String> =
+        postMultipart("upload", fieldName = FILE_FIELD_NAME, fileName = fileName, fileData = fileData)
+
+    @Throws(Exception::class)
+    private suspend fun postMultipart(
+        path: String,
+        fieldName: String,
+        fileName: String,
+        fileData: ByteArray,
+    ): ApiResponse<String> {
         val boundary = generateMultipartBoundary()
-        val bodyBytes = buildMultipartFirmwareBody(boundary, fileName, fileData)
+        val bodyBytes = buildMultipartBody(boundary, fieldName, fileName, fileData)
         // Use ByteArrayContent instead of streaming WriteChannelContent so Darwin sends an NSData
         // body with an explicit Content-Length rather than chunked Transfer-Encoding (unsupported by ESP32).
-        val response = httpClient.post(normalizeUrl("update")) {
+        val response = httpClient.post(normalizeUrl(path)) {
             setBody(
                 ByteArrayContent(
                     bytes = bodyBytes,
@@ -116,13 +168,18 @@ class KtorDeviceApi(private val baseUrl: String, private val httpClient: HttpCli
         append(Random.nextLong().toULong().toString(HEX_RADIX))
     }
 
-    private fun buildMultipartFirmwareBody(boundary: String, fileName: String, fileData: ByteArray): ByteArray {
+    private fun buildMultipartBody(
+        boundary: String,
+        fieldName: String,
+        fileName: String,
+        fileData: ByteArray,
+    ): ByteArray {
         // ESPAsyncWebServer reads filename="..." up to the next quote without unescaping
         // backslashes, so strip CR/LF and quotes rather than backslash-escaping.
         val safeFileName = fileName.filterNot { it == '\r' || it == '\n' || it == '"' }
         return Buffer().apply {
             writeUtf8("--$boundary\r\n")
-            writeUtf8("Content-Disposition: form-data; name=\"file\"; filename=\"$safeFileName\"\r\n")
+            writeUtf8("Content-Disposition: form-data; name=\"$fieldName\"; filename=\"$safeFileName\"\r\n")
             writeUtf8("Content-Type: application/octet-stream\r\n")
             writeUtf8("\r\n")
             write(fileData)
@@ -132,6 +189,9 @@ class KtorDeviceApi(private val baseUrl: String, private val httpClient: HttpCli
 
     private companion object {
         const val HEX_RADIX = 16
+
+        /** Multipart field name expected by both `/update` and `/upload` on the firmware. */
+        const val FILE_FIELD_NAME = "file"
     }
 }
 

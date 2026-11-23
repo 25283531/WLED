@@ -3,6 +3,7 @@ package ca.cgagnier.wlednativeandroid.service
 import ca.cgagnier.wlednativeandroid.model.Branch
 import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.DeviceStateInfo
+import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.model.wledapi.State
 import ca.cgagnier.wlednativeandroid.repository.DeviceStore
 import ca.cgagnier.wlednativeandroid.service.update.RepositoryIdResolver
@@ -612,6 +613,35 @@ class DeviceConnectionManager(
         sendState(macAddress, State(brightness = brightness))
 
     suspend fun setPower(macAddress: String, isOn: Boolean): Boolean = sendState(macAddress, State(isOn = isOn))
+
+    /**
+     * Applies [transform] to one segment and sends the whole segment list.
+     *
+     * WLED treats each entry of `seg` as a patch for the segment with that `id`, so sending the
+     * complete list keeps every other segment untouched while letting a single call change any
+     * combination of effect, speed, colors and palette.
+     *
+     * Returns false when the device state is not known yet or the send failed.
+     */
+    suspend fun sendSegmentPatch(
+        macAddress: String,
+        segmentId: Int = 0,
+        transform: (Segment) -> Segment,
+    ): Boolean {
+        val currentState = _allDevicesWithState.value
+            .firstOrNull { it.device.macAddress == macAddress }
+            ?.stateInfo
+            ?.state
+            ?: return false
+        val segments = currentState.segment.orEmpty()
+        val index = segments.indexOfFirst { (it.id ?: 0) == segmentId }
+        val updated = if (index >= 0) {
+            segments.toMutableList().apply { this[index] = transform(this[index]) }
+        } else {
+            segments + transform(Segment(id = segmentId))
+        }
+        return sendState(macAddress, State(segment = updated))
+    }
 
     suspend fun sendState(macAddress: String, patch: State): Boolean {
         val connection = synchronized(lock) { sessions[macAddress]?.connection } ?: return false

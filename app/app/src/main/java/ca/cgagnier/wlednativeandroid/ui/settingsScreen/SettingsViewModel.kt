@@ -54,4 +54,6 @@ data class SettingsState(
     val showHiddenDevices: Boolean = false,
     val theme: ThemeSettings = ThemeSettings.Auto,
     val language: AppLanguage = AppLanguage.Default,
+    /** 语言是否跟随系统（默认行为）。 */
+    val isFollowingSystem: Boolean = true,
 )

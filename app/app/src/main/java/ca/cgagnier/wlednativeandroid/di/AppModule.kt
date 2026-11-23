@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import ca.cgagnier.wlednativeandroid.domain.ChangelogProvider
 import ca.cgagnier.wlednativeandroid.domain.DeepLinkHandler
 import ca.cgagnier.wlednativeandroid.repository.DevicesDatabase
+import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.repository.USER_PREFERENCES_DATA_STORE_FILE_NAME
 import ca.cgagnier.wlednativeandroid.repository.UserPreferences
 import ca.cgagnier.wlednativeandroid.repository.createUserPreferencesDataStore
@@ -23,6 +24,9 @@ import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.api.createHttpClient
 import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
+import ca.cgagnier.wlednativeandroid.ui.control.ControlViewModel
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectsViewModel
+import ca.cgagnier.wlednativeandroid.ui.favorites.FavoritesViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceEdit.DeviceEditViewModel
@@ -53,6 +57,8 @@ val appModule: Module = module {
     single<DevicesDatabase> {
         DevicesDatabase.getDatabase(androidContext())
     }
+
+    single<FavoriteEffectDao> { get<DevicesDatabase>().favoriteEffectDao() }
 
     single<DataStore<UserPreferences>> {
         val context = androidContext()
@@ -167,4 +173,7 @@ val appModule: Module = module {
     }
     viewModelOf(::DeviceWebsocketListViewModel)
     viewModelOf(::DeviceAddViewModel)
+    viewModelOf(::EffectsViewModel)
+    viewModelOf(::ControlViewModel)
+    viewModelOf(::FavoritesViewModel)
 }

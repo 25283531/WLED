@@ -8,20 +8,18 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetail
-import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailActions
 import ca.cgagnier.wlednativeandroid.ui.settingsScreen.Settings
 import kotlinx.serialization.Serializable
 
 @Serializable
-data object DeviceListDetailKey : NavKey
+data object HomeKey : NavKey
 
 @Serializable
 data object SettingsKey : NavKey
 
 @Composable
 fun MainNavHost(
-    backStack: NavBackStack<NavKey> = rememberNavBackStack(DeviceListDetailKey),
+    backStack: NavBackStack<NavKey> = rememberNavBackStack(HomeKey),
     startDeviceAddress: NavigationEvent? = null,
     openChangelogs: () -> Unit = {},
 ) {
@@ -37,15 +35,11 @@ fun MainNavHost(
             rememberViewModelStoreNavEntryDecorator(),
         ),
         entryProvider = entryProvider {
-            entry<DeviceListDetailKey> {
-                DeviceListDetail(
+            entry<HomeKey> {
+                HomeScaffold(
                     initialDeviceMacAddress = startDeviceAddress,
-                    actions = DeviceListDetailActions(
-                        openSettings = {
-                            backStack.add(SettingsKey)
-                        },
-                        openChangelogs = openChangelogs,
-                    ),
+                    openSettings = { backStack.add(SettingsKey) },
+                    openChangelogs = openChangelogs,
                 )
             }
             entry<SettingsKey> {
