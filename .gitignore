@@ -1,0 +1,16 @@
+# firmware
+firmware/.pio/
+firmware/node_modules/
+firmware/build_output/
+firmware/wled00/html_*.h
+# app
+app/.gradle/
+app/build/
+app/**/build/
+app/local.properties
+app/.kotlin/
+app/iosApp/build/
+app/iosApp/**/xcuserdata/
+*.iml
+.DS_Store
+Thumbs.db

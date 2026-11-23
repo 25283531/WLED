@@ -1,0 +1,64 @@
+name: Firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['firmware/**', '.github/workflows/firmware.yml']
+    tags: ['fw-v*']
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: firmware
+
+jobs:
+  build:
+    name: Build color_lamp_c3
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: firmware/.nvmrc
+          cache: npm
+          cache-dependency-path: firmware/package-lock.json
+
+      - run: npm ci
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio/.cache
+          key: pio-${{ hashFiles('firmware/platformio.ini', 'firmware/platformio_override.ini') }}
+
+      - run: pip install -r requirements.txt
+
+      - run: pio run -e color_lamp_c3
+
+      - name: Collect binaries
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp build_output/release/*.bin "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
+          cp .pio/build/color_lamp_c3/firmware.bin "$GITHUB_WORKSPACE/out/ColorLamp-C3-ota.bin"
+          cp .pio/build/color_lamp_c3/bootloader.bin .pio/build/color_lamp_c3/partitions.bin "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
+          ls -la "$GITHUB_WORKSPACE/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-color_lamp_c3
+          path: out/*.bin
+          retention-days: 30
+
+      - name: Publish GitHub Release (tag fw-v*)
+        if: startsWith(github.ref, 'refs/tags/fw-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.bin
