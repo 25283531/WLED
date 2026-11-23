@@ -60,9 +60,16 @@ android {
 
     buildTypes {
         release {
-            if (!keystorePath.isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            // 有正式签名材料就用正式的；没有则回落到 debug keystore。
+            // 回落是为了让 CI 产出的 release 包**可以直接安装**——未签名的 APK
+            // 在 Android 上连解析都会失败（"解析软件包时出现问题"）。
+            // 上架应用商店前必须换成正式 keystore，否则无法覆盖升级。
+            signingConfig =
+                if (!keystorePath.isNullOrBlank()) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

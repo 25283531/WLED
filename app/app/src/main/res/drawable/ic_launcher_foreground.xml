@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    自适应图标前景：夜色里一座浮在水面的发光小岛 —— 岛顶射出一道柔光柱。
+    对应品牌「光屿 / LumiIsle」。
+
+    画布 108×108，主体落在中央 72×72 安全区（x/y 18–90）。
+    构图与 tools/gen_app_icon.py 渲染的位图版本一致，两者必须同步修改。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 岛体暖光晕 -->
+    <path android:pathData="M54,66 m-33,0 a33,33 0 1,0 66,0 a33,33 0 1,0 -66,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="66"
+                android:gradientRadius="33">
+                <item android:offset="0.0" android:color="#57FFDBF2" />
+                <item android:offset="0.42" android:color="#1CFFDBF2" />
+                <item android:offset="1.0" android:color="#00FFDBF2" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 水中倒影：水面以下一枚压扁的半椭圆 -->
+    <path android:pathData="M29,78 A25,9 0 0 0 79,78 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="78"
+                android:endX="54"
+                android:endY="87">
+                <item android:offset="0.0" android:color="#59A88CFF" />
+                <item android:offset="1.0" android:color="#00A88CFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 光柱外层：柔光晕 -->
+    <path android:pathData="M47.6,66 L60.4,66 L57.2,29 L50.8,29 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="29"
+                android:endX="54"
+                android:endY="66">
+                <item android:offset="0.0" android:color="#00FFFFFF" />
+                <item android:offset="0.45" android:color="#38AAE2FF" />
+                <item android:offset="1.0" android:color="#6EE5F5FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 光柱内层：亮芯 -->
+    <path android:pathData="M51.4,66 L56.6,66 L55.1,29 L52.9,29 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="29"
+                android:endX="54"
+                android:endY="66">
+                <item android:offset="0.0" android:color="#00FFFFFF" />
+                <item android:offset="0.5" android:color="#B3FFFFFF" />
+                <item android:offset="1.0" android:color="#F2FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 小岛主体：宽而扁的半椭圆，顶部暖粉到底部深靛 -->
+    <path android:pathData="M29,78 A25,16 0 0 1 79,78 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="62"
+                android:endX="54"
+                android:endY="78">
+                <item android:offset="0.0" android:color="#FFFF8AB4" />
+                <item android:offset="0.38" android:color="#FFD080FF" />
+                <item android:offset="0.72" android:color="#FF8E7AFA" />
+                <item android:offset="1.0" android:color="#FF524CB6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 岛顶轮廓高光 -->
+    <path
+        android:pathData="M29,78 A25,16 0 0 1 79,78"
+        android:strokeColor="#E6FFF0F8"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round" />
+</vector>

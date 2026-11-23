@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    自适应图标背景：深空靛蓝对角渐变 + 左上角一点冷光。
+    与 tools/gen_app_icon.py 的 BG_STOPS 保持一致（位图兜底与矢量化要视觉统一）。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108">
+                <item android:offset="0.0" android:color="#FF101638" />
+                <item android:offset="0.5" android:color="#FF19113C" />
+                <item android:offset="1.0" android:color="#FF2C0E3A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="26"
+                android:centerY="20"
+                android:gradientRadius="74">
+                <item android:offset="0.0" android:color="#339EC2FF" />
+                <item android:offset="1.0" android:color="#009EC2FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

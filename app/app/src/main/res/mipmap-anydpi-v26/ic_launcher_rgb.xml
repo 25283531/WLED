@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    API 26+ 自适应图标（光屿 / LumiIsle）：
+    背景是夜色渐变，前景是"水面上一座发光小岛 + 一道柔光柱"。
+    位图兜底见 mipmap-*/ic_launcher_rgb*.png（由 tools/gen_app_icon.py 生成）。
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_rgb_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_rgb_foreground"/>
-    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

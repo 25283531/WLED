@@ -47,8 +47,14 @@ object AppLanguageManager {
     private const val PREFS = "app_language_prefs"
     private const val KEY = "language"
 
+    /**
+     * 注意：`Application.attachBaseContext()` 执行时 Application 还没绑定 base，
+     * 此时 `applicationContext` 为 null。所以这里必须容忍 null 并回退到传入的 context，
+     * 否则启动即 NPE（历史 bug）。
+     */
     private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        (context.applicationContext ?: context)
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** 用户显式选择的语言；null 表示跟随系统。 */
     fun preferredLanguage(context: Context): AppLanguage? =
@@ -60,8 +66,8 @@ object AppLanguageManager {
     fun current(context: Context): AppLanguage {
         preferredLanguage(context)?.let { return it }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val locales = context.getSystemService(LocaleManager::class.java).applicationLocales
-            if (!locales.isEmpty) {
+            val locales = context.getSystemService(LocaleManager::class.java)?.applicationLocales
+            if (locales != null && !locales.isEmpty) {
                 AppLanguage.forLanguageCode(locales[0].language)?.let { return it }
             }
         }
@@ -81,7 +87,8 @@ object AppLanguageManager {
     fun followSystem(activity: Activity) {
         prefs(activity).edit().remove(KEY).apply()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            activity.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.getEmptyLocaleList()
+            activity.getSystemService(LocaleManager::class.java)
+                ?.setApplicationLocales(LocaleList.getEmptyLocaleList())
         } else {
             activity.recreate()
         }
@@ -91,8 +98,8 @@ object AppLanguageManager {
         prefs(activity).edit().putString(KEY, language.tag).apply()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // 系统会自动重建 Activity
-            activity.getSystemService(LocaleManager::class.java).applicationLocales =
-                LocaleList.forLanguageTags(language.tag)
+            activity.getSystemService(LocaleManager::class.java)
+                ?.setApplicationLocales(LocaleList.forLanguageTags(language.tag))
         } else {
             activity.recreate()
         }

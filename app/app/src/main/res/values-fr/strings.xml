@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_logo">Logo WLED</string>
+    <string name="app_logo">Logo LumiIsle</string>
     <string name="add_a_device">Ajouter un appareil</string>
     <string name="add">Ajouter</string>
     <string name="add_adding_device">Ajout de <xliff:g example="192.168.1.1" id="strength">%1$s</xliff:g></string>
@@ -91,7 +91,7 @@
     <string name="device_offline_update_message">L\'appareil doit être en ligne pour vérifier sa version actuelle et chercher des mises à jour disponibles.</string>
     <string name="select_a_device_from_the_list">Veuillez choisir un appareil</string>
     <string name="downloading_file">Téléchargement de %1$s…</string>
-    <string name="help">WLED Aide</string>
+    <string name="help">Aide LumiIsle</string>
     <string name="support_me">Supporter Moustachauve</string>
     <string name="offline_devices">Appareils hors-ligne</string>
     <string name="websocket_connected">Connecté</string>
@@ -140,8 +140,8 @@
 
     <!-- Local network permission -->
     <string name="local_network_warning_title">Accès au réseau local requis</string>
-    <string name="local_network_warning_body">WLED a besoin de l\'accès au réseau local pour découvrir et contrôler vos appareils.</string>
-    <string name="local_network_instructions">Aller dans Paramètres → Applications → WLED → Autorisations → Appareils à proximité</string>
+    <string name="local_network_warning_body">LumiIsle a besoin de l\'accès au réseau local pour découvrir et contrôler vos appareils.</string>
+    <string name="local_network_instructions">Aller dans Paramètres → Applications → LumiIsle → Autorisations → Appareils à proximité</string>
     <string name="local_network_allow_access">Autoriser l\'accès</string>
 
     <string name="settings_general">Général</string>

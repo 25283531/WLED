@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    单色图标（Android 13+ 主题图标 / themed icon）：只取剪影，由系统上色。
+    「光柱 + 小岛」的轮廓，与彩色版构图一致。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 光柱 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M51.6,66 L56.4,66 L55.2,30 L52.8,30 Z" />
+
+    <!-- 小岛 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M29,78 A25,16 0 0 1 79,78 Z" />
+
+    <!-- 水面 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M24,80.4 L84,80.4 L84,82.4 L24,82.4 Z" />
+</vector>
