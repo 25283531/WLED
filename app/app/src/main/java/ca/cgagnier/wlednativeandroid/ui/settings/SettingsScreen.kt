@@ -108,7 +108,9 @@ fun SettingsScreen(
             )
 
             DeviceSummaryCard(
-                name = device?.device?.customName?.ifBlank { device.device.originalName } ?: stringResource(R.string.app_name),
+                name = device?.device?.let { it.customName.ifBlank { it.originalName } }
+                    ?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.app_name),
                 online = device?.isOnline == true,
                 version = device?.stateInfo?.info?.version,
                 onClick = { openWeb() },

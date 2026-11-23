@@ -131,7 +131,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
 
             item {
                 DeviceTube(
-                    colors = remember(segment) { segment.tubeColors() },
+                    colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     isOn = isOn,
                     brightness = brightness / MAX_CHANNEL_VALUE.toFloat(),
                     modifier = Modifier
