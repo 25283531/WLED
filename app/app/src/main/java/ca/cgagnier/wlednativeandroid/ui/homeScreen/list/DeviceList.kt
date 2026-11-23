@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -414,9 +415,11 @@ fun LazyItemScope.DeviceRow(
 @Composable
 fun DeviceListAppBar(modifier: Modifier = Modifier, onOpenDrawer: () -> Unit, onAddDevice: () -> Unit) {
     CenterAlignedTopAppBar(modifier = modifier, title = {
-        Image(
-            painter = painterResource(id = R.drawable.wled_logo_akemi),
-            contentDescription = stringResource(R.string.app_logo),
+        // 原来的 WLED 像素横幅是上游项目的美术，换成自己的品牌名
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
         )
     }, navigationIcon = {
         IconButton(onClick = onOpenDrawer) {

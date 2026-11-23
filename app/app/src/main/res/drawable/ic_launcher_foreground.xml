@@ -28,60 +28,76 @@
         </aapt:attr>
     </path>
 
+    <!-- 水面：岛底一道横向微光，两端渐隐 -->
+    <path android:pathData="M54,78.6 m-26,0 a26,2.3 0 1,0 52,0 a26,2.3 0 1,0 -52,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="28"
+                android:startY="78.6"
+                android:endX="80"
+                android:endY="78.6">
+                <item android:offset="0.0" android:color="#008CD9FF" />
+                <item android:offset="0.5" android:color="#738CD9FF" />
+                <item android:offset="1.0" android:color="#008CD9FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
     <!-- 水中倒影：水面以下一枚压扁的半椭圆 -->
-    <path android:pathData="M29,78 A25,9 0 0 0 79,78 Z">
+    <path android:pathData="M31,78 A23,8 0 0 0 77,78 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
                 android:startX="54"
                 android:startY="78"
                 android:endX="54"
-                android:endY="87">
-                <item android:offset="0.0" android:color="#59A88CFF" />
+                android:endY="86">
+                <item android:offset="0.0" android:color="#4DA88CFF" />
                 <item android:offset="1.0" android:color="#00A88CFF" />
             </gradient>
         </aapt:attr>
     </path>
 
     <!-- 光柱外层：柔光晕 -->
-    <path android:pathData="M47.6,66 L60.4,66 L57.2,29 L50.8,29 Z">
+    <path android:pathData="M48.2,66 L59.8,66 L57.0,32 L51.0,32 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
                 android:startX="54"
-                android:startY="29"
+                android:startY="32"
                 android:endX="54"
                 android:endY="66">
                 <item android:offset="0.0" android:color="#00FFFFFF" />
                 <item android:offset="0.45" android:color="#38AAE2FF" />
-                <item android:offset="1.0" android:color="#6EE5F5FF" />
+                <item android:offset="1.0" android:color="#66E5F5FF" />
             </gradient>
         </aapt:attr>
     </path>
 
     <!-- 光柱内层：亮芯 -->
-    <path android:pathData="M51.4,66 L56.6,66 L55.1,29 L52.9,29 Z">
+    <path android:pathData="M51.6,66 L56.4,66 L55.2,32 L52.8,32 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
                 android:startX="54"
-                android:startY="29"
+                android:startY="32"
                 android:endX="54"
                 android:endY="66">
                 <item android:offset="0.0" android:color="#00FFFFFF" />
-                <item android:offset="0.5" android:color="#B3FFFFFF" />
-                <item android:offset="1.0" android:color="#F2FFFFFF" />
+                <item android:offset="0.5" android:color="#A6FFFFFF" />
+                <item android:offset="1.0" android:color="#E6FFFFFF" />
             </gradient>
         </aapt:attr>
     </path>
 
     <!-- 小岛主体：宽而扁的半椭圆，顶部暖粉到底部深靛 -->
-    <path android:pathData="M29,78 A25,16 0 0 1 79,78 Z">
+    <path android:pathData="M31,78 A23,15 0 0 1 77,78 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
                 android:startX="54"
-                android:startY="62"
+                android:startY="63"
                 android:endX="54"
                 android:endY="78">
                 <item android:offset="0.0" android:color="#FFFF8AB4" />
@@ -94,8 +110,8 @@
 
     <!-- 岛顶轮廓高光 -->
     <path
-        android:pathData="M29,78 A25,16 0 0 1 79,78"
-        android:strokeColor="#E6FFF0F8"
-        android:strokeWidth="1.4"
+        android:pathData="M31,78 A23,15 0 0 1 77,78"
+        android:strokeColor="#CCFFF0F8"
+        android:strokeWidth="1.1"
         android:strokeLineCap="round" />
 </vector>

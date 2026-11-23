@@ -28,7 +28,7 @@ CANVAS = 108.0
 # 小岛：一枚扁圆丘（圆心 54,78，横半径 25、纵半径 16），截在水平线 y=78 以上。
 # 刻意做成"宽而扁"，宽高比接近 3:1 —— 正圆的半圆会被读成气球或蘑菇。
 ISLAND_CX, ISLAND_CY = 54.0, 78.0
-ISLAND_RX, ISLAND_RY = 25.0, 16.0
+ISLAND_RX, ISLAND_RY = 23.0, 15.0
 WATER_Y = 78.0
 
 # 光柱
@@ -151,7 +151,7 @@ def render(size: int, ss: int = 4) -> Image.Image:
     # 水面：岛底一道横向微光
     water = Image.new("L", (S, S), 0)
     ImageDraw.Draw(water).ellipse(
-        [(54 - 26) * k, (WATER_Y - 2.2) * k, (54 + 26) * k, (WATER_Y + 2.8) * k],
+        [(54 - 26) * k, (WATER_Y - 1.6) * k, (54 + 26) * k, (WATER_Y + 2.2) * k],
         fill=int(255 * 0.45),
     )
     water = water.filter(ImageFilter.GaussianBlur(max(1, int(1.2 * k))))

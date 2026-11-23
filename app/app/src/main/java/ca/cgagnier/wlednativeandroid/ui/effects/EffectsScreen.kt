@@ -69,7 +69,6 @@ fun EffectsScreen(
     val lastAppliedId by viewModel.lastAppliedEffectId.collectAsStateWithLifecycle()
 
     val selectedDevice = devices.firstOrNull { it.device.macAddress == selectedMac && it.isOnline }
-    val supports2D = selectedDevice?.stateInfo?.info?.leds?.is2D == true
 
     LaunchedEffect(devices, selectedMac) {
         if (selectedDevice == null) {
@@ -77,12 +76,9 @@ fun EffectsScreen(
         }
     }
 
-    // 2D 不可用时不能停留在 2D / 字画筛选上，否则会看到空列表
-    LaunchedEffect(supports2D, filter) {
-        if (!supports2D && (filter == EffectFilter.TWO_D || filter == EffectFilter.ART)) {
-            viewModel.selectFilter(EffectFilter.ALL)
-        }
-    }
+    // 分类 chips 始终显示全部五项（含 2D / 字画）。
+    // 早期版本按设备是否支持 2D 隐藏这两类，结果没连设备时「字画」入口直接消失，
+    // 用户以为没有这个分类 —— 浏览不该受当前设备能力限制，能否下发交给固件处理。
 
     val visibleEffects = remember(filter, query) {
         filterEffects(EffectCatalog.all, filter, query)
@@ -134,7 +130,7 @@ fun EffectsScreen(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(availableFilters(supports2D)) { item ->
+            items(EffectFilter.entries) { item ->
                 FilterChip(
                     selected = filter == item,
                     onClick = { viewModel.selectFilter(item) },
@@ -274,13 +270,6 @@ private fun EffectGridCard(
         }
     }
 }
-
-private fun availableFilters(supports2D: Boolean): List<EffectFilter> =
-    if (supports2D) {
-        EffectFilter.entries
-    } else {
-        EffectFilter.entries.filter { it != EffectFilter.TWO_D && it != EffectFilter.ART }
-    }
 
 private fun filterLabel(filter: EffectFilter): Int = when (filter) {
     EffectFilter.ALL -> R.string.effects_filter_all

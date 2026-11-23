@@ -1,9 +1,9 @@
 package ca.cgagnier.wlednativeandroid.ui.homeScreen.list
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -34,58 +35,67 @@ fun NoDevicesItem(
     onAddDevice: () -> Unit,
     onShowHiddenDevices: () -> Unit,
 ) {
-    Card(
+    // 卡片本身不再拉伸到整屏：内容只有三行，撑满会留一大片空白。
+    // 外层 Box 占满给它的区域，把卡片垂直居中即可。
+    Box(
         modifier = modifier
-            .fillMaxSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth()
-                .padding(16.dp)
-                .padding(top = 24.dp),
-            horizontalAlignment = CenterHorizontally,
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
         ) {
-            Image(
-                modifier = Modifier.heightIn(0.dp, 80.dp),
-                painter = painterResource(id = R.drawable.akemi_018_teeth),
-                contentDescription = stringResource(R.string.awkward_akemi_character),
-            )
-            Text(stringResource(R.string.you_dont_have_any_visible_devices))
-            Button(
-                modifier = Modifier.padding(top = 16.dp),
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                onClick = onAddDevice,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 32.dp),
+                horizontalAlignment = CenterHorizontally,
             ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.add_a_device),
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                Image(
+                    modifier = Modifier.heightIn(0.dp, 80.dp),
+                    painter = painterResource(id = R.drawable.akemi_018_teeth),
+                    contentDescription = stringResource(R.string.awkward_akemi_character),
                 )
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text(stringResource(R.string.add_a_device))
-            }
-
-            if (shouldShowHiddenDevices) {
                 Text(
-                    stringResource(R.string.some_devices_hidden),
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 32.dp),
+                    text = stringResource(R.string.you_dont_have_any_visible_devices),
+                    modifier = Modifier.padding(top = 12.dp),
                 )
-                TextButton(
+                Button(
+                    modifier = Modifier.padding(top = 16.dp),
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    onClick = onShowHiddenDevices,
+                    onClick = onAddDevice,
                 ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.baseline_visibility_24),
-                        contentDescription = stringResource(R.string.show_hidden_devices),
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.add_a_device),
                         modifier = Modifier.size(ButtonDefaults.IconSize),
                     )
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.show_hidden_devices))
+                    Text(stringResource(R.string.add_a_device))
+                }
+
+                if (shouldShowHiddenDevices) {
+                    Text(
+                        stringResource(R.string.some_devices_hidden),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(top = 32.dp),
+                    )
+                    TextButton(
+                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        onClick = onShowHiddenDevices,
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.baseline_visibility_24),
+                            contentDescription = stringResource(R.string.show_hidden_devices),
+                            modifier = Modifier.size(ButtonDefaults.IconSize),
+                        )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.show_hidden_devices))
+                    }
                 }
             }
         }
