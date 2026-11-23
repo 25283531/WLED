@@ -700,7 +700,47 @@ App 的灯效目录与预览 GIF 都以**固件运行时 fx 值**为 id。
 | `tools/gen_effect_catalog.py` / `tools/gen_effect_gifs.py` | 灯效目录与预览动图生成 |
 | `tools/mock_wled_server.py` | 本地 mock 设备（已同步 `bootps` / `bootfx`） |
 
-### 14.8 未做
+### 14.8 验收结果（CI + 模拟器）
+
+**固件 CI**（`c05d398`，run [#45239866461](https://github.com/25283531/WLED/actions/runs/45239866461)）
+全部步骤成功，`pio run -e color_lamp_c3` 编译通过：
+
+```
+JOB: Build color_lamp_c3 -> success
+   - Verify color_lamp_c3 environment is defined => success
+   - Run pio run -e color_lamp_c3                 => success
+   - Collect binaries / upload-artifact            => success
+```
+
+产物 `firmware-color_lamp_c3.zip`（1,894,252 字节）内含
+`WLED_17.0.0-devV5_ColorLamp-C3.bin`、`ColorLamp-C3-ota.bin`、`bootloader.bin`、`partitions.bin`。
+在 bin 中检索到 `极光之舞`（UTF-8，偏移 17100）与 `bootfx` / `bootps` 字符串，
+确认 221 号灯效与新增只读字段均已编入固件。
+
+> 首次编译曾报 `FX.cpp:5262/5266: error: cannot convert 'CRGB' to 'uint32_t'`，
+> 根因是 `color_blend()` 返回 `uint32_t` 而非 `CRGB`（`firmware/wled00/src/dependencies/fastled_slim/colors.h:64`），
+> 已在 `c05d398` 修正为 `uint32_t ribbonColor = color_blend(...)` + `CRGB pixel(ribbonColor);`。
+
+**Android CI**（run #45238765415）单测 + `assembleDebug` / `assembleRelease` 均成功，
+artifact `android-apk`（44,665,308 字节）下载后安装到 `emulator-5554` 完成验收：
+
+| 验收项 | 结果 |
+|---|---|
+| 启动器图标 | 深空蓝灰底 + 双股螺旋光带（底亮青 → 中蔚蓝 → 顶紫罗兰）+ 底部三圈青色涟漪 ✅ |
+| 设置 → 系统与支持 → 「开机默认状态」 | 显示 **「极光之舞」** ✅（`leds.bootfx=221` → `Leds.defaultEffectId` → `EffectCatalog.nameZh`） |
+| 灯效库「幻彩极光」末尾 | 「极光之舞」条目存在，缩略图为深底青蓝螺旋光带 ✅ |
+| 预览 GIF | 连续三帧像素互不相同，动画在播 ✅ |
+| 点击条目下发 | 设备 `seg.fx` 实测变为 **221** ✅ |
+
+### 14.9 本轮新增脚本
+
+| 脚本 | 用途 |
+|---|---|
+| `tools/ci_status.py` | 查询 Actions 运行状态（TLS 需重试、关闭证书校验）；令牌读 `GITHUB_TOKEN` 环境变量 |
+| `tools/fetch_artifact.py` | 下载 Actions artifact；用 `curl -L` 跟随 302（urllib 会把 Authorization 带到 Azure Blob 被拒 401） |
+| `tools/png_crop.py` | 纯 stdlib 的 PNG 裁剪 + 放大（本机无 PIL），支持 PNG 滤波 0-4 反算 |
+
+### 14.10 未做
 
 1. **App 端写入开机灯效**：固件缺干净入口（见 14.3），如需支持应先在固件加独立字段，
    而不是让 App 去拼 `psave` + `bootps`（会占用设备预设槽位）或调 `POST /settings`（有副作用）。
