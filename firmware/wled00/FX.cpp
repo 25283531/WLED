@@ -5255,20 +5255,22 @@ void mode_lumi_aurora(void) {
     }
 
     // 计算当前高度的垂直主色调：底部亮青 -> 中部蔚蓝 -> 顶部紫罗兰
-    CRGB ribbonColor;
+    // color_blend() 返回 uint32_t 颜色值，不是 CRGB，直接用 uint32_t 承载。
+    uint32_t ribbonColor;
     if (posY < 128) {
-      // 下半段：亮青 CRGB(0, 245, 255) 过渡到 蔚蓝 CRGB(30, 120, 255)
+      // 下半段：亮青 0x00F5FF 过渡到 蔚蓝 0x1E78FF
       uint8_t frac = posY * 2;
-      ribbonColor = CRGB(color_blend(CRGB(0, 245, 255), CRGB(30, 120, 255), frac));
+      ribbonColor = color_blend(0x00F5FF, 0x1E78FF, frac);
     } else {
-      // 上半段：蔚蓝 CRGB(30, 120, 255) 过渡到 紫罗兰 CRGB(175, 40, 255)
+      // 上半段：蔚蓝 0x1E78FF 过渡到 紫罗兰 0xAF28FF
       uint8_t frac = (posY - 128) * 2;
-      ribbonColor = CRGB(color_blend(CRGB(30, 120, 255), CRGB(175, 40, 255), frac));
+      ribbonColor = color_blend(0x1E78FF, 0xAF28FF, frac);
     }
 
     // 两条极光丝带在当前高度的圆周中心角（0~255 代表 0°~360°）
-    uint8_t centerA = (sin8_t((posY * twist) / 16 + t) + (t >> 1)) & 0xFF;
-    uint8_t centerB = (cos8_t((posY * twist) / 14 - (t >> 1)) + 110 - (t >> 2)) & 0xFF;
+    // sin8_t/cos8_t 只收 uint8_t，相位按模 256 环绕，显式截断以免依赖隐式转换。
+    uint8_t centerA = (sin8_t((uint8_t)((posY * twist) / 16 + t)) + (uint8_t)(t >> 1)) & 0xFF;
+    uint8_t centerB = (cos8_t((uint8_t)((posY * twist) / 14 - (t >> 1))) + 110 - (uint8_t)(t >> 2)) & 0xFF;
 
     for (uint16_t x = 0; x < cols; x++) {
       // 当前列在圆柱圆周上的角度（0~255 无缝闭环）
@@ -5287,10 +5289,10 @@ void mode_lumi_aurora(void) {
       uint8_t glowB = (diffB < 42) ? scale8(255 - (diffB * 255) / 42, 255 - (diffB * 255) / 42) : 0;
 
       // 合成主丝带（亮）与副丝带（略柔和）
-      CRGB pixel = ribbonColor;
+      CRGB pixel(ribbonColor);
       pixel.nscale8(glowA);
 
-      CRGB secondRibbon = ribbonColor;
+      CRGB secondRibbon(ribbonColor);
       secondRibbon.nscale8(scale8(glowB, 195));
 
       // 两条丝带交叉处采用饱和加法叠加，还原图标中重叠处的高亮通透感

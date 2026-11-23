@@ -583,3 +583,126 @@ WLED 本身是设备自描述的，规格通过 API 暴露：
 1. **Matter / 米家 / HomeKit 桥接**、**I2S 麦克风灵敏度**、**顶部四键触控校准**：固件均无接口。
 2. 旧 `homeScreen/` 列表链清理（见 13.5）。
 3. iOS 仍搁置。
+## 14. 实现记录（v8.1.0-test7，新图标 + 「极光之舞」出厂开机灯效）
+
+本轮做两件事：**把 APP 图标换成螺旋光带**，并**新增一个与它同源同色的灯效「极光之舞」，
+设为固件出厂默认开机灯效**。
+
+### 14.1 APP 图标
+
+画面：深空蓝灰底 + 居中自下而上螺旋上升的**双股光带** + 底部三圈同心青色椭圆涟漪。
+光带配色自下而上：亮青 `#00F5FF` → 蔚蓝 `#1E78FF` → 紫罗兰 `#AF28FF`。
+
+| 产物 | 说明 |
+|---|---|
+| `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_rgb*.png` | 5 密度 × 4 张（方形 / 圆形 / 前景 / 单色） |
+| `drawable/ic_launcher_background.xml` | 深空蓝灰底渐变 |
+| `drawable/ic_launcher_foreground.xml` | 螺旋光带 + 涟漪矢量层 |
+| `drawable/ic_launcher_monochrome.xml` | Android 13+ 主题图标单色层 |
+| `mipmap-anydpi-v26/ic_launcher_rgb{,_round}.xml` | API 26+ 自适应图标入口 |
+
+生成脚本：`tools/gen_app_icon.py`（位图）与 `tools/gen_icon_vectors.py`（矢量层）。
+
+### 14.2 固件灯效 221「极光之舞」
+
+| 位置 | 内容 |
+|---|---|
+| `firmware/wled00/FX.h` | `#define FX_MODE_LUMI_AURORA 221`，`MODE_COUNT` 221 → **222**（顺延为当前最大编号 + 1） |
+| `firmware/wled00/FX.cpp` | `mode_lumi_aurora()` 实现 + `_data_FX_MODE_LUMI_AURORA` 名称表 + `addEffect()` 挂载 |
+| `firmware/effects_enabled.json` | 灯效白名单同步（App 目录与预览 GIF 均由此派生） |
+| `firmware/platformio_override.ini` | `-D DEFAULT_BOOT_FX=221` |
+
+实现要点：
+
+- 竖直圆柱矩阵专用（`SEG_W` × `SEG_H`），非 2D 时走 `FX_FALLBACK_STATIC`。
+- 两条极光丝带以不同相位沿圆周交织，**螺旋角度随高度递增**（`twist` 由 Intensity 滑块控制）。
+- 高度主色调：底部亮青 → 中部蔚蓝 → 顶部紫罗兰，与 APP 图标完全同源。
+- 底部三圈青色涟漪以 `beatsin8_t` 呼吸。
+- **开机升腾动画**：`SEGENV.call` 帧计数推进，132 帧（约 2.2 秒）从底部升到顶部，
+  未升腾区域保持暗场并带 32 像素羽化边缘。用帧计数而非毫秒时间戳，避免 `uint16_t` 回绕。
+
+### 14.3 「出厂开机默认灯效」的实现机制（本轮查清）
+
+这是本轮最需要说清楚的一点 —— **固件里段落的 `fx` 并不随重启持久化**：
+
+- 本 fork 的 `Segment` 类**没有** `getConfig()` / `setConfig()`
+- `cfg.json` 的序列化/反序列化里**没有** `"seg"` 数组（`cfg.cpp` 里只有 `"aseg"` 和同步用的 `if.sync.seg`）
+
+所以设备每次重启，段落都由 `Segment` 构造函数 `, mode(DEFAULT_MODE)`（`FX.h:599`）决定。
+这反证了 `DEFAULT_BOOT_FX=221` 是**唯一正确且充分**的固件落点。
+
+固件的**开机预设**是另一条独立机制：
+
+| 环节 | 位置 | 说明 |
+|---|---|---|
+| 定义 | `wled.h:382` | `WLED_GLOBAL byte bootPreset _INIT(0);` |
+| 持久化 | `cfg.cpp:626` 读 / `cfg.cpp:1194` 写 | cfg.json 的 `def.ps` |
+| 开机执行 | `wled.cpp:693-694` | `if (bootPreset > 0) applyPreset(bootPreset, CALL_MODE_INIT);` |
+| 对外只读 | `json.cpp:731` | `/json/info` → `leds.bootps` |
+
+`bootPreset = 0` 即「不加载预设」→ 回落到固件出厂默认灯效，正是本产品要的语义。
+
+**写入路径有两个坑，都不能直接给 App 用**：
+
+1. `bootps` 只在 `savePreset()` 内部被消费（`presets.cpp:240`），且是
+   `bootPreset = sObj["bootps"] | bootPreset` —— **按位或**，无法干净地写 0；
+   必须与 `psave` 同批下发（固件原生 Web UI 就是 `obj.bootps = pI; obj.psave = pI;`）。
+2. `POST /settings` 是**全表单**接口，缺 `CA` 会把开机亮度置 0、缺 `GV` 会关掉 gamma 校正 ——
+   不能用于 App 端的部分写入。
+
+### 14.4 本轮新增的固件只读字段
+
+`/json/info` 的 `leds` 对象新增 `bootfx`（`json.cpp`）：
+
+```cpp
+leds[F("bootps")] = bootPreset;
+leds[F("bootfx")] = DEFAULT_MODE;   // 编译期出厂默认灯效 id
+```
+
+App 据此显示**真实**开机状态，而不必硬编码 221（换固件版本也不用改 App）。
+这是**只读**字段，不引入任何写入副作用。
+
+### 14.5 App 端改动
+
+| 位置 | 内容 |
+|---|---|
+| `model/wledapi/Leds.kt` | 新增 `bootps`（开机预设 id）与 `bootfx`（出厂默认灯效 id），均可空 |
+| `ui/settings/SettingsScreen.kt` | 「开机默认状态」行由「只跳转网页」改为**展示设备实际状态** |
+| `res/values{,-zh,-de,-fr}/strings.xml` | 新增 `isle_boot_state_factory` / `_effect` / `_preset` |
+
+显示规则：
+
+- `bootps > 0` → 「预设 #N」
+- `bootps == 0` 且能查到 `bootfx` 对应灯效 → 灯效名（本产品为「极光之舞」）
+- 设备老固件没有 `bootfx` 字段 → 「出厂默认」（降级文案，不假装知道具体灯效）
+
+**App 侧刻意不做写入**：固件没有提供干净的单参数开机灯效写入口（见 14.3 的两个坑），
+按 13.5 的既定原则「界面应该如实反映能力边界，而不是假装有」，
+这一行点击仍引导到设备原生设置页 `http://<ip>/settings`，由固件自己的 UI 完成修改。
+
+### 14.6 灯效 id 槽位对齐
+
+App 的灯效目录与预览 GIF 都以**固件运行时 fx 值**为 id。
+本轮新增 221 后发现此前的目录存在槽位错位，已按固件实际可用灯效重新生成：
+
+- `tools/gen_effect_catalog.py` → `ui/effects/EffectCatalog.kt`（222 个条目，id 与固件一一对应）
+- `tools/gen_effect_gifs.py` → `assets/effect_previews/<id>.gif`（189 张，按 id 命名，32×18）
+
+### 14.7 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `firmware/wled00/FX.h` | `FX_MODE_LUMI_AURORA 221`、`DEFAULT_BOOT_FX` 覆盖 `DEFAULT_MODE` |
+| `firmware/wled00/FX.cpp` | `mode_lumi_aurora()` 与效果表挂载 |
+| `firmware/platformio_override.ini` | `-D DEFAULT_BOOT_FX=221` |
+| `firmware/wled00/json.cpp` | `/json/info` 的 `leds.bootfx` 只读字段 |
+| `tools/gen_app_icon.py` / `tools/gen_icon_vectors.py` | 图标位图与矢量层生成 |
+| `tools/gen_effect_catalog.py` / `tools/gen_effect_gifs.py` | 灯效目录与预览动图生成 |
+| `tools/mock_wled_server.py` | 本地 mock 设备（已同步 `bootps` / `bootfx`） |
+
+### 14.8 未做
+
+1. **App 端写入开机灯效**：固件缺干净入口（见 14.3），如需支持应先在固件加独立字段，
+   而不是让 App 去拼 `psave` + `bootps`（会占用设备预设槽位）或调 `POST /settings`（有副作用）。
+2. 旧 `homeScreen/` 列表链清理（见 13.5）。
+3. iOS 仍搁置。
