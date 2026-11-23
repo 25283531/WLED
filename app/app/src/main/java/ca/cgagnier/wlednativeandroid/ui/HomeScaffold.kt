@@ -1,49 +1,64 @@
 package ca.cgagnier.wlednativeandroid.ui
 
 import androidx.annotation.StringRes
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ca.cgagnier.wlednativeandroid.R
-import ca.cgagnier.wlednativeandroid.ui.control.ControlScreen
-import ca.cgagnier.wlednativeandroid.ui.effects.EffectsScreen
-import ca.cgagnier.wlednativeandroid.ui.favorites.FavoritesScreen
-import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetail
-import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailActions
+import ca.cgagnier.wlednativeandroid.ui.create.CreateScreen
+import ca.cgagnier.wlednativeandroid.ui.device.DeviceScreen
+import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
+import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
+import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
+import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
+import ca.cgagnier.wlednativeandroid.ui.library.LibraryScreen
+import ca.cgagnier.wlednativeandroid.ui.settings.SettingsScreen
+import org.koin.compose.koinInject
 
-/** 底部导航页签。 */
-enum class HomeTab(@StringRes val labelRes: Int, val icon: ImageVector) {
-    DEVICES(R.string.nav_devices, Icons.Filled.Home),
-    EFFECTS(R.string.nav_effects, Icons.Filled.Star),
-    CONTROL(R.string.nav_control, Icons.Filled.PlayArrow),
-    FAVORITES(R.string.nav_favorites, Icons.Filled.Favorite),
+/** 底部导航页签。顺序即设计稿：设备 / 灯效库 / 创作 / 设置。 */
+enum class HomeTab(@StringRes val labelRes: Int, val glyph: Glyph) {
+    DEVICE(R.string.isle_tab_device, Glyph.Devices),
+    LIBRARY(R.string.isle_tab_library, Glyph.Library),
+    CREATE(R.string.isle_tab_create, Glyph.Create),
+    SETTINGS(R.string.isle_tab_settings, Glyph.Settings),
 }
 
 /**
- * App 主框架：底部四个页签 + 各自的页面内容。
+ * App 主框架：四个页签 + 自绘底部导航。
  *
- * 外层 [Scaffold] 故意把 `contentWindowInsets` 设为 0，让内层页面（设备列表自带 TopAppBar、
- * 其余页面用 `statusBarsPadding`）各自处理系统栏，避免状态栏内边距被叠加两次。
+ * 用自绘导航栏而不是 `NavigationBar`：设计稿要的是"文字压在图标下、选中项只有颜色变化、
+ * 整条栏与背景融为一体"，Material3 的默认胶囊指示器在这里反而抢眼。
  */
 @Composable
 fun HomeScaffold(
@@ -51,24 +66,23 @@ fun HomeScaffold(
     openSettings: () -> Unit = {},
     openChangelogs: () -> Unit = {},
 ) {
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(HomeTab.DEVICES.ordinal) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(HomeTab.DEVICE.ordinal) }
     val selectedTab = HomeTab.entries[selectedTabIndex]
-    // 每个页签各自保存界面状态：切回来时不会跳回列表首页
     val tabStateHolder = rememberSaveableStateHolder()
+    val selectedDeviceStore = koinInject<SelectedDeviceStore>()
+
+    // 深链带过来的设备直接成为当前设备，其它三个页签也跟着切过去
+    LaunchedEffect(initialDeviceMacAddress) {
+        initialDeviceMacAddress?.let { selectedDeviceStore.select(it.macAddress) }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar {
-                HomeTab.entries.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        icon = { Icon(imageVector = tab.icon, contentDescription = null) },
-                        label = { Text(stringResource(tab.labelRes)) },
-                    )
-                }
-            }
+            IsleBottomBar(
+                selected = selectedTab,
+                onSelect = { selectedTabIndex = it.ordinal },
+            )
         },
     ) { innerPadding ->
         Box(
@@ -78,21 +92,88 @@ fun HomeScaffold(
         ) {
             tabStateHolder.SaveableStateProvider(selectedTab.name) {
                 when (selectedTab) {
-                    HomeTab.DEVICES -> DeviceListDetail(
-                        initialDeviceMacAddress = initialDeviceMacAddress,
-                        actions = DeviceListDetailActions(
-                            openSettings = openSettings,
-                            openChangelogs = openChangelogs,
-                        ),
-                    )
-
-                    HomeTab.EFFECTS -> EffectsScreen()
-
-                    HomeTab.CONTROL -> ControlScreen()
-
-                    HomeTab.FAVORITES -> FavoritesScreen()
+                    HomeTab.DEVICE -> DeviceScreen()
+                    HomeTab.LIBRARY -> LibraryScreen()
+                    HomeTab.CREATE -> CreateScreen()
+                    HomeTab.SETTINGS -> SettingsScreen()
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun IsleBottomBar(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xF00A0B10))
+            .drawBehind {
+                // 顶部一道极细高光，把导航栏和内容区分开
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color(0x1FFFFFFF), Color.Transparent),
+                    ),
+                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    strokeWidth = 1f,
+                )
+            }
+            .navigationBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            HomeTab.entries.forEach { tab ->
+                BottomBarItem(
+                    tab = tab,
+                    selected = tab == selected,
+                    onClick = { onSelect(tab) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomBarItem(tab: HomeTab, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) IsleColors.Cyan else IsleColors.TextMuted,
+        label = "tabTint",
+    )
+    val glow by animateFloatAsState(if (selected) 1f else 0f, label = "tabGlow")
+
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (glow > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 44.dp, height = 26.dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(IsleColors.Cyan.copy(alpha = 0.20f * glow), Color.Transparent),
+                            ),
+                            RoundedCornerShape(13.dp),
+                        ),
+                )
+            }
+            GlyphIcon(glyph = tab.glyph, size = 21.dp, tint = tint)
+        }
+        Text(
+            text = stringResource(tab.labelRes),
+            color = tint,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }

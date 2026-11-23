@@ -23,3 +23,6 @@ dist/
 
 # CI 日志抓取缓存（tools/fetch_ci_log.py）
 _ci/
+
+# 本地校验产物（预览拼图、模拟器截图、GIF 调参样张）
+/build/

@@ -11,13 +11,15 @@ import ca.cgagnier.wlednativeandroid.service.DeviceFirstContactService
 import ca.cgagnier.wlednativeandroid.service.NetworkConnectivityManager
 import ca.cgagnier.wlednativeandroid.service.WidgetStateSync
 import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
+import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
+import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
+import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceEdit.DeviceEditViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.list.DeviceWebsocketListViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.update.UpdateInstallingViewModel
-import ca.cgagnier.wlednativeandroid.ui.settingsScreen.SettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.theme.ThemeViewModel
 import ca.cgagnier.wlednativeandroid.widget.WledWidgetManager
 import io.mockk.every
@@ -67,7 +69,9 @@ class KoinModuleTest : KoinTest {
     @Test
     fun resolveAllViewModels() {
         assertNotNull(get<MainViewModel>())
-        assertNotNull(get<SettingsViewModel>())
+        assertNotNull(get<DeviceHomeViewModel>())
+        assertNotNull(get<LibraryViewModel>())
+        assertNotNull(get<CreateViewModel>())
         assertNotNull(get<ChangelogViewModel>())
         assertNotNull(get<ThemeViewModel>())
         assertNotNull(get<UpdateInstallingViewModel>())

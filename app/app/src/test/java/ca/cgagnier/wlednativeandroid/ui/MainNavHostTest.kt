@@ -3,9 +3,12 @@ package ca.cgagnier.wlednativeandroid.ui
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * 页面切换现在全部由 [HomeScaffold] 的底部页签承担，NavDisplay 只剩一个 HomeKey 目的地，
+ * 所以这里只校验「根目的地不会被误弹出」这一条真实的返回栈约束。
+ */
 class MainNavHostTest {
 
     @Test
@@ -17,51 +20,15 @@ class MainNavHostTest {
     }
 
     @Test
-    fun `navigating to settings pushes SettingsKey on top of back stack`() {
+    fun `back navigation on root destination keeps HomeKey`() {
         val backStack = NavBackStack<NavKey>(HomeKey)
 
-        backStack.add(SettingsKey)
-
-        assertEquals(2, backStack.size)
-        assertEquals(SettingsKey, backStack.last())
-        assertEquals(HomeKey, backStack.first())
-    }
-
-    @Test
-    fun `navigating back from settings restores HomeKey`() {
-        val backStack = NavBackStack<NavKey>(HomeKey)
-        backStack.add(SettingsKey)
-
+        // 与 MainNavHost 的 onBack 守卫一致：只剩一个目的地时不弹栈
         if (backStack.size > 1) {
             backStack.removeAt(backStack.lastIndex)
         }
 
         assertEquals(1, backStack.size)
         assertEquals(HomeKey, backStack.last())
-    }
-
-    @Test
-    fun `back navigation on root destination does not remove last destination`() {
-        val backStack = NavBackStack<NavKey>(HomeKey)
-
-        // Simulating the onBack guard condition from MainNavHost:
-        // if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-        if (backStack.size > 1) {
-            backStack.removeAt(backStack.lastIndex)
-        }
-
-        assertEquals(1, backStack.size)
-        assertEquals(HomeKey, backStack.last())
-    }
-
-    @Test
-    fun `navigation keys are distinct and identify destinations correctly`() {
-        val homeKey: NavKey = HomeKey
-        val settingsKey: NavKey = SettingsKey
-
-        assertTrue(homeKey is HomeKey)
-        assertTrue(settingsKey is SettingsKey)
-        assertEquals("HomeKey", homeKey.toString())
-        assertEquals("SettingsKey", settingsKey.toString())
     }
 }

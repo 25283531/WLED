@@ -31,8 +31,9 @@ private const val PREVIEW_ASSET_DIR = "effect_previews"
 /**
  * 灯效预览动图。
  *
- * GIF 是按**通用画布**（256×144，与灯珠数量/排列无关）生成的，一套图可通用于任何硬件形态，
- * 因此这里只负责播放，不需要知道设备的矩阵尺寸。
+ * GIF 按**32×18 的灯珠栅格**（渲染成 128×72 像素）生成，1D 效果会先算出一条蛇形灯带的
+ * 颜色再按 S 形铺满矩阵，所以看到的是整块光栅而不是一条线。
+ * 预览图与具体硬件解耦，这里只负责播放。
  *
  * @param assetName `assets/effect_previews/<assetName>.gif` 的文件名（不含扩展名）；null 时显示占位块。
  */

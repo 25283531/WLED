@@ -8,14 +8,10 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import ca.cgagnier.wlednativeandroid.ui.settingsScreen.Settings
 import kotlinx.serialization.Serializable
 
 @Serializable
 data object HomeKey : NavKey
-
-@Serializable
-data object SettingsKey : NavKey
 
 @Composable
 fun MainNavHost(
@@ -38,17 +34,8 @@ fun MainNavHost(
             entry<HomeKey> {
                 HomeScaffold(
                     initialDeviceMacAddress = startDeviceAddress,
-                    openSettings = { backStack.add(SettingsKey) },
+                    openSettings = {},
                     openChangelogs = openChangelogs,
-                )
-            }
-            entry<SettingsKey> {
-                Settings(
-                    navigateUp = {
-                        if (backStack.size > 1) {
-                            backStack.removeAt(backStack.lastIndex)
-                        }
-                    },
                 )
             }
         },

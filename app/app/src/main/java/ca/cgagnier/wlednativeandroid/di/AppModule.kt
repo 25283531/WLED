@@ -23,16 +23,17 @@ import ca.cgagnier.wlednativeandroid.service.WidgetStateSync
 import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.api.createHttpClient
 import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
-import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.control.ControlViewModel
-import ca.cgagnier.wlednativeandroid.ui.effects.EffectsViewModel
-import ca.cgagnier.wlednativeandroid.ui.favorites.FavoritesViewModel
+import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
+import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
+import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
+import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
+import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceEdit.DeviceEditViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.list.DeviceWebsocketListViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.update.UpdateInstallingViewModel
-import ca.cgagnier.wlednativeandroid.ui.settingsScreen.SettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.theme.ThemeViewModel
 import ca.cgagnier.wlednativeandroid.widget.WledWidgetManager
 import io.ktor.client.HttpClient
@@ -59,6 +60,9 @@ val appModule: Module = module {
     }
 
     single<FavoriteEffectDao> { get<DevicesDatabase>().favoriteEffectDao() }
+
+    // 四个页签共享同一个「当前设备」
+    single { SelectedDeviceStore() }
 
     single<DataStore<UserPreferences>> {
         val context = androidContext()
@@ -136,7 +140,6 @@ val appModule: Module = module {
     }
 
     viewModelOf(::MainViewModel)
-    viewModelOf(::SettingsViewModel)
     viewModelOf(::ChangelogViewModel)
     viewModelOf(::ThemeViewModel)
     viewModel {
@@ -173,7 +176,8 @@ val appModule: Module = module {
     }
     viewModelOf(::DeviceWebsocketListViewModel)
     viewModelOf(::DeviceAddViewModel)
-    viewModelOf(::EffectsViewModel)
     viewModelOf(::ControlViewModel)
-    viewModelOf(::FavoritesViewModel)
+    viewModelOf(::DeviceHomeViewModel)
+    viewModelOf(::LibraryViewModel)
+    viewModelOf(::CreateViewModel)
 }

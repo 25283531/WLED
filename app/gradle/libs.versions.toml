@@ -1,7 +1,7 @@
 [versions]
 # App version - Update these when releasing (underscores used instead of dashes for IzzyOnDroid's yq parser)
-app_versionCode = "112"
-app_versionName = "8.1.0-test3"
+app_versionCode = "113"
+app_versionName = "8.1.0-test4"
 
 agp = "9.5.0"
 activityCompose = "1.13.0"
