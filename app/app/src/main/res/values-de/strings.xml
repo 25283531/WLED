@@ -260,6 +260,9 @@
     <string name="isle_mic">Mikrofonempfindlichkeit</string>
     <string name="isle_keys">Tasten oben</string>
     <string name="isle_boot_state">Startzustand</string>
+    <string name="isle_boot_state_factory">Werkseinstellung</string>
+    <string name="isle_boot_state_effect">%1$s</string>
+    <string name="isle_boot_state_preset">Voreinstellung #%1$d</string>
     <string name="isle_firmware">Firmware-Update</string>
     <string name="isle_not_supported">Nicht verfügbar</string>
     <string name="isle_not_supported_short">N/V</string>

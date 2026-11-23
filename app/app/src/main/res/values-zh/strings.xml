@@ -258,6 +258,9 @@
     <string name="isle_mic">麦克风拾音灵敏度</string>
     <string name="isle_keys">顶部按键设置</string>
     <string name="isle_boot_state">开机默认状态</string>
+    <string name="isle_boot_state_factory">出厂默认</string>
+    <string name="isle_boot_state_effect">%1$s</string>
+    <string name="isle_boot_state_preset">预设 #%1$d</string>
     <string name="isle_firmware">固件升级</string>
     <string name="isle_not_supported">固件未开放</string>
     <string name="isle_not_supported_short">未开放</string>

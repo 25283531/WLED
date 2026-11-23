@@ -39,7 +39,12 @@
 #endif
 
 #define DEFAULT_BRIGHTNESS (uint8_t)127
-#define DEFAULT_MODE       (uint8_t)0
+// 段落的出厂默认灯效（seg.fx）。产品固件可用 DEFAULT_BOOT_FX 覆盖成招牌灯效。
+#ifdef DEFAULT_BOOT_FX
+  #define DEFAULT_MODE     (uint8_t)DEFAULT_BOOT_FX
+#else
+  #define DEFAULT_MODE     (uint8_t)0
+#endif
 #define DEFAULT_SPEED      (uint8_t)128
 #define DEFAULT_INTENSITY  (uint8_t)128
 #define DEFAULT_COLOR      (uint32_t)0xFFA000
@@ -369,8 +374,9 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_COLORCLOUDS            218
 #define FX_MODE_SLOW_TRANSITION        219
 #define FX_MODE_2DANALOGCLOCK          220  // new in 16.1
+#define FX_MODE_LUMI_AURORA            221  // 光屿招牌灯效「极光之舞」
 
-#define MODE_COUNT                     221
+#define MODE_COUNT                     222
 
 
 #define TRANSITION_FADE            0x00  // universal

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
@@ -90,6 +91,28 @@ fun SettingsScreen(
 
     fun notYet() {
         Toast.makeText(context, R.string.isle_not_supported_toast, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * 开机默认灯效的真实状态。
+     *
+     * 固件里段落的 fx 不随重启持久化（cfg.json 没有 "seg" 数组），所以设备每次开机
+     * 落到的灯效只有两种来源：
+     *  - `bootps == 0`：不加载预设，段落用编译期的出厂默认灯效（`leds.bootfx`，本产品为 221「极光之舞」）
+     *  - `bootps > 0`：加载该编号的预设，开机效果由预设内容决定
+     *
+     * 这里如实反映设备当前状态，不在 App 侧猜测或缓存。
+     */
+    fun bootStateLabel(): String? {
+        val leds = device?.stateInfo?.info?.leds ?: return null
+        val presetId = leds.bootPresetId ?: 0
+        if (presetId > 0) {
+            return context.getString(R.string.isle_boot_state_preset, presetId)
+        }
+        val bootFx = leds.defaultEffectId
+        val name = bootFx?.let { EffectCatalog.find(it)?.nameZh }
+            ?: return context.getString(R.string.isle_boot_state_factory)
+        return context.getString(R.string.isle_boot_state_effect, name)
     }
 
     IsleBackdrop(modifier = modifier) {
@@ -157,7 +180,8 @@ fun SettingsScreen(
                     glyph = Glyph.Power,
                     iconTint = IsleColors.Cyan,
                     label = stringResource(R.string.isle_boot_state),
-                    onClick = { openWeb() },
+                    value = bootStateLabel(),
+                    onClick = { openWeb("settings") },
                 )
                 SettingsRow(
                     glyph = Glyph.Chip,

@@ -260,6 +260,9 @@
     <string name="isle_mic">Sensibilité du micro</string>
     <string name="isle_keys">Touches tactiles</string>
     <string name="isle_boot_state">État au démarrage</string>
+    <string name="isle_boot_state_factory">Réglage usine</string>
+    <string name="isle_boot_state_effect">%1$s</string>
+    <string name="isle_boot_state_preset">Préréglage #%1$d</string>
     <string name="isle_firmware">Mise à jour du firmware</string>
     <string name="isle_not_supported">Non disponible</string>
     <string name="isle_not_supported_short">N/D</string>

@@ -59,6 +59,10 @@ INFO = {
         "fps": 42,
         "maxpwr": 850,
         "maxseg": 16,
+        # bootps: 开机加载的预设编号，0 = 不加载预设（用固件出厂默认灯效）
+        "bootps": 0,
+        # bootfx: 固件编译期的出厂默认灯效 id（与 firmware/wled00/FX.h 的 DEFAULT_MODE 一致）
+        "bootfx": 221,
         "matrix": {"w": MATRIX_W, "h": MATRIX_H},
     },
     "wifi": {"rssi": -52, "signal": 78, "channel": 6, "bssid": "AA:BB:CC:DD:EE:FF"},

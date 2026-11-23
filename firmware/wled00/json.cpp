@@ -729,6 +729,10 @@ void serializeInfo(JsonObject root)
   //leds[F("actseg")] = strip.getActiveSegmentsNum();
   //leds[F("seglock")] = false; //might be used in the future to prevent modifications to segment config
   leds[F("bootps")] = bootPreset;
+  // 出厂默认灯效 id（编译期 DEFAULT_BOOT_FX，未定义时为 0）。
+  // 段落的 fx 不随重启持久化（cfg.json 无 "seg" 数组），所以开机首帧一定是这个值。
+  // App 据此显示「开机默认灯效」的真实值，而不必硬编码。
+  leds[F("bootfx")] = DEFAULT_MODE;
 
   #ifndef WLED_DISABLE_2D
   if (strip.isMatrix) {

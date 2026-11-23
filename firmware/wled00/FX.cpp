@@ -5205,6 +5205,120 @@ void mode_2DAnalogClock(void) {                  // By Andras Fekete (bandi13)
 static const char _data_FX_MODE_2DANALOGCLOCK[] PROGMEM = "Analog Clock 2D@,,,,,Seconds,Soft;Hour,Minute,Second;;2;o1=1,o2=1";
 
 
+// 光屿 LumiIsle 招牌开机灯效：极光之舞 (Aurora Dance)
+// 视觉特征：
+// 1. 底部一圈呼吸感青色涟漪底座（呼应图标底部波纹）
+// 2. 两条反向交织螺旋上升的半透明极光丝带，交叉处自动产生高亮丝绸叠加质感
+// 3. 色彩自下而上由 亮青 (#00F5FF) -> 蔚蓝 (#1E78FF) -> 紫罗兰 (#AF28FF) 平滑过渡
+// 4. 开机前 2.2 秒自带"由底向上点亮升腾"的迎宾动画
+//
+// 相对上游写法的适配（本仓库 WLED 版本）：
+//   - 效果函数签名必须是 void（mode_ptr = void (*)(void)），不是 uint16_t
+//   - 数学函数是 sin8_t / cos8_t / beatsin8_t（带 _t 后缀）
+//   - 颜色混合用 color_blend()（返回 uint32_t），没有 blend()
+//   - 尺寸用 SEG_W / SEG_H（2D 效果的惯用取法）
+//   - 开机计时不能用 aux0 存毫秒（uint16_t 每 65 秒回绕），改用 SEGENV.call 帧计数
+void mode_lumi_aurora(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC; // not a 2D set-up
+
+  const uint16_t cols = SEG_W;   // 圆柱圆周列数（如 32）
+  const uint16_t rows = SEG_H;   // 圆柱垂直行数（如 18）
+  if (cols <= 1 || rows <= 1) return;
+
+  // 开机升腾动画：用帧计数推进，避免毫秒时间戳在 uint16_t 里回绕。
+  // 约 2.2 秒走完全柱（以 60fps 估算 132 帧），SEGENV.call 在效果切换时归零。
+  const uint16_t bootFrames = 132;
+  uint32_t bootProgress = 255;
+  if (SEGENV.call < bootFrames) {
+    bootProgress = (SEGENV.call * 255UL) / bootFrames;
+  }
+
+  // 流动速度受 WLED 面板 Speed 滑块控制；扭曲幅度受 Intensity 滑块控制
+  uint32_t t = (strip.now * (12 + (SEGMENT.speed >> 2))) >> 7;
+  uint8_t twist = 10 + (SEGMENT.intensity >> 3); // 螺旋交织角度跨度
+
+  // 底部青色涟漪呼吸亮度
+  uint8_t rippleBreath = beatsin8_t(18, 90, 210);
+
+  for (uint16_t y = 0; y < rows; y++) {
+    // 归一化高度比例 posY: 0 (最底部) -> 255 (最顶部)
+    uint8_t posY = (y * 255) / (rows - 1);
+
+    // 开机升腾遮罩：未升腾到的高处保持暗场
+    uint8_t heightMask = 255;
+    if (bootProgress < 255) {
+      if (posY > bootProgress) {
+        heightMask = 0;
+      } else if (bootProgress - posY < 32) {
+        heightMask = ((bootProgress - posY) * 255) / 32;
+      }
+    }
+
+    // 计算当前高度的垂直主色调：底部亮青 -> 中部蔚蓝 -> 顶部紫罗兰
+    CRGB ribbonColor;
+    if (posY < 128) {
+      // 下半段：亮青 CRGB(0, 245, 255) 过渡到 蔚蓝 CRGB(30, 120, 255)
+      uint8_t frac = posY * 2;
+      ribbonColor = CRGB(color_blend(CRGB(0, 245, 255), CRGB(30, 120, 255), frac));
+    } else {
+      // 上半段：蔚蓝 CRGB(30, 120, 255) 过渡到 紫罗兰 CRGB(175, 40, 255)
+      uint8_t frac = (posY - 128) * 2;
+      ribbonColor = CRGB(color_blend(CRGB(30, 120, 255), CRGB(175, 40, 255), frac));
+    }
+
+    // 两条极光丝带在当前高度的圆周中心角（0~255 代表 0°~360°）
+    uint8_t centerA = (sin8_t((posY * twist) / 16 + t) + (t >> 1)) & 0xFF;
+    uint8_t centerB = (cos8_t((posY * twist) / 14 - (t >> 1)) + 110 - (t >> 2)) & 0xFF;
+
+    for (uint16_t x = 0; x < cols; x++) {
+      // 当前列在圆柱圆周上的角度（0~255 无缝闭环）
+      uint8_t angleX = (x * 256) / cols;
+
+      // 计算到丝带 A 的圆周最短距离（0~128）
+      uint8_t diffA = abs((int)angleX - (int)centerA);
+      if (diffA > 128) diffA = 256 - diffA;
+
+      // 计算到丝带 B 的圆周最短距离（0~128）
+      uint8_t diffB = abs((int)angleX - (int)centerB);
+      if (diffB > 128) diffB = 256 - diffB;
+
+      // 丝绸柔光衰减曲线（宽度约占圆周 1/4，经 20mm 空气腔与扩散膜后呈现顺滑丝带）
+      uint8_t glowA = (diffA < 46) ? scale8(255 - (diffA * 255) / 46, 255 - (diffA * 255) / 46) : 0;
+      uint8_t glowB = (diffB < 42) ? scale8(255 - (diffB * 255) / 42, 255 - (diffB * 255) / 42) : 0;
+
+      // 合成主丝带（亮）与副丝带（略柔和）
+      CRGB pixel = ribbonColor;
+      pixel.nscale8(glowA);
+
+      CRGB secondRibbon = ribbonColor;
+      secondRibbon.nscale8(scale8(glowB, 195));
+
+      // 两条丝带交叉处采用饱和加法叠加，还原图标中重叠处的高亮通透感
+      pixel.r = qadd8(pixel.r, secondRibbon.r);
+      pixel.g = qadd8(pixel.g, secondRibbon.g);
+      pixel.b = qadd8(pixel.b, secondRibbon.b);
+
+      // 叠加底部第 0~1 行的青色声波涟漪底座
+      if (y <= 1) {
+        uint8_t ringStrength = (y == 0) ? rippleBreath : (rippleBreath >> 2);
+        CRGB baseRing = CRGB(0, scale8(220, ringStrength), scale8(255, ringStrength));
+        pixel.r = qadd8(pixel.r, baseRing.r);
+        pixel.g = qadd8(pixel.g, baseRing.g);
+        pixel.b = qadd8(pixel.b, baseRing.b);
+      }
+
+      // 应用开机升腾遮罩
+      if (heightMask < 255) {
+        pixel.nscale8(heightMask);
+      }
+
+      SEGMENT.setPixelColorXY(x, y, pixel);
+    }
+  }
+}
+static const char _data_FX_MODE_LUMI_AURORA[] PROGMEM = "极光之舞@速度,交织幅度;;2";
+
+
 // Black hole
 void mode_2DBlackHole(void) {            // By: Stepko https://editor.soulmatelights.com/gallery/1012 , Modified by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC; // not a 2D set-up
@@ -11312,6 +11426,7 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DGEQ, &mode_2DGEQ, _data_FX_MODE_2DGEQ); // audio
 
   addEffect(FX_MODE_2DANALOGCLOCK, &mode_2DAnalogClock, _data_FX_MODE_2DANALOGCLOCK);
+  addEffect(FX_MODE_LUMI_AURORA, &mode_lumi_aurora, _data_FX_MODE_LUMI_AURORA);
   addEffect(FX_MODE_2DNOISE, &mode_2Dnoise, _data_FX_MODE_2DNOISE);
   addEffect(FX_MODE_2DFIRENOISE, &mode_2Dfirenoise, _data_FX_MODE_2DFIRENOISE);
   addEffect(FX_MODE_2DSQUAREDSWIRL, &mode_2Dsquaredswirl, _data_FX_MODE_2DSQUAREDSWIRL);

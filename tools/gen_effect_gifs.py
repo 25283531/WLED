@@ -385,6 +385,71 @@ def r_matrix(t, color=(60, 255, 120), seed=4.0):
 
 
 # ------------------------------------------------------------------ 2D 渲染器
+def r_lumi_aurora(t, twist=16):
+    """光屿招牌灯效「极光之舞」。
+
+    与固件 `mode_lumi_aurora`（firmware/wled00/FX.cpp）逐行对应：
+      1. 底部第 0~1 行叠加青色呼吸涟漪底座
+      2. 两条反向交织的螺旋丝带，圆周角随高度旋转（交织幅度 = twist）
+      3. 主色调自下而上 亮青(#00F5FF) -> 蔚蓝(#1E78FF) -> 紫罗兰(#AF28FF)
+      4. 丝带交叉处用饱和加法叠加，得到丝绸重叠的高亮通透感
+    """
+    grid = empty()
+    # 固件里 t = (strip.now * (12 + speed/4)) >> 7，这里换算成 0~1 的循环时间
+    tt = t * 2 * math.pi
+    ripple = 0.5 - 0.5 * math.cos(tt * 18 / 60.0 * 2 * math.pi)
+    ripple_breath = 90 + int(120 * ripple)
+
+    for y in range(H):
+        # 固件的 y=0 是矩阵最底部，本渲染器栅格 y=0 是画面顶部，所以要翻转。
+        # 这样 posY=0（亮青）才落在画面下缘，与实物的「底部青色涟漪」一致。
+        pos_y = int((H - 1 - y) * 255 / (H - 1)) if H > 1 else 0
+        # 垂直主色调
+        if pos_y < 128:
+            frac = pos_y / 128.0
+            ribbon = mix((0, 245, 255), (30, 120, 255), frac)
+        else:
+            frac = (pos_y - 128) / 127.0
+            ribbon = mix((30, 120, 255), (175, 40, 255), frac)
+
+        # 两条丝带在当前高度的圆周中心角（0~255 = 0~360 度）
+        center_a = int(math.sin((pos_y * twist / 16 + tt * 12) / 256 * 2 * math.pi) * 127.5 + 127.5) & 0xFF
+        center_b = int(math.cos((pos_y * twist / 14 - tt * 12) / 256 * 2 * math.pi) * 127.5 + 127.5) & 0xFF
+
+        for x in range(W):
+            angle_x = (x * 256) // W
+
+            diff_a = abs(angle_x - center_a)
+            if diff_a > 128:
+                diff_a = 256 - diff_a
+            diff_b = abs(angle_x - center_b)
+            if diff_b > 128:
+                diff_b = 256 - diff_b
+
+            # 丝绸柔光衰减（宽度约占圆周 1/4）
+            glow_a = 0.0
+            if diff_a < 46:
+                glow_a = ((255 - (diff_a * 255) // 46) / 255.0) ** 2
+            glow_b = 0.0
+            if diff_b < 42:
+                glow_b = ((255 - (diff_b * 255) // 42) / 255.0) ** 2
+
+            pixel = [int(c * glow_a) for c in ribbon]
+            second = [int(c * glow_b * (195 / 255.0)) for c in ribbon]
+
+            # 交叉处饱和加法叠加
+            pixel = [min(255, pixel[i] + second[i]) for i in range(3)]
+
+            # 底部青色涟漪底座（固件加在 y<=1，即矩阵最底部两行）
+            if pos_y <= 1:
+                strength = ripple_breath if pos_y == 0 else (ripple_breath >> 2)
+                base = (0, int(220 * strength / 255), int(255 * strength / 255))
+                pixel = [min(255, pixel[i] + base[i]) for i in range(3)]
+
+            grid[y][x] = tuple(pixel)
+    return grid
+
+
 def r_plasma(t, cycles=1.0, hue=0.62, sat=0.9):
     grid = empty()
     tt = t * 2 * math.pi * cycles
@@ -720,193 +785,195 @@ def build_effects() -> dict:
     """id -> 渲染函数。键是固件 fx 值，和 seg.fx 严格对应。"""
     fx = {
         0: lambda t: r_solid(t, WARM),
+        77: lambda t: r_solid(t, WARM),
         1: lambda t: r_blink(t, WARM, 1.2),
         2: lambda t: r_breathe(t, (255, 205, 140), 1.2),
         3: lambda t: r_wipe(t, CYAN),
-        4: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM], 0.5, 2),
-        5: lambda t: r_wipe(t, hsv(t)),
-        6: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 2),
-        7: lambda t: r_hue_cycle(t, 1.2),
-        8: lambda t: r_rainbow(t, 1.0, 1.5),
-        9: lambda t: r_comet(t, CYAN, 18, 2),
-        10: lambda t: r_breathe(t, hsv(t), 0.8),
-        11: lambda t: r_chase(t, WARM, 2, 6, 2),
-        12: lambda t: r_dots(t, [WARM], 1, 3, 6),
-        13: lambda t: r_twinkle(t, [WHITE, WARM], 0.2, 4),
-        14: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.1, 1.5, 6),
-        15: lambda t: r_sparkle(t, WHITE, 0.10, 5),
-        16: lambda t: r_strobe(t, WHITE, 4),
-        17: lambda t: r_strobe(t, WHITE, 9),
-        18: lambda t: r_hue_cycle(t, 0.6, 1.0),
-        19: lambda t: r_chase(t, ORANGE, 4, 3, 2),
-        20: lambda t: r_chase(t, WHITE, 2, 3, 3),
-        21: lambda t: r_twinkle(t, [WARM, CYAN], 0.3, 8),
-        22: lambda t: r_chase_rainbow(t),
-        23: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM, PINK], 0.4, 9),
-        24: lambda t: r_traffic(t),
-        25: lambda t: r_noise_flow(t, AURORA_STOPS, 0.09, 1.2, 10),
-        26: lambda t: r_noise_flow(t, AURORA_STOPS, 0.06, 1.0, 11),
-        27: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.10, 2.0, 12),
-        28: lambda t: r_comet(t, CYAN, 8, 2, 2),
-        29: lambda t: r_rain(t, BLUE, 14, 7),
-        30: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.14, 1.6, 13),
-        31: lambda t: r_fireworks(t, 11),
-        32: lambda t: r_tetrix(t),
-        33: lambda t: r_candle(t, 3),
-        34: lambda t: r_gradient_flow(t, [0.0, RED, 0.5, PINK, 1.0, BLUE], 1),
-        35: lambda t: r_twinkle(t, [WARM, PINK, CYAN], 0.25, 14),
-        36: lambda t: r_dots(t, [WARM, CYAN], 2, 15, 3),
-        37: lambda t: r_twinkle(t, [WARM, WHITE], 0.35, 16),
-        38: lambda t: r_image(t),
-        39: lambda t: r_chase(t, CYAN, 3, 3, 2),
-        40: lambda t: r_wipe_tri(t, 1),
-        41: lambda t: r_wipe_tri(t, 0),
-        42: lambda t: r_lightning(t),
-        43: lambda t: r_percent_bar(t, GREEN),
-        44: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.12, 1.4, 17),
-        45: lambda t: r_solid_oscillate(t),
-        46: lambda t: r_dots(t, [WARM, CYAN, PINK], 3, 18, 4),
-        47: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 0.6),
-        48: lambda t: r_breathe(t, PINK, 2.0),
-        49: lambda t: r_noise_flow(t, AURORA_STOPS, 0.2, 1.0, 19),
-        50: lambda t: r_noise_flow(t, AURORA_STOPS, 0.25, 0.8, 20),
-        51: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.3, 0.9, 21),
-        52: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM, PINK, CYAN], 0.3, 22),
-        53: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.05, 0.5, 23),
-        54: lambda t: r_comet(t, WARM, 16, 1.5, 1),
-        55: lambda t: r_chase(t, WARM, 2, 8, 4),
-        56: lambda t: r_ripple_strip(t),
-        57: lambda t: r_twinkle(t, [WARM, ORANGE], 0.15, 24),
-        58: lambda t: r_eyes(t),
-        59: lambda t: r_solid(t, WARM),
-        60: lambda t: r_wipe_tri(t, 2),
-        61: lambda t: r_dots(t, [WARM, CYAN, PINK], 4, 25, 4),
-        62: lambda t: r_comet(t, WHITE, 10, 1.0, 1),
-        63: lambda t: r_fire(t, 26, 1.0),
-        64: lambda t: r_fireworks(t, 27),
-        65: lambda t: r_sparkle(t, WHITE, 0.05, 28),
-        66: lambda t: r_sparkle(t, WARM, 0.09, 29),
-        67: lambda t: r_sparkle(t, WARM, 0.07, 30),
-        68: lambda t: r_comet(t, CYAN, 14, 1.2, 3),
-        69: lambda t: r_bouncing(t, [RED, GREEN, BLUE, WARM], 4, 31),
-        70: lambda t: r_fireworks(t, 32),
-        71: lambda t: r_noise_flow(t, [0.0, (10, 6, 20), 0.6, (90, 40, 160), 1.0, (240, 200, 255)], 0.08, 1.0, 33),
-        72: lambda t: r_candle(t, 34),
-        73: lambda t: r_bouncing(t, [WARM, CYAN], 3, 35),
-        74: lambda t: r_sparkle(t, (255, 230, 160), 0.12, 36),
-        75: lambda t: r_rain(t, CYAN, 8, 37),
-        76: lambda t: r_comet(t, WARM, 12, 1.6, 1),
-        77: lambda t: r_noise_flow(t, [0.0, (20, 4, 50), 0.4, (120, 40, 220), 0.7, (40, 200, 240), 1.0, (230, 255, 255)], 0.15, 1.8, 38),
-        78: lambda t: r_percent_bar(t, CYAN),
-        79: lambda t: r_heartbeat(t),
-        80: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.04, 0.6, 39),
-        81: lambda t: r_candle(t, 40),
-        82: lambda t: r_gradient_flow(t, [0.0, (40, 0, 10), 0.5, (200, 60, 20), 0.85, (255, 190, 120), 1.0, (255, 250, 230)], -0.5),
-        83: lambda t: r_phased(t),
-        84: lambda t: r_twinkle(t, [WARM, WHITE], 0.2, 41),
-        85: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.18, 1.2, 42),
-        86: lambda t: r_sine_wave(t),
-        87: lambda t: r_gradient_flow(t, AURORA_STOPS, 1.4),
-        88: lambda t: r_bouncing(t, [PINK, WARM], 2, 43),
-        89: lambda t: r_spiral_strip(t),
-        90: lambda t: r_gradient_flow(t, [0.0, CYAN, 0.5, VIOLET, 1.0, PINK], 0.8),
-        91: lambda t: r_tv_noise(t),
-        92: lambda t: r_pacman(t),
-        93: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 0.25),
-        94: lambda t: r_pixels(t),
-        95: lambda t: r_sine_wave(t),
-        96: lambda t: r_dots(t, [WARM, CYAN, PINK], 4, 44, 5),
-        97: lambda t: r_wipe(t, VIOLET, 2),
-        98: lambda t: r_percent_bar(t, VIOLET),
-        99: lambda t: r_noise_flow(t, [0.0, (10, 4, 30), 0.5, (120, 40, 200), 1.0, (200, 240, 255)], 0.1, 1.4, 45),
-        100: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.07, 0.9, 46),
-        101: lambda t: r_noise_flow(t, AURORA_STOPS, 0.2, 1.4, 47),
-        102: lambda t: r_bars_2d(t, 48),
-        103: lambda t: r_bars_2d(t, 49),
-        104: lambda t: r_rain(t, (120, 200, 255), 16, 50),
-        105: lambda t: r_bars_2d(t, 51),
+        5: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM], 0.5, 2),
+        6: lambda t: r_wipe(t, hsv(t)),
+        7: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 2),
+        8: lambda t: r_hue_cycle(t, 1.2),
+        9: lambda t: r_rainbow(t, 1.0, 1.5),
+        10: lambda t: r_comet(t, CYAN, 18, 2),
+        12: lambda t: r_breathe(t, hsv(t), 0.8),
+        13: lambda t: r_chase(t, WARM, 2, 6, 2),
+        15: lambda t: r_dots(t, [WARM], 1, 3, 6),
+        17: lambda t: r_twinkle(t, [WHITE, WARM], 0.2, 4),
+        18: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.1, 1.5, 6),
+        21: lambda t: r_sparkle(t, WHITE, 0.10, 5),
+        23: lambda t: r_strobe(t, WHITE, 4),
+        25: lambda t: r_strobe(t, WHITE, 9),
+        27: lambda t: r_hue_cycle(t, 0.6, 1.0),
+        28: lambda t: r_chase(t, ORANGE, 4, 3, 2),
+        31: lambda t: r_chase(t, WHITE, 2, 3, 3),
+        32: lambda t: r_twinkle(t, [WARM, CYAN], 0.3, 8),
+        33: lambda t: r_chase_rainbow(t),
+        34: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM, PINK], 0.4, 9),
+        35: lambda t: r_traffic(t),
+        38: lambda t: r_noise_flow(t, AURORA_STOPS, 0.09, 1.2, 10),
+        218: lambda t: r_noise_flow(t, AURORA_STOPS, 0.06, 1.0, 11),
+        39: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.10, 2.0, 12),
+        40: lambda t: r_comet(t, CYAN, 8, 2, 2),
+        43: lambda t: r_rain(t, BLUE, 14, 7),
+        67: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.14, 1.6, 13),
+        42: lambda t: r_fireworks(t, 11),
+        44: lambda t: r_tetrix(t),
+        45: lambda t: r_candle(t, 3),
+        46: lambda t: r_gradient_flow(t, [0.0, RED, 0.5, PINK, 1.0, BLUE], 1),
+        49: lambda t: r_twinkle(t, [WARM, PINK, CYAN], 0.25, 14),
+        50: lambda t: r_dots(t, [WARM, CYAN], 2, 15, 3),
+        51: lambda t: r_twinkle(t, [WARM, WHITE], 0.35, 16),
+        53: lambda t: r_image(t),
+        54: lambda t: r_chase(t, CYAN, 3, 3, 2),
+        55: lambda t: r_wipe_tri(t, 1),
+        56: lambda t: r_wipe_tri(t, 0),
+        57: lambda t: r_lightning(t),
+        58: lambda t: r_percent_bar(t, GREEN),
+        61: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.12, 1.4, 17),
+        62: lambda t: r_solid_oscillate(t),
+        64: lambda t: r_dots(t, [WARM, CYAN, PINK], 3, 18, 4),
+        65: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 0.6),
+        68: lambda t: r_breathe(t, PINK, 2.0),
+        69: lambda t: r_noise_flow(t, AURORA_STOPS, 0.2, 1.0, 19),
+        70: lambda t: r_noise_flow(t, AURORA_STOPS, 0.25, 0.8, 20),
+        73: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.3, 0.9, 21),
+        74: lambda t: r_twinkle(t, [RED, GREEN, BLUE, WARM, PINK, CYAN], 0.3, 22),
+        75: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.05, 0.5, 23),
+        76: lambda t: r_comet(t, WARM, 16, 1.5, 1),
+        78: lambda t: r_chase(t, WARM, 2, 8, 4),
+        79: lambda t: r_ripple_strip(t),
+        80: lambda t: r_twinkle(t, [WARM, ORANGE], 0.15, 24),
+        82: lambda t: r_eyes(t),
+        83: lambda t: r_solid(t, WARM),
+        84: lambda t: r_wipe_tri(t, 2),
+        85: lambda t: r_dots(t, [WARM, CYAN, PINK], 4, 25, 4),
+        41: lambda t: r_comet(t, WHITE, 10, 1.0, 1),
+        66: lambda t: r_fire(t, 26, 1.0),
+        90: lambda t: r_fireworks(t, 27),
+        20: lambda t: r_sparkle(t, WHITE, 0.05, 28),
+        87: lambda t: r_sparkle(t, WARM, 0.09, 29),
+        103: lambda t: r_sparkle(t, WARM, 0.07, 30),
+        59: lambda t: r_comet(t, CYAN, 14, 1.2, 3),
+        48: lambda t: r_bouncing(t, [RED, GREEN, BLUE, WARM], 4, 31),
+        89: lambda t: r_fireworks(t, 32),
+        112: lambda t: r_noise_flow(t, [0.0, (10, 6, 20), 0.6, (90, 40, 160), 1.0, (240, 200, 255)], 0.08, 1.0, 33),
+        88: lambda t: r_candle(t, 34),
+        91: lambda t: r_bouncing(t, [WARM, CYAN], 3, 35),
+        95: lambda t: r_sparkle(t, (255, 230, 160), 0.12, 36),
+        96: lambda t: r_rain(t, CYAN, 8, 37),
+        92: lambda t: r_comet(t, WARM, 12, 1.6, 1),
+        97: lambda t: r_noise_flow(t, [0.0, (20, 4, 50), 0.4, (120, 40, 220), 0.7, (40, 200, 240), 1.0, (230, 255, 255)], 0.15, 1.8, 38),
+        98: lambda t: r_percent_bar(t, CYAN),
+        100: lambda t: r_heartbeat(t),
+        101: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.04, 0.6, 39),
+        102: lambda t: r_candle(t, 40),
+        104: lambda t: r_gradient_flow(t, [0.0, (40, 0, 10), 0.5, (200, 60, 20), 0.85, (255, 190, 120), 1.0, (255, 250, 230)], -0.5),
+        105: lambda t: r_phased(t),
+        106: lambda t: r_twinkle(t, [WARM, WHITE], 0.2, 41),
+        107: lambda t: r_noise_flow(t, RAINBOW_STOPS, 0.18, 1.2, 42),
+        108: lambda t: r_sine_wave(t),
+        110: lambda t: r_gradient_flow(t, AURORA_STOPS, 1.4),
+        111: lambda t: r_bouncing(t, [PINK, WARM], 2, 43),
+        113: lambda t: r_spiral_strip(t),
+        115: lambda t: r_gradient_flow(t, [0.0, CYAN, 0.5, VIOLET, 1.0, PINK], 0.8),
+        116: lambda t: r_tv_noise(t),
+        151: lambda t: r_pacman(t),
+        219: lambda t: r_gradient_flow(t, RAINBOW_STOPS, 0.25),
+        128: lambda t: r_pixels(t),
+        129: lambda t: r_sine_wave(t),
+        130: lambda t: r_dots(t, [WARM, CYAN, PINK], 4, 44, 5),
+        131: lambda t: r_wipe(t, VIOLET, 2),
+        132: lambda t: r_percent_bar(t, VIOLET),
+        133: lambda t: r_noise_flow(t, [0.0, (10, 4, 30), 0.5, (120, 40, 200), 1.0, (200, 240, 255)], 0.1, 1.4, 45),
+        134: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.07, 0.9, 46),
+        135: lambda t: r_noise_flow(t, AURORA_STOPS, 0.2, 1.4, 47),
+        136: lambda t: r_bars_2d(t, 48),
+        137: lambda t: r_bars_2d(t, 49),
+        140: lambda t: r_rain(t, (120, 200, 255), 16, 50),
+        141: lambda t: r_bars_2d(t, 51),
         # ---- 2D ----
-        106: lambda t: r_bars_2d(t, 52),
-        107: lambda t: r_noise2d(t, OCEAN_STOPS, 53),
-        108: lambda t: r_noise2d(t, AURORA_STOPS, 54),
-        109: lambda t: r_ripple(t, CYAN, 1.5),
-        110: lambda t: r_bars_2d(t, 55),
-        111: lambda t: r_blobs(t, 1.0, 56),
-        112: lambda t: r_bars_2d(t, 57),
-        113: lambda t: r_noise2d(t, [0.0, (20, 10, 40), 1.0, (200, 160, 255)], 58),
-        114: lambda t: r_waves(t, RAINBOW_STOPS, 1.0),
-        115: lambda t: r_waves(t, AURORA_STOPS, 1.2),
-        116: lambda t: r_waves(t, OCEAN_STOPS, 1.5),
-        117: lambda t: r_sparkle2d(t, WHITE, 0.05, 59),
-        118: lambda t: r_zoom(t, VIOLET),
-        119: lambda t: r_dots2d(t, [CYAN, VIOLET], 4, 60),
-        120: lambda t: r_dots2d(t, [WARM, PINK], 6, 61),
-        121: lambda t: r_waves(t, [0.0, (8, 4, 16), 0.6, (140, 30, 60), 1.0, (255, 170, 120)], 1.1),
-        122: lambda t: r_blobs(t, 0.8, 62),
-        123: lambda t: r_text_scroll(t, "LUMI ISLE", WARM),
-        124: lambda t: r_spiral(t, 0.8),
-        125: lambda t: r_waves(t, AURORA_STOPS, 2.0),
-        126: lambda t: r_bars_2d(t, 63),
-        127: lambda t: r_clock(t),
-        128: lambda t: r_noise2d(t, AURORA_STOPS, 64),
-        129: lambda t: r_noise2d(t, FIRE_STOPS, 65),
-        130: lambda t: r_spiral(t, 1.6),
-        131: lambda t: r_waves(t, [0.0, (4, 20, 40), 0.5, (30, 200, 220), 1.0, (230, 255, 255)], 1.3),
-        132: lambda t: r_matrix(t),
-        133: lambda t: r_blobs(t, 1.3, 66),
-        134: lambda t: r_bars_2d(t, 67),
-        135: lambda t: r_radial(t, PINK, 1.4),
-        136: lambda t: r_noise2d(t, OCEAN_STOPS, 68),
-        137: lambda t: r_waves(t, OCEAN_STOPS, 1.8),
-        138: lambda t: r_radial(t, WARM, 1.0),
-        139: lambda t: r_fireworks(t, 69),
-        140: lambda t: r_plasma(t, 0.7, 0.85, 0.95),
-        141: lambda t: r_life(t, 70),
-        142: lambda t: r_tartan(t, 0.6),
-        143: lambda t: r_noise2d(t, AURORA_STOPS, 71),
-        144: lambda t: r_spiral(t, 1.2),
-        145: lambda t: r_lissajous(t, VIOLET, 3),
-        146: lambda t: r_noise2d(t, RAINBOW_STOPS, 72),
-        147: lambda t: r_radial(t, CYAN, 1.6),
-        148: lambda t: r_waves(t, VIOLET_STOPS, 0.9),
-        149: lambda t: r_dots2d(t, [WARM, CYAN], 5, 73),
-        150: lambda t: r_spiral(t, 1.0),
-        151: lambda t: r_zoom(t, (120, 40, 220)),
-        152: lambda t: r_blobs(t, 0.6, 74),
-        153: lambda t: r_spiral(t, 0.7),
-        154: lambda t: r_waves(t, AURORA_STOPS, 1.1),
-        155: lambda t: r_bars_2d(t, 75),
-        156: lambda t: r_noise2d(t, FIRE_STOPS, 76),
-        157: lambda t: r_noise2d(t, FIRE_STOPS, 77),
-        158: lambda t: r_fireworks(t, 78),
-        159: lambda t: r_spiral(t, 1.8),
-        160: lambda t: r_noise2d(t, [0.0, (14, 10, 24), 1.0, (200, 200, 230)], 79),
-        161: lambda t: r_blobs(t, 1.1, 80),
-        162: lambda t: r_tartan(t, 0.4),
-        163: lambda t: r_lissajous(t, CYAN, 4),
-        164: lambda t: r_radial(t, PINK, 2.0),
-        165: lambda t: r_rain2d(t),
-        166: lambda t: r_dots2d(t, [WARM, CYAN], 8, 81),
-        167: lambda t: r_bars_2d(t, 82),
-        168: lambda t: r_bars_2d(t, 83),
-        169: lambda t: r_waves(t, [0.0, (8, 4, 16), 0.6, (140, 30, 60), 1.0, (255, 170, 120)], 1.4),
-        170: lambda t: r_blobs(t, 0.9, 84),
-        171: lambda t: r_noise2d(t, VIOLET_STOPS, 85),
-        172: lambda t: r_rain2d(t),
-        173: lambda t: r_dots2d(t, [WARM, PINK, CYAN], 5, 86),
-        174: lambda t: r_noise2d(t, [0.0, (6, 4, 12), 1.0, (120, 60, 160)], 87),
-        175: lambda t: r_fireworks(t, 88),
-        176: lambda t: r_sparkle2d(t, (255, 230, 160), 0.07, 89),
-        177: lambda t: r_dots2d(t, [WARM], 6, 90),
-        178: lambda t: r_dots2d(t, [CYAN], 7, 91),
-        179: lambda t: r_bars_2d(t, 92),
-        180: lambda t: r_chase_2d(t, WARM),
-        181: lambda t: r_fireworks(t, 93),
-        182: lambda t: r_bars_2d(t, 94),
-        183: lambda t: r_noise2d(t, FIRE_STOPS, 95),
-        184: lambda t: r_bars_2d(t, 96),
-        185: lambda t: r_radial(t, PINK, 2.4),
-        186: lambda t: r_waves(t, RAINBOW_STOPS, 2.2),
+        143: lambda t: r_bars_2d(t, 52),
+        145: lambda t: r_noise2d(t, OCEAN_STOPS, 53),
+        147: lambda t: r_noise2d(t, AURORA_STOPS, 54),
+        148: lambda t: r_ripple(t, CYAN, 1.5),
+        155: lambda t: r_bars_2d(t, 55),
+        156: lambda t: r_blobs(t, 1.0, 56),
+        159: lambda t: r_bars_2d(t, 57),
+        163: lambda t: r_noise2d(t, [0.0, (20, 10, 40), 1.0, (200, 160, 255)], 58),
+        179: lambda t: r_waves(t, RAINBOW_STOPS, 1.0),
+        184: lambda t: r_waves(t, AURORA_STOPS, 1.2),
+        185: lambda t: r_waves(t, OCEAN_STOPS, 1.5),
+        161: lambda t: r_sparkle2d(t, WHITE, 0.05, 59),
+        114: lambda t: r_zoom(t, VIOLET),
+        118: lambda t: r_dots2d(t, [CYAN, VIOLET], 4, 60),
+        119: lambda t: r_dots2d(t, [WARM, PINK], 6, 61),
+        120: lambda t: r_waves(t, [0.0, (8, 4, 16), 0.6, (140, 30, 60), 1.0, (255, 170, 120)], 1.1),
+        121: lambda t: r_blobs(t, 0.8, 62),
+        122: lambda t: r_text_scroll(t, "LUMI ISLE", WARM),
+        123: lambda t: r_spiral(t, 0.8),
+        124: lambda t: r_waves(t, AURORA_STOPS, 2.0),
+        139: lambda t: r_bars_2d(t, 63),
+        221: lambda t: r_lumi_aurora(t),
+        220: lambda t: r_clock(t),
+        146: lambda t: r_noise2d(t, AURORA_STOPS, 64),
+        149: lambda t: r_noise2d(t, FIRE_STOPS, 65),
+        150: lambda t: r_spiral(t, 1.6),
+        152: lambda t: r_waves(t, [0.0, (4, 20, 40), 0.5, (30, 200, 220), 1.0, (230, 255, 255)], 1.3),
+        153: lambda t: r_matrix(t),
+        154: lambda t: r_blobs(t, 1.3, 66),
+        160: lambda t: r_bars_2d(t, 67),
+        162: lambda t: r_radial(t, PINK, 1.4),
+        164: lambda t: r_noise2d(t, OCEAN_STOPS, 68),
+        165: lambda t: r_waves(t, OCEAN_STOPS, 1.8),
+        166: lambda t: r_radial(t, WARM, 1.0),
+        167: lambda t: r_fireworks(t, 69),
+        168: lambda t: r_plasma(t, 0.7, 0.85, 0.95),
+        172: lambda t: r_life(t, 70),
+        173: lambda t: r_tartan(t, 0.6),
+        174: lambda t: r_noise2d(t, AURORA_STOPS, 71),
+        175: lambda t: r_spiral(t, 1.2),
+        176: lambda t: r_lissajous(t, VIOLET, 3),
+        177: lambda t: r_noise2d(t, RAINBOW_STOPS, 72),
+        178: lambda t: r_radial(t, CYAN, 1.6),
+        180: lambda t: r_waves(t, VIOLET_STOPS, 0.9),
+        181: lambda t: r_dots2d(t, [WARM, CYAN], 5, 73),
+        182: lambda t: r_spiral(t, 1.0),
+        183: lambda t: r_zoom(t, (120, 40, 220)),
+        125: lambda t: r_blobs(t, 0.6, 74),
+        126: lambda t: r_spiral(t, 0.7),
+        127: lambda t: r_waves(t, AURORA_STOPS, 1.1),
+        186: lambda t: r_bars_2d(t, 75),
+        187: lambda t: r_noise2d(t, FIRE_STOPS, 76),
+        188: lambda t: r_noise2d(t, FIRE_STOPS, 77),
+        189: lambda t: r_fireworks(t, 78),
+        190: lambda t: r_spiral(t, 1.8),
+        191: lambda t: r_noise2d(t, [0.0, (14, 10, 24), 1.0, (200, 200, 230)], 79),
+        192: lambda t: r_blobs(t, 1.1, 80),
+        193: lambda t: r_tartan(t, 0.4),
+        194: lambda t: r_lissajous(t, CYAN, 4),
+        195: lambda t: r_radial(t, PINK, 2.0),
+        196: lambda t: r_rain2d(t),
+        197: lambda t: r_dots2d(t, [WARM, CYAN], 8, 81),
+        198: lambda t: r_bars_2d(t, 82),
+        199: lambda t: r_bars_2d(t, 83),
+        200: lambda t: r_waves(t, [0.0, (8, 4, 16), 0.6, (140, 30, 60), 1.0, (255, 170, 120)], 1.4),
+        201: lambda t: r_blobs(t, 0.9, 84),
+        217: lambda t: r_noise2d(t, VIOLET_STOPS, 85),
+        202: lambda t: r_rain2d(t),
+        203: lambda t: r_dots2d(t, [WARM, PINK, CYAN], 5, 86),
+        204: lambda t: r_noise2d(t, [0.0, (6, 4, 12), 1.0, (120, 60, 160)], 87),
+        205: lambda t: r_fireworks(t, 88),
+        206: lambda t: r_sparkle2d(t, (255, 230, 160), 0.07, 89),
+        207: lambda t: r_dots2d(t, [WARM], 6, 90),
+        208: lambda t: r_dots2d(t, [CYAN], 7, 91),
+        209: lambda t: r_bars_2d(t, 92),
+        210: lambda t: r_chase_2d(t, WARM),
+        211: lambda t: r_fireworks(t, 93),
+        212: lambda t: r_bars_2d(t, 94),
+        213: lambda t: r_noise2d(t, FIRE_STOPS, 95),
+        214: lambda t: r_bars_2d(t, 96),
+        215: lambda t: r_radial(t, PINK, 2.4),
+        216: lambda t: r_waves(t, RAINBOW_STOPS, 2.2),
     }
     return fx
 
@@ -1113,7 +1180,11 @@ def main():
 
     effects = build_effects()
     if args.list:
-        names = {e["idx"]: e["name"] for e in json.loads(open(EFFECTS_FILE, encoding="utf-8").read())}
+        names = {
+            e["idx"]: e["name"]
+            for e in json.loads(open(EFFECTS_FILE, encoding="utf-8").read())
+            if e and e.get("name")
+        }
         for idx in sorted(effects):
             print(f"{idx:4d}  {names.get(idx, '?'):24s}")
         return

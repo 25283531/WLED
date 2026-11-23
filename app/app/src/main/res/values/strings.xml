@@ -260,6 +260,9 @@
     <string name="isle_mic">Mic sensitivity</string>
     <string name="isle_keys">Top touch keys</string>
     <string name="isle_boot_state">Power-on state</string>
+    <string name="isle_boot_state_factory">Factory default</string>
+    <string name="isle_boot_state_effect">%1$s</string>
+    <string name="isle_boot_state_preset">Preset #%1$d</string>
     <string name="isle_firmware">Firmware update</string>
     <string name="isle_not_supported">Not in firmware</string>
     <string name="isle_not_supported_short">N/A</string>
