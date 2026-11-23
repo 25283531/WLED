@@ -27,12 +27,17 @@ import json
 import math
 import os
 import random
+import re
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EFFECTS_FILE = os.path.join(ROOT, "firmware", "effects_enabled.json")
 OUT_DIR = os.path.join(ROOT, "app", "app", "src", "main", "assets", "effect_previews")
+
+#: 固件内置的 5×12 点阵字体（wbf 格式）。字幕预览直接用它渲染，
+#: 这样 GIF 里的字形、字高、字距与设备上真正显示的一致。
+WLED_FONT_FILE = os.path.join(ROOT, "firmware", "wled00", "src", "font", "font_5x12.h")
 
 # ------------------------------------------------------------------ 画布
 W, H = 32, 18
@@ -344,22 +349,25 @@ def r_eyes(t, color=(255, 120, 40)):
 
 
 def r_text_scroll(t, text, color=WARM, vertical=False):
-    """滚动字幕：固件侧的「动态字幕」模式就是这么画的 —— 加粗点阵、竖着占满屏幕。"""
+    """滚动字幕：与固件 `mode_2Dscrollingtext` + font 4 + 加粗一致。
+
+    字形取自固件的 5×12 点阵字体，逐字加粗（笔画 2 颗灯珠），
+    字高 12/18 行，纯黑底 + 单色高亮。
+    """
     grid = empty()
-    bold_height = GLYPH_H * BOLD_SCALE
     if vertical:
-        width = text_width(text, bold=True)
+        width = text_width(text)
         x0 = max(0, (W - width) // 2)
-        span = H + bold_height
-        off = (H - bold_height) // 2 - int(t * span)
-        draw_text(grid, text, x0, off, color, bold=True)
-        draw_text(grid, text, x0, off + span, color, bold=True)
+        span = H + TEXT_H
+        off = (H - TEXT_H) // 2 - int(t * span)
+        draw_text(grid, text, x0, off, color)
+        draw_text(grid, text, x0, off + span, color)
         return grid
-    span = text_width(text, bold=True) + W
+    span = text_width(text) + W
     off = W // 2 - int(t * span)
-    y0 = (H - bold_height) // 2
-    draw_text(grid, text, off, y0, color, bold=True)
-    draw_text(grid, text, off + span, y0, color, bold=True)
+    y0 = (H - TEXT_H) // 2
+    draw_text(grid, text, off, y0, color)
+    draw_text(grid, text, off + span, y0, color)
     return grid
 
 
@@ -534,11 +542,11 @@ def r_clock(t):
 
 
 def r_image(t):
-    """`Image` 效果的占位演示：一段加粗像素字 + 横向滚动（实际显示的是用户上传的图）。"""
+    """`Image` 效果的占位演示：一段像素字 + 横向滚动（实际显示的是用户上传的图）。"""
     grid = empty()
-    width = text_width("LUMI", bold=True)
+    width = text_width("LUMI")
     x0 = int(-width + t * (width + W))
-    draw_text(grid, "LUMI", x0, (H - GLYPH_H * BOLD_SCALE) // 2, (120, 220, 255), bold=True)
+    draw_text(grid, "LUMI", x0, (H - TEXT_H) // 2, (120, 220, 255))
     return grid
 
 
@@ -627,36 +635,84 @@ FONT5x7 = {
 }
 GLYPH_H, GLYPH_W, ADVANCE = 7, 5, 6
 
-#: 字幕用的加粗倍率。5×7 的细笔画透过「20mm 空气腔 + 乳白扩散膜 + 黑透亚克力」
-#: 会被晕开，所以字幕模式一律按 2 倍块状放大画：笔画 2 颗灯珠宽、字高 14 颗灯珠，
-#: 且只用纯黑底 + 高亮单色，把对比度拉满。
-BOLD_SCALE = 2
+
+def load_wled_font(path: str):
+    """解析固件的 wbf 点阵字体（12 字节头 + 可选宽度表 + 行优先 MSB 位图）。
+
+    返回 (height, spacing, {code: [row_bits]})；解析失败时返回 None，调用方退回内置 5×7。
+    """
+    try:
+        raw = open(path, encoding="utf-8").read()
+    except OSError:
+        return None
+    text = raw[raw.index("static const unsigned char") :]
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # 行内注释里有示例 hex，必须先去掉
+    data = [int(h, 16) for h in re.findall(r"0x([0-9A-Fa-f]{2})", text)]
+    if len(data) < 13 or data[0] != 0x57:
+        return None
+    height, max_width, spacing, flags, first, last = data[1], data[2], data[3], data[4], data[5], data[6]
+    count = last - first + 1
+    pos = 12
+    if flags & 0x01:
+        widths = {first + i: data[pos + i] for i in range(count)}
+        pos += count
+    else:
+        widths = {first + i: max_width for i in range(count)}
+    glyphs = {}
+    for code in range(first, last + 1):
+        width = widths[code]
+        glyph = []
+        bit = 0
+        for _ in range(height):
+            row = []
+            for _ in range(width):
+                byte = data[pos + (bit >> 3)] if pos + (bit >> 3) < len(data) else 0
+                row.append((byte >> (7 - (bit & 7))) & 1)
+                bit += 1
+            glyph.append(row)
+        pos += (width * height + 7) // 8
+        glyphs[code] = glyph
+    return height, spacing, glyphs
 
 
-def glyph_step(bold: bool) -> int:
-    return ADVANCE * BOLD_SCALE if bold else ADVANCE
+#: 固件字体：字幕预览与设备显示必须同源，否则"预览好看、上机不认"。
+_WLED_FONT = load_wled_font(WLED_FONT_FILE)
+if _WLED_FONT:
+    TEXT_H, TEXT_SPACING, TEXT_GLYPHS = _WLED_FONT
+else:  # 兜底：文件缺失时用内置 5×7
+    TEXT_H, TEXT_SPACING = GLYPH_H, 1
+    TEXT_GLYPHS = {ord(ch): [[int(b) for b in row] for row in glyph] for ch, glyph in FONT5x7.items()}
 
 
-def text_width(s: str, bold: bool = False) -> int:
-    return len(s) * glyph_step(bold) - (BOLD_SCALE if bold else 1)
+def glyph_rows(ch: str):
+    return TEXT_GLYPHS.get(ord(ch)) or TEXT_GLYPHS.get(ord(' ')) or [[0]]
 
 
-def draw_text(grid, s: str, x0: int, y0: int, color, bold: bool = False):
-    """把字符串画到栅格上。`bold` 为真时每个笔画像素放大成 BOLD_SCALE² 的方块。"""
-    step = BOLD_SCALE if bold else 1
-    for i, ch in enumerate(s.upper()):
-        glyph = FONT5x7.get(ch) or FONT5x7[' ']
+def text_width(s: str, bold: bool = True) -> int:
+    """整串文字的像素宽度。`bold` 与固件一致：每个字形多占 1 列。"""
+    extra = 1 if bold else 0
+    return sum(len(glyph_rows(ch)[0]) + TEXT_SPACING + extra for ch in s.upper()) - TEXT_SPACING
+
+
+def draw_text(grid, s: str, x0: int, y0: int, color, bold: bool = True):
+    """按固件字体的字距把字符串画到栅格上。
+
+    `bold` 复刻 `FontManager::drawCharacter` 的加粗方式：每个点亮像素再往右补一颗，
+    1 像素笔画因此变成 2 像素宽 —— 乳白扩散膜会晕开细笔画，不加粗在设备上读不清。
+    """
+    extra = 1 if bold else 0
+    cursor = x0
+    for ch in s.upper():
+        glyph = glyph_rows(ch)
         for gy, row in enumerate(glyph):
             for gx, bit in enumerate(row):
-                if bit != '1':
+                if not bit:
                     continue
-                base_x = x0 + i * glyph_step(bold) + gx * step
-                base_y = y0 + gy * step
-                for dy in range(step):
-                    for dx in range(step):
-                        x, y = base_x + dx, base_y + dy
-                        if 0 <= x < W and 0 <= y < H:
-                            grid[y][x] = color
+                for dx in range(1 + extra):
+                    x, y = cursor + gx + dx, y0 + gy
+                    if 0 <= x < W and 0 <= y < H:
+                        grid[y][x] = color
+        cursor += len(glyph[0]) + TEXT_SPACING + extra
 
 
 # ------------------------------------------------------------------ 效果表
