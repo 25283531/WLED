@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -324,7 +323,7 @@ private fun ColorPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 6.dp, bottom = 10.dp)
-                .aspectRatio(1f),
+                .height(236.dp),
         )
         LabeledSlider(
             label = stringResource(R.string.isle_flow_speed),

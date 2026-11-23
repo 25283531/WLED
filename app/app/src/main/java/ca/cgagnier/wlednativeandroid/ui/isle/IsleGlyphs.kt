@@ -15,8 +15,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * 细线条图标集。
@@ -144,12 +142,11 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color, width: Float) {
         }
 
         Glyph.Settings -> {
-            drawCircle(color, radius = 3.4f, center = Offset(12f, 12f), style = stroke)
-            for (index in 0 until 8) {
-                val angle = Math.toRadians((index * 45).toDouble())
-                val dx = cos(angle).toFloat()
-                val dy = sin(angle).toFloat()
-                line(12f + dx * 6.1f, 12f + dy * 6.1f, 12f + dx * 9.2f, 12f + dy * 9.2f)
+            // 三条带滑块的横线：比齿轮更轻，也更符合"设置"的动作语义
+            val rows = listOf(6.2f to 15.4f, 12f to 9.6f, 17.8f to 17.2f)
+            rows.forEach { (y, knobX) ->
+                line(3.6f, y, 20.4f, y)
+                drawCircle(color, radius = 2.3f, center = Offset(knobX, y), style = stroke)
             }
         }
 

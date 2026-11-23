@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -139,20 +141,23 @@ fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = k
                     }
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        modifier = Modifier
+                            .padding(top = 16.dp, bottom = 4.dp)
+                            .horizontalScroll(rememberScrollState()),
                     ) {
                         EffectMood.entries.forEach { item ->
                             IsleCapsule(
                                 selected = item == mood,
                                 onClick = { viewModel.selectMood(item) },
-                                contentPadding = 13.dp,
+                                contentPadding = 11.dp,
                             ) {
                                 Text(
                                     text = stringResource(item.labelRes()),
                                     color = if (item == mood) IsleColors.TextPrimary else IsleColors.TextMuted,
-                                    fontSize = 12.5.sp,
+                                    fontSize = 12.sp,
                                     maxLines = 1,
+                                    softWrap = false,
                                 )
                             }
                         }

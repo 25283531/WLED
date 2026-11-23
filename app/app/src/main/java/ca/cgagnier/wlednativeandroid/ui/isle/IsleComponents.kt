@@ -414,21 +414,30 @@ fun DeviceTube(
             }
         }
         drawPath(tubePath, Color(0x33FFFFFF), style = Stroke(width = 1.4f.dp.toPx()))
-        drawPath(
-            Path().apply {
-                addRoundRect(
-                    RoundRect(
-                        left = left + 1f,
-                        top = top + 1f,
-                        right = left + tubeWidth - 1f,
-                        bottom = top + tubeHeight * 0.45f,
-                        radiusX = corner,
-                        radiusY = corner,
-                    ),
-                )
-            },
-            Color(0x14FFFFFF),
-        )
+        // 管顶的掠射高光：渐变到全透明，避免出现一条生硬的横接缝
+        val sheenPath = Path().apply {
+            addRoundRect(
+                RoundRect(
+                    left = left,
+                    top = top,
+                    right = left + tubeWidth,
+                    bottom = top + tubeHeight * 0.62f,
+                    radiusX = corner,
+                    radiusY = corner,
+                ),
+            )
+        }
+        clipPath(sheenPath) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0x2BFFFFFF), Color(0x08FFFFFF), Color(0x00FFFFFF)),
+                    startY = top,
+                    endY = top + tubeHeight * 0.62f,
+                ),
+                topLeft = Offset(left, top),
+                size = Size(tubeWidth, tubeHeight * 0.62f),
+            )
+        }
 
         // 金属底座
         val baseShape = Path().apply {

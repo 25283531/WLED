@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,26 +78,43 @@ fun HomeScaffold(
         initialDeviceMacAddress?.let { selectedDeviceStore.select(it.macAddress) }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            IsleBottomBar(
-                selected = selectedTab,
-                onSelect = { selectedTabIndex = it.ordinal },
-            )
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding()),
-        ) {
-            tabStateHolder.SaveableStateProvider(selectedTab.name) {
-                when (selectedTab) {
-                    HomeTab.DEVICE -> DeviceScreen()
-                    HomeTab.LIBRARY -> LibraryScreen()
-                    HomeTab.CREATE -> CreateScreen()
-                    HomeTab.SETTINGS -> SettingsScreen()
+    // 光屿是固定的深色视觉，Material 组件（弹层、涟漪、默认文字色）也必须跟着暗下来，
+    // 否则系统处于浅色主题时会在深色页面里漏出白色的底和灰边。
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = IsleColors.Cyan,
+            secondary = IsleColors.Violet,
+            background = IsleColors.Background,
+            surface = IsleColors.Surface,
+            surfaceVariant = IsleColors.SurfaceHigh,
+            onPrimary = Color(0xFF08202A),
+            onBackground = IsleColors.TextPrimary,
+            onSurface = IsleColors.TextPrimary,
+            onSurfaceVariant = IsleColors.TextSecondary,
+            outline = IsleColors.StrokeStrong,
+        ),
+    ) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = {
+                IsleBottomBar(
+                    selected = selectedTab,
+                    onSelect = { selectedTabIndex = it.ordinal },
+                )
+            },
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = innerPadding.calculateBottomPadding()),
+            ) {
+                tabStateHolder.SaveableStateProvider(selectedTab.name) {
+                    when (selectedTab) {
+                        HomeTab.DEVICE -> DeviceScreen()
+                        HomeTab.LIBRARY -> LibraryScreen()
+                        HomeTab.CREATE -> CreateScreen()
+                        HomeTab.SETTINGS -> SettingsScreen()
+                    }
                 }
             }
         }
