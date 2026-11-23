@@ -17,7 +17,11 @@ __pycache__/
 /docs/ignore/
 
 esp01-update.sh
-platformio_override.ini
+# platformio_override.ini 是**产品定义**，必须入库：
+#   color_lamp_c3 这个 env 只在这里定义，platformio.ini 里没有。
+#   忽略它会导致 CI 的 `pio run -e color_lamp_c3` 报 Unknown environment，
+#   等同于固件没有任何自动化编译验证。模板见 platformio_override.sample.ini。
+# platformio_override.ini
 AGENTS.local.md
 platformio_release.ini
 replace_fs.py

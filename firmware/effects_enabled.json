@@ -1,0 +1,1124 @@
+[
+ {
+  "idx": 0,
+  "fx": "FX_MODE_COPY",
+  "name": "Copy Segment",
+  "fn": "mode_copy_segment"
+ },
+ {
+  "idx": 1,
+  "fx": "FX_MODE_BLINK",
+  "name": "Blink",
+  "fn": "mode_blink"
+ },
+ {
+  "idx": 2,
+  "fx": "FX_MODE_BREATH",
+  "name": "Breathe",
+  "fn": "mode_breath"
+ },
+ {
+  "idx": 3,
+  "fx": "FX_MODE_COLOR_WIPE",
+  "name": "Wipe",
+  "fn": "mode_color_wipe"
+ },
+ {
+  "idx": 4,
+  "fx": "FX_MODE_RANDOM_COLOR",
+  "name": "Random Colors",
+  "fn": "mode_random_color"
+ },
+ {
+  "idx": 5,
+  "fx": "FX_MODE_COLOR_SWEEP",
+  "name": "Sweep",
+  "fn": "mode_color_sweep"
+ },
+ {
+  "idx": 6,
+  "fx": "FX_MODE_DYNAMIC",
+  "name": "Dynamic",
+  "fn": "mode_dynamic"
+ },
+ {
+  "idx": 7,
+  "fx": "FX_MODE_RAINBOW",
+  "name": "Colorloop",
+  "fn": "mode_rainbow"
+ },
+ {
+  "idx": 8,
+  "fx": "FX_MODE_RAINBOW_CYCLE",
+  "name": "Rainbow",
+  "fn": "mode_rainbow_cycle"
+ },
+ {
+  "idx": 9,
+  "fx": "FX_MODE_SCAN",
+  "name": "Scan",
+  "fn": "mode_scan"
+ },
+ {
+  "idx": 10,
+  "fx": "FX_MODE_FADE",
+  "name": "Fade",
+  "fn": "mode_fade"
+ },
+ {
+  "idx": 11,
+  "fx": "FX_MODE_THEATER_CHASE",
+  "name": "Theater",
+  "fn": "mode_theater_chase"
+ },
+ {
+  "idx": 12,
+  "fx": "FX_MODE_RUNNING_LIGHTS",
+  "name": "Running",
+  "fn": "mode_running_lights"
+ },
+ {
+  "idx": 13,
+  "fx": "FX_MODE_TWINKLE",
+  "name": "Twinkle",
+  "fn": "mode_twinkle"
+ },
+ {
+  "idx": 14,
+  "fx": "FX_MODE_DISSOLVE",
+  "name": "Dissolve",
+  "fn": "mode_dissolve"
+ },
+ {
+  "idx": 15,
+  "fx": "FX_MODE_FLASH_SPARKLE",
+  "name": "Sparkle Dark",
+  "fn": "mode_flash_sparkle"
+ },
+ {
+  "idx": 16,
+  "fx": "FX_MODE_STROBE",
+  "name": "Strobe",
+  "fn": "mode_strobe"
+ },
+ {
+  "idx": 17,
+  "fx": "FX_MODE_MULTI_STROBE",
+  "name": "Strobe Mega",
+  "fn": "mode_multi_strobe"
+ },
+ {
+  "idx": 18,
+  "fx": "FX_MODE_ANDROID",
+  "name": "Android",
+  "fn": "mode_android"
+ },
+ {
+  "idx": 19,
+  "fx": "FX_MODE_CHASE_COLOR",
+  "name": "Chase",
+  "fn": "mode_chase_color"
+ },
+ {
+  "idx": 20,
+  "fx": "FX_MODE_CHASE_FLASH",
+  "name": "Chase Flash",
+  "fn": "mode_chase_flash"
+ },
+ {
+  "idx": 21,
+  "fx": "FX_MODE_CHASE_FLASH_RANDOM",
+  "name": "Chase Flash Rnd",
+  "fn": "mode_chase_flash_random"
+ },
+ {
+  "idx": 22,
+  "fx": "FX_MODE_CHASE_RAINBOW_WHITE",
+  "name": "Rainbow Runner",
+  "fn": "mode_chase_rainbow_white"
+ },
+ {
+  "idx": 23,
+  "fx": "FX_MODE_COLORFUL",
+  "name": "Colorful",
+  "fn": "mode_colorful"
+ },
+ {
+  "idx": 24,
+  "fx": "FX_MODE_TRAFFIC_LIGHT",
+  "name": "Traffic Light",
+  "fn": "mode_traffic_light"
+ },
+ {
+  "idx": 25,
+  "fx": "FX_MODE_AURORA",
+  "name": "Aurora",
+  "fn": "mode_aurora"
+ },
+ {
+  "idx": 26,
+  "fx": "FX_MODE_COLORCLOUDS",
+  "name": "Color Clouds",
+  "fn": "mode_ColorClouds"
+ },
+ {
+  "idx": 27,
+  "fx": "FX_MODE_RUNNING_RANDOM",
+  "name": "Stream",
+  "fn": "mode_running_random"
+ },
+ {
+  "idx": 28,
+  "fx": "FX_MODE_LARSON_SCANNER",
+  "name": "Scanner",
+  "fn": "mode_larson_scanner"
+ },
+ {
+  "idx": 29,
+  "fx": "FX_MODE_RAIN",
+  "name": "Rain",
+  "fn": "mode_rain"
+ },
+ {
+  "idx": 30,
+  "fx": "FX_MODE_COLORWAVES",
+  "name": "Colorwaves",
+  "fn": "mode_colorwaves"
+ },
+ {
+  "idx": 31,
+  "fx": "FX_MODE_FIREWORKS",
+  "name": "Fireworks",
+  "fn": "mode_fireworks"
+ },
+ {
+  "idx": 32,
+  "fx": "FX_MODE_TETRIX",
+  "name": "Tetrix",
+  "fn": "mode_tetrix"
+ },
+ {
+  "idx": 33,
+  "fx": "FX_MODE_FIRE_FLICKER",
+  "name": "Fire Flicker",
+  "fn": "mode_fire_flicker"
+ },
+ {
+  "idx": 34,
+  "fx": "FX_MODE_GRADIENT",
+  "name": "Gradient",
+  "fn": "mode_gradient"
+ },
+ {
+  "idx": 35,
+  "fx": "FX_MODE_FAIRY",
+  "name": "Fairy",
+  "fn": "mode_fairy"
+ },
+ {
+  "idx": 36,
+  "fx": "FX_MODE_TWO_DOTS",
+  "name": "Two Dots",
+  "fn": "mode_two_dots"
+ },
+ {
+  "idx": 37,
+  "fx": "FX_MODE_FAIRYTWINKLE",
+  "name": "Fairytwinkle",
+  "fn": "mode_fairytwinkle"
+ },
+ {
+  "idx": 38,
+  "fx": "FX_MODE_IMAGE",
+  "name": "Image",
+  "fn": "mode_image"
+ },
+ {
+  "idx": 39,
+  "fx": "FX_MODE_TRICOLOR_CHASE",
+  "name": "Chase 3",
+  "fn": "mode_tricolor_chase"
+ },
+ {
+  "idx": 40,
+  "fx": "FX_MODE_TRICOLOR_WIPE",
+  "name": "Tri Wipe",
+  "fn": "mode_tricolor_wipe"
+ },
+ {
+  "idx": 41,
+  "fx": "FX_MODE_TRICOLOR_FADE",
+  "name": "Tri Fade",
+  "fn": "mode_tricolor_fade"
+ },
+ {
+  "idx": 42,
+  "fx": "FX_MODE_LIGHTNING",
+  "name": "Lightning",
+  "fn": "mode_lightning"
+ },
+ {
+  "idx": 43,
+  "fx": "FX_MODE_ICU",
+  "name": "ICU",
+  "fn": "mode_icu"
+ },
+ {
+  "idx": 44,
+  "fx": "FX_MODE_RANDOM_CHASE",
+  "name": "Stream 2",
+  "fn": "mode_random_chase"
+ },
+ {
+  "idx": 45,
+  "fx": "FX_MODE_OSCILLATE",
+  "name": "Oscillate",
+  "fn": "mode_oscillate"
+ },
+ {
+  "idx": 46,
+  "fx": "FX_MODE_JUGGLE",
+  "name": "Juggle",
+  "fn": "mode_juggle"
+ },
+ {
+  "idx": 47,
+  "fx": "FX_MODE_PALETTE",
+  "name": "Palette",
+  "fn": "mode_palette"
+ },
+ {
+  "idx": 48,
+  "fx": "FX_MODE_BPM",
+  "name": "Bpm",
+  "fn": "mode_bpm"
+ },
+ {
+  "idx": 49,
+  "fx": "FX_MODE_FILLNOISE8",
+  "name": "Fill Noise",
+  "fn": "mode_fillnoise8"
+ },
+ {
+  "idx": 50,
+  "fx": "FX_MODE_NOISE16_1",
+  "name": "Noise 1",
+  "fn": "mode_noise16_1"
+ },
+ {
+  "idx": 51,
+  "fx": "FX_MODE_NOISE16_4",
+  "name": "Noise 4",
+  "fn": "mode_noise16_4"
+ },
+ {
+  "idx": 52,
+  "fx": "FX_MODE_COLORTWINKLE",
+  "name": "Colortwinkles",
+  "fn": "mode_colortwinkle"
+ },
+ {
+  "idx": 53,
+  "fx": "FX_MODE_LAKE",
+  "name": "Lake",
+  "fn": "mode_lake"
+ },
+ {
+  "idx": 54,
+  "fx": "FX_MODE_METEOR",
+  "name": "Meteor",
+  "fn": "mode_meteor"
+ },
+ {
+  "idx": 55,
+  "fx": "FX_MODE_RAILWAY",
+  "name": "Railway",
+  "fn": "mode_railway"
+ },
+ {
+  "idx": 56,
+  "fx": "FX_MODE_RIPPLE",
+  "name": "Ripple",
+  "fn": "mode_ripple"
+ },
+ {
+  "idx": 57,
+  "fx": "FX_MODE_TWINKLEFOX",
+  "name": "Twinklefox",
+  "fn": "mode_twinklefox"
+ },
+ {
+  "idx": 58,
+  "fx": "FX_MODE_HALLOWEEN_EYES",
+  "name": "Halloween Eyes",
+  "fn": "mode_halloween_eyes"
+ },
+ {
+  "idx": 59,
+  "fx": "FX_MODE_STATIC_PATTERN",
+  "name": "Solid Pattern",
+  "fn": "mode_static_pattern"
+ },
+ {
+  "idx": 60,
+  "fx": "FX_MODE_TRI_STATIC_PATTERN",
+  "name": "Solid Pattern Tri",
+  "fn": "mode_tri_static_pattern"
+ },
+ {
+  "idx": 61,
+  "fx": "FX_MODE_SPOTS",
+  "name": "Spots",
+  "fn": "mode_spots"
+ },
+ {
+  "idx": 62,
+  "fx": "FX_MODE_COMET",
+  "name": "Lighthouse",
+  "fn": "mode_comet"
+ },
+ {
+  "idx": 63,
+  "fx": "FX_MODE_FIRE_2012",
+  "name": "Fire 2012",
+  "fn": "mode_fire_2012"
+ },
+ {
+  "idx": 64,
+  "fx": "FX_MODE_EXPLODING_FIREWORKS",
+  "name": "Fireworks 1D",
+  "fn": "mode_exploding_fireworks"
+ },
+ {
+  "idx": 65,
+  "fx": "FX_MODE_SPARKLE",
+  "name": "Sparkle",
+  "fn": "mode_sparkle"
+ },
+ {
+  "idx": 66,
+  "fx": "FX_MODE_GLITTER",
+  "name": "Glitter",
+  "fn": "mode_glitter"
+ },
+ {
+  "idx": 67,
+  "fx": "FX_MODE_SOLID_GLITTER",
+  "name": "Solid Glitter",
+  "fn": "mode_solid_glitter"
+ },
+ {
+  "idx": 68,
+  "fx": "FX_MODE_MULTI_COMET",
+  "name": "Multi Comet",
+  "fn": "mode_multi_comet"
+ },
+ {
+  "idx": 69,
+  "fx": "FX_MODE_ROLLINGBALLS",
+  "name": "Rolling Balls",
+  "fn": "mode_rolling_balls"
+ },
+ {
+  "idx": 70,
+  "fx": "FX_MODE_STARBURST",
+  "name": "Fireworks Starburst",
+  "fn": "mode_starburst"
+ },
+ {
+  "idx": 71,
+  "fx": "FX_MODE_DANCING_SHADOWS",
+  "name": "Dancing Shadows",
+  "fn": "mode_dancing_shadows"
+ },
+ {
+  "idx": 72,
+  "fx": "FX_MODE_CANDLE",
+  "name": "Candle",
+  "fn": "mode_candle"
+ },
+ {
+  "idx": 73,
+  "fx": "FX_MODE_BOUNCINGBALLS",
+  "name": "Bouncing Balls",
+  "fn": "mode_bouncing_balls"
+ },
+ {
+  "idx": 74,
+  "fx": "FX_MODE_POPCORN",
+  "name": "Popcorn",
+  "fn": "mode_popcorn"
+ },
+ {
+  "idx": 75,
+  "fx": "FX_MODE_DRIP",
+  "name": "Drip",
+  "fn": "mode_drip"
+ },
+ {
+  "idx": 76,
+  "fx": "FX_MODE_SINELON",
+  "name": "Sinelon",
+  "fn": "mode_sinelon"
+ },
+ {
+  "idx": 77,
+  "fx": "FX_MODE_PLASMA",
+  "name": "Plasma",
+  "fn": "mode_plasma"
+ },
+ {
+  "idx": 78,
+  "fx": "FX_MODE_PERCENT",
+  "name": "Percent",
+  "fn": "mode_percent"
+ },
+ {
+  "idx": 79,
+  "fx": "FX_MODE_HEARTBEAT",
+  "name": "Heartbeat",
+  "fn": "mode_heartbeat"
+ },
+ {
+  "idx": 80,
+  "fx": "FX_MODE_PACIFICA",
+  "name": "Pacifica",
+  "fn": "mode_pacifica"
+ },
+ {
+  "idx": 81,
+  "fx": "FX_MODE_CANDLE_MULTI",
+  "name": "Candle Multi",
+  "fn": "mode_candle_multi"
+ },
+ {
+  "idx": 82,
+  "fx": "FX_MODE_SUNRISE",
+  "name": "Sunrise",
+  "fn": "mode_sunrise"
+ },
+ {
+  "idx": 83,
+  "fx": "FX_MODE_PHASED",
+  "name": "Phased",
+  "fn": "mode_phased"
+ },
+ {
+  "idx": 84,
+  "fx": "FX_MODE_TWINKLEUP",
+  "name": "Twinkleup",
+  "fn": "mode_twinkleup"
+ },
+ {
+  "idx": 85,
+  "fx": "FX_MODE_NOISEPAL",
+  "name": "Noise Pal",
+  "fn": "mode_noisepal"
+ },
+ {
+  "idx": 86,
+  "fx": "FX_MODE_SINEWAVE",
+  "name": "Sine",
+  "fn": "mode_sinewave"
+ },
+ {
+  "idx": 87,
+  "fx": "FX_MODE_FLOW",
+  "name": "Flow",
+  "fn": "mode_flow"
+ },
+ {
+  "idx": 88,
+  "fx": "FX_MODE_CHUNCHUN",
+  "name": "Chunchun",
+  "fn": "mode_chunchun"
+ },
+ {
+  "idx": 89,
+  "fx": "FX_MODE_WASHING_MACHINE",
+  "name": "Washing Machine",
+  "fn": "mode_washing_machine"
+ },
+ {
+  "idx": 90,
+  "fx": "FX_MODE_BLENDS",
+  "name": "Blends",
+  "fn": "mode_blends"
+ },
+ {
+  "idx": 91,
+  "fx": "FX_MODE_TV_SIMULATOR",
+  "name": "TV Simulator",
+  "fn": "mode_tv_simulator"
+ },
+ {
+  "idx": 92,
+  "fx": "FX_MODE_PACMAN",
+  "name": "PacMan",
+  "fn": "mode_pacman"
+ },
+ {
+  "idx": 93,
+  "fx": "FX_MODE_SLOW_TRANSITION",
+  "name": "Slow Transition",
+  "fn": "mode_slow_transition"
+ },
+ {
+  "idx": 94,
+  "fx": "FX_MODE_PIXELS",
+  "name": "Pixels",
+  "fn": "mode_pixels"
+ },
+ {
+  "idx": 95,
+  "fx": "FX_MODE_PIXELWAVE",
+  "name": "Pixelwave",
+  "fn": "mode_pixelwave"
+ },
+ {
+  "idx": 96,
+  "fx": "FX_MODE_JUGGLES",
+  "name": "Juggles",
+  "fn": "mode_juggles"
+ },
+ {
+  "idx": 97,
+  "fx": "FX_MODE_MATRIPIX",
+  "name": "Matripix",
+  "fn": "mode_matripix"
+ },
+ {
+  "idx": 98,
+  "fx": "FX_MODE_GRAVIMETER",
+  "name": "Gravimeter",
+  "fn": "mode_gravimeter"
+ },
+ {
+  "idx": 99,
+  "fx": "FX_MODE_PLASMOID",
+  "name": "Plasmoid",
+  "fn": "mode_plasmoid"
+ },
+ {
+  "idx": 100,
+  "fx": "FX_MODE_PUDDLES",
+  "name": "Puddles",
+  "fn": "mode_puddles"
+ },
+ {
+  "idx": 101,
+  "fx": "FX_MODE_MIDNOISE",
+  "name": "Midnoise",
+  "fn": "mode_midnoise"
+ },
+ {
+  "idx": 102,
+  "fx": "FX_MODE_NOISEMETER",
+  "name": "Noisemeter",
+  "fn": "mode_noisemeter"
+ },
+ {
+  "idx": 103,
+  "fx": "FX_MODE_FREQWAVE",
+  "name": "Freqwave",
+  "fn": "mode_freqwave"
+ },
+ {
+  "idx": 104,
+  "fx": "FX_MODE_WATERFALL",
+  "name": "Waterfall",
+  "fn": "mode_waterfall"
+ },
+ {
+  "idx": 105,
+  "fx": "FX_MODE_FREQPIXELS",
+  "name": "Freqpixels",
+  "fn": "mode_freqpixels"
+ },
+ {
+  "idx": 106,
+  "fx": "FX_MODE_NOISEFIRE",
+  "name": "Noisefire",
+  "fn": "mode_noisefire"
+ },
+ {
+  "idx": 107,
+  "fx": "FX_MODE_NOISEMOVE",
+  "name": "Noisemove",
+  "fn": "mode_noisemove"
+ },
+ {
+  "idx": 108,
+  "fx": "FX_MODE_PERLINMOVE",
+  "name": "Perlin Move",
+  "fn": "mode_perlinmove"
+ },
+ {
+  "idx": 109,
+  "fx": "FX_MODE_RIPPLEPEAK",
+  "name": "Ripple Peak",
+  "fn": "mode_ripplepeak"
+ },
+ {
+  "idx": 110,
+  "fx": "FX_MODE_FREQMAP",
+  "name": "Freqmap",
+  "fn": "mode_freqmap"
+ },
+ {
+  "idx": 111,
+  "fx": "FX_MODE_GRAVCENTER",
+  "name": "Gravcenter",
+  "fn": "mode_gravcenter"
+ },
+ {
+  "idx": 112,
+  "fx": "FX_MODE_DJLIGHT",
+  "name": "DJ Light",
+  "fn": "mode_DJLight"
+ },
+ {
+  "idx": 113,
+  "fx": "FX_MODE_BLURZ",
+  "name": "Blurz",
+  "fn": "mode_blurz"
+ },
+ {
+  "idx": 114,
+  "fx": "FX_MODE_FLOWSTRIPE",
+  "name": "Flow Stripe",
+  "fn": "mode_FlowStripe"
+ },
+ {
+  "idx": 115,
+  "fx": "FX_MODE_WAVESINS",
+  "name": "Wavesins",
+  "fn": "mode_wavesins"
+ },
+ {
+  "idx": 116,
+  "fx": "FX_MODE_ROCKTAVES",
+  "name": "Rocktaves",
+  "fn": "mode_rocktaves"
+ },
+ {
+  "idx": 117,
+  "fx": "FX_MODE_SHIMMER",
+  "name": "Shimmer",
+  "fn": "mode_shimmer"
+ },
+ {
+  "idx": 118,
+  "fx": "FX_MODE_2DPLASMAROTOZOOM",
+  "name": "Rotozoomer",
+  "fn": "mode_2Dplasmarotozoom"
+ },
+ {
+  "idx": 119,
+  "fx": "FX_MODE_2DSPACESHIPS",
+  "name": "Spaceships",
+  "fn": "mode_2Dspaceships"
+ },
+ {
+  "idx": 120,
+  "fx": "FX_MODE_2DCRAZYBEES",
+  "name": "Crazy Bees",
+  "fn": "mode_2Dcrazybees"
+ },
+ {
+  "idx": 121,
+  "fx": "FX_MODE_2DGHOSTRIDER",
+  "name": "Ghost Rider",
+  "fn": "mode_2Dghostrider"
+ },
+ {
+  "idx": 122,
+  "fx": "FX_MODE_2DBLOBS",
+  "name": "Blobs",
+  "fn": "mode_2Dfloatingblobs"
+ },
+ {
+  "idx": 123,
+  "fx": "FX_MODE_2DSCROLLTEXT",
+  "name": "Scrolling Text",
+  "fn": "mode_2Dscrollingtext"
+ },
+ {
+  "idx": 124,
+  "fx": "FX_MODE_2DDRIFTROSE",
+  "name": "Drift Rose",
+  "fn": "mode_2Ddriftrose"
+ },
+ {
+  "idx": 125,
+  "fx": "FX_MODE_2DDISTORTIONWAVES",
+  "name": "Distortion Waves",
+  "fn": "mode_2Ddistortionwaves"
+ },
+ {
+  "idx": 126,
+  "fx": "FX_MODE_2DGEQ",
+  "name": "GEQ",
+  "fn": "mode_2DGEQ"
+ },
+ {
+  "idx": 127,
+  "fx": "FX_MODE_2DANALOGCLOCK",
+  "name": "Analog Clock 2D",
+  "fn": "mode_2DAnalogClock"
+ },
+ {
+  "idx": 128,
+  "fx": "FX_MODE_2DNOISE",
+  "name": "Noise2D",
+  "fn": "mode_2Dnoise"
+ },
+ {
+  "idx": 129,
+  "fx": "FX_MODE_2DFIRENOISE",
+  "name": "Firenoise",
+  "fn": "mode_2Dfirenoise"
+ },
+ {
+  "idx": 130,
+  "fx": "FX_MODE_2DSQUAREDSWIRL",
+  "name": "Squared Swirl",
+  "fn": "mode_2Dsquaredswirl"
+ },
+ {
+  "idx": 131,
+  "fx": "FX_MODE_2DDNA",
+  "name": "DNA",
+  "fn": "mode_2Ddna"
+ },
+ {
+  "idx": 132,
+  "fx": "FX_MODE_2DMATRIX",
+  "name": "Matrix",
+  "fn": "mode_2Dmatrix"
+ },
+ {
+  "idx": 133,
+  "fx": "FX_MODE_2DMETABALLS",
+  "name": "Metaballs",
+  "fn": "mode_2Dmetaballs"
+ },
+ {
+  "idx": 134,
+  "fx": "FX_MODE_2DFUNKYPLANK",
+  "name": "Funky Plank",
+  "fn": "mode_2DFunkyPlank"
+ },
+ {
+  "idx": 135,
+  "fx": "FX_MODE_2DPULSER",
+  "name": "Pulser",
+  "fn": "mode_2DPulser"
+ },
+ {
+  "idx": 136,
+  "fx": "FX_MODE_2DDRIFT",
+  "name": "Drift",
+  "fn": "mode_2DDrift"
+ },
+ {
+  "idx": 137,
+  "fx": "FX_MODE_2DWAVERLY",
+  "name": "Waverly",
+  "fn": "mode_2DWaverly"
+ },
+ {
+  "idx": 138,
+  "fx": "FX_MODE_2DSUNRADIATION",
+  "name": "Sun Radiation",
+  "fn": "mode_2DSunradiation"
+ },
+ {
+  "idx": 139,
+  "fx": "FX_MODE_2DCOLOREDBURSTS",
+  "name": "Colored Bursts",
+  "fn": "mode_2DColoredBursts"
+ },
+ {
+  "idx": 140,
+  "fx": "FX_MODE_2DJULIA",
+  "name": "Julia",
+  "fn": "mode_2DJulia"
+ },
+ {
+  "idx": 141,
+  "fx": "FX_MODE_2DGAMEOFLIFE",
+  "name": "Game Of Life",
+  "fn": "mode_2Dgameoflife"
+ },
+ {
+  "idx": 142,
+  "fx": "FX_MODE_2DTARTAN",
+  "name": "Tartan",
+  "fn": "mode_2Dtartan"
+ },
+ {
+  "idx": 143,
+  "fx": "FX_MODE_2DPOLARLIGHTS",
+  "name": "Polar Lights",
+  "fn": "mode_2DPolarLights"
+ },
+ {
+  "idx": 144,
+  "fx": "FX_MODE_2DSWIRL",
+  "name": "Swirl",
+  "fn": "mode_2DSwirl"
+ },
+ {
+  "idx": 145,
+  "fx": "FX_MODE_2DLISSAJOUS",
+  "name": "Lissajous",
+  "fn": "mode_2DLissajous"
+ },
+ {
+  "idx": 146,
+  "fx": "FX_MODE_2DFRIZZLES",
+  "name": "Frizzles",
+  "fn": "mode_2DFrizzles"
+ },
+ {
+  "idx": 147,
+  "fx": "FX_MODE_2DPLASMABALL",
+  "name": "Plasma Ball",
+  "fn": "mode_2DPlasmaball"
+ },
+ {
+  "idx": 148,
+  "fx": "FX_MODE_2DHIPHOTIC",
+  "name": "Hiphotic",
+  "fn": "mode_2DHiphotic"
+ },
+ {
+  "idx": 149,
+  "fx": "FX_MODE_2DSINDOTS",
+  "name": "Sindots",
+  "fn": "mode_2DSindots"
+ },
+ {
+  "idx": 150,
+  "fx": "FX_MODE_2DDNASPIRAL",
+  "name": "DNA Spiral",
+  "fn": "mode_2DDNASpiral"
+ },
+ {
+  "idx": 151,
+  "fx": "FX_MODE_2DBLACKHOLE",
+  "name": "Black Hole",
+  "fn": "mode_2DBlackHole"
+ },
+ {
+  "idx": 152,
+  "fx": "FX_MODE_2DSOAP",
+  "name": "Soap",
+  "fn": "mode_2Dsoap"
+ },
+ {
+  "idx": 153,
+  "fx": "FX_MODE_2DOCTOPUS",
+  "name": "Octopus",
+  "fn": "mode_2Doctopus"
+ },
+ {
+  "idx": 154,
+  "fx": "FX_MODE_2DWAVINGCELL",
+  "name": "Waving Cell",
+  "fn": "mode_2Dwavingcell"
+ },
+ {
+  "idx": 155,
+  "fx": "FX_MODE_2DAKEMI",
+  "name": "Akemi",
+  "fn": "mode_2DAkemi"
+ },
+ {
+  "idx": 156,
+  "fx": "FX_MODE_PARTICLEVOLCANO",
+  "name": "PS Volcano",
+  "fn": "mode_particlevolcano"
+ },
+ {
+  "idx": 157,
+  "fx": "FX_MODE_PARTICLEFIRE",
+  "name": "PS Fire",
+  "fn": "mode_particlefire"
+ },
+ {
+  "idx": 158,
+  "fx": "FX_MODE_PARTICLEFIREWORKS",
+  "name": "PS Fireworks",
+  "fn": "mode_particlefireworks"
+ },
+ {
+  "idx": 159,
+  "fx": "FX_MODE_PARTICLEVORTEX",
+  "name": "PS Vortex",
+  "fn": "mode_particlevortex"
+ },
+ {
+  "idx": 160,
+  "fx": "FX_MODE_PARTICLEPERLIN",
+  "name": "PS Fuzzy Noise",
+  "fn": "mode_particleperlin"
+ },
+ {
+  "idx": 161,
+  "fx": "FX_MODE_PARTICLEPIT",
+  "name": "PS Ballpit",
+  "fn": "mode_particlepit"
+ },
+ {
+  "idx": 162,
+  "fx": "FX_MODE_PARTICLEBOX",
+  "name": "PS Box",
+  "fn": "mode_particlebox"
+ },
+ {
+  "idx": 163,
+  "fx": "FX_MODE_PARTICLEATTRACTOR",
+  "name": "PS Attractor",
+  "fn": "mode_particleattractor"
+ },
+ {
+  "idx": 164,
+  "fx": "FX_MODE_PARTICLEIMPACT",
+  "name": "PS Impact",
+  "fn": "mode_particleimpact"
+ },
+ {
+  "idx": 165,
+  "fx": "FX_MODE_PARTICLEWATERFALL",
+  "name": "PS Waterfall",
+  "fn": "mode_particlewaterfall"
+ },
+ {
+  "idx": 166,
+  "fx": "FX_MODE_PARTICLESPRAY",
+  "name": "PS Spray",
+  "fn": "mode_particlespray"
+ },
+ {
+  "idx": 167,
+  "fx": "FX_MODE_PARTICLESGEQ",
+  "name": "PS GEQ 2D",
+  "fn": "mode_particleGEQ"
+ },
+ {
+  "idx": 168,
+  "fx": "FX_MODE_PARTICLECENTERGEQ",
+  "name": "PS GEQ Nova",
+  "fn": "mode_particlecenterGEQ"
+ },
+ {
+  "idx": 169,
+  "fx": "FX_MODE_PARTICLEGHOSTRIDER",
+  "name": "PS Ghost Rider",
+  "fn": "mode_particleghostrider"
+ },
+ {
+  "idx": 170,
+  "fx": "FX_MODE_PARTICLEBLOBS",
+  "name": "PS Blobs",
+  "fn": "mode_particleblobs"
+ },
+ {
+  "idx": 171,
+  "fx": "FX_MODE_PARTICLEGALAXY",
+  "name": "PS Galaxy",
+  "fn": "mode_particlegalaxy"
+ },
+ {
+  "idx": 172,
+  "fx": "FX_MODE_PSDRIP",
+  "name": "PS DripDrop",
+  "fn": "mode_particleDrip"
+ },
+ {
+  "idx": 173,
+  "fx": "FX_MODE_PSPINBALL",
+  "name": "PS Pinball",
+  "fn": "mode_particlePinball"
+ },
+ {
+  "idx": 174,
+  "fx": "FX_MODE_PSDANCINGSHADOWS",
+  "name": "PS Dancing Shadows",
+  "fn": "mode_particleDancingShadows"
+ },
+ {
+  "idx": 175,
+  "fx": "FX_MODE_PSFIREWORKS1D",
+  "name": "PS Fireworks 1D",
+  "fn": "mode_particleFireworks1D"
+ },
+ {
+  "idx": 176,
+  "fx": "FX_MODE_PSSPARKLER",
+  "name": "PS Sparkler",
+  "fn": "mode_particleSparkler"
+ },
+ {
+  "idx": 177,
+  "fx": "FX_MODE_PSHOURGLASS",
+  "name": "PS Hourglass",
+  "fn": "mode_particleHourglass"
+ },
+ {
+  "idx": 178,
+  "fx": "FX_MODE_PS1DSPRAY",
+  "name": "PS Spray 1D",
+  "fn": "mode_particle1Dspray"
+ },
+ {
+  "idx": 179,
+  "fx": "FX_MODE_PSBALANCE",
+  "name": "PS 1D Balance",
+  "fn": "mode_particleBalance"
+ },
+ {
+  "idx": 180,
+  "fx": "FX_MODE_PSCHASE",
+  "name": "PS Chase",
+  "fn": "mode_particleChase"
+ },
+ {
+  "idx": 181,
+  "fx": "FX_MODE_PSSTARBURST",
+  "name": "PS Starburst",
+  "fn": "mode_particleStarburst"
+ },
+ {
+  "idx": 182,
+  "fx": "FX_MODE_PS1DGEQ",
+  "name": "PS GEQ 1D",
+  "fn": "mode_particle1DGEQ"
+ },
+ {
+  "idx": 183,
+  "fx": "FX_MODE_PSFIRE1D",
+  "name": "PS Fire 1D",
+  "fn": "mode_particleFire1D"
+ },
+ {
+  "idx": 184,
+  "fx": "FX_MODE_PS1DSONICSTREAM",
+  "name": "PS Sonic Stream",
+  "fn": "mode_particle1DsonicStream"
+ },
+ {
+  "idx": 185,
+  "fx": "FX_MODE_PS1DSONICBOOM",
+  "name": "PS Sonic Boom",
+  "fn": "mode_particle1DsonicBoom"
+ },
+ {
+  "idx": 186,
+  "fx": "FX_MODE_PS1DSPRINGY",
+  "name": "PS Springy",
+  "fn": "mode_particleSpringy"
+ }
+]

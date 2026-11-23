@@ -21,4 +21,15 @@ data class Segment(
     @SerialName("sel") val isSelected: Boolean? = null,
     @SerialName("rev") val isReversed: Boolean? = null,
     @SerialName("mi") val isMirrored: Boolean? = null,
+    /** Segment name. Doubles as the text shown by the 2D "Scrolling Text" effect. */
+    @SerialName("n") val name: String? = null,
+    /** Effect custom parameter 1 (0-255). Meaning depends on the effect. */
+    @SerialName("c1") val custom1: Int? = null,
+    /** Effect custom parameter 2 (0-255). */
+    @SerialName("c2") val custom2: Int? = null,
+    /** Effect custom parameter 3 (0-31, 5 bit). E.g. text rotation for Scrolling Text. */
+    @SerialName("c3") val custom3: Int? = null,
+    @SerialName("o1") val check1: Boolean? = null,
+    @SerialName("o2") val check2: Boolean? = null,
+    @SerialName("o3") val check3: Boolean? = null,
 )

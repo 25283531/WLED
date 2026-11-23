@@ -1,0 +1,72 @@
+[
+ {
+  "ratio": 0.961,
+  "a": "Gravimeter",
+  "fa": "mode_gravimeter",
+  "b": "Gravcenter",
+  "fb": "mode_gravcenter"
+ },
+ {
+  "ratio": 0.895,
+  "a": "Scan",
+  "fa": "mode_scan",
+  "b": "Candle",
+  "fb": "mode_candle"
+ },
+ {
+  "ratio": 0.885,
+  "a": "Wipe",
+  "fa": "mode_color_wipe",
+  "b": "Sweep",
+  "fb": "mode_color_sweep"
+ },
+ {
+  "ratio": 0.87,
+  "a": "Blink",
+  "fa": "mode_blink",
+  "b": "Strobe",
+  "fb": "mode_strobe"
+ },
+ {
+  "ratio": 0.854,
+  "a": "Theater",
+  "fa": "mode_theater_chase",
+  "b": "Strobe",
+  "fb": "mode_strobe"
+ },
+ {
+  "ratio": 0.845,
+  "a": "Blink",
+  "fa": "mode_blink",
+  "b": "Theater",
+  "fb": "mode_theater_chase"
+ },
+ {
+  "ratio": 0.836,
+  "a": "Twinklefox",
+  "fa": "mode_twinklefox",
+  "b": "Sinelon",
+  "fb": "mode_sinelon"
+ },
+ {
+  "ratio": 0.83,
+  "a": "Gradient",
+  "fa": "mode_gradient",
+  "b": "Sinelon",
+  "fb": "mode_sinelon"
+ },
+ {
+  "ratio": 0.821,
+  "a": "Candle",
+  "fa": "mode_candle",
+  "b": "Candle Multi",
+  "fb": "mode_candle_multi"
+ },
+ {
+  "ratio": 0.808,
+  "a": "Running",
+  "fa": "mode_running_lights",
+  "b": "Sinelon",
+  "fb": "mode_sinelon"
+ }
+]

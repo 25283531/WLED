@@ -220,6 +220,35 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
     // cannot call strip.deserializeLedmap()/strip.setUpMatrix() here due to already locked JSON buffer
     //if (!fromFS) doInit2D = true; // if called at boot (fromFS==true), WLED::beginStrip() will take care of setting up matrix
   }
+  #if defined(DEFAULT_MATRIX_W) && defined(DEFAULT_MATRIX_H)
+  else {
+    // No matrix stored in cfg.json yet (factory-fresh device): apply the build-time
+    // default so the lamp comes up already configured as a 2D matrix.
+    // Users can still change it later in Settings -> LED Preferences -> 2D Configuration;
+    // once saved, cfg.json wins and this branch is skipped.
+    strip.isMatrix = true;
+    WS2812FX::Panel p;
+    p.width       = constrain(DEFAULT_MATRIX_W, 1, 255);
+    p.height      = constrain(DEFAULT_MATRIX_H, 1, 255);
+    p.xOffset     = 0;
+    p.yOffset     = 0;
+    #ifdef DEFAULT_MATRIX_VERTICAL
+    p.vertical    = DEFAULT_MATRIX_VERTICAL;
+    #endif
+    #ifdef DEFAULT_MATRIX_SERPENTINE
+    p.serpentine  = DEFAULT_MATRIX_SERPENTINE;
+    #endif
+    #ifdef DEFAULT_MATRIX_BOTTOM_START
+    p.bottomStart = DEFAULT_MATRIX_BOTTOM_START;
+    #endif
+    #ifdef DEFAULT_MATRIX_RIGHT_START
+    p.rightStart  = DEFAULT_MATRIX_RIGHT_START;
+    #endif
+    strip.panel.clear();
+    strip.panel.push_back(p);
+    strip.panel.shrink_to_fit();
+  }
+  #endif
   #endif
 
   DEBUG_PRINTF_P(PSTR("Heap before buses: %d\n"), getFreeHeapSize());

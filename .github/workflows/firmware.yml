@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: firmware
@@ -40,6 +44,15 @@ jobs:
           key: pio-${{ hashFiles('firmware/platformio.ini', 'firmware/platformio_override.ini') }}
 
       - run: pip install -r requirements.txt
+
+      # Fail fast with an actionable message instead of "Unknown environment".
+      # color_lamp_c3 is defined only in firmware/platformio_override.ini.
+      - name: Verify color_lamp_c3 environment is defined
+        run: |
+          if ! pio project config | grep -q 'env:color_lamp_c3'; then
+            echo "::error::env:color_lamp_c3 not found. firmware/platformio_override.ini must be committed (it defines the whole product env)."
+            exit 1
+          fi
 
       - run: pio run -e color_lamp_c3
 
