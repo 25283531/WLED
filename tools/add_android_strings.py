@@ -105,7 +105,13 @@ FILES = {
 
 
 def escape(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Android 资源里撇号必须转义，否则 AAPT2 会报 "Invalid unicode escape sequence"
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("'", "\\'")
+    )
 
 
 def main() -> int:
