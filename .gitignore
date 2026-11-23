@@ -17,3 +17,6 @@ Thumbs.db
 
 # 本地 AI 助手工作状态（记忆/日志），不入库
 .workbuddy/
+
+# CI 构建产物（APK 等），不入库
+dist/
