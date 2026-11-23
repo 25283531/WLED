@@ -32,17 +32,36 @@ class GifEncoderTest {
     }
 
     /**
-     * 大面积渐变会逼着编码器把字典填满并提升码长，这一步最容易写错。
+     * 大面积渐变会逼着编码器把字典填满并提升码长，这一步最容易写错：
+     * 解码器要读到下一个码才补登表项，编码器必须按"已分配出去的码号"提升位宽。
      */
     @Test
     fun `handles palettes that force longer codes`() {
         val width = 40
         val height = 24
         val palette = IntArray(256) { index ->
-            ((index shl 16) or ((index * 3 and 0xFF) shl 8) or (255 - index)).also { it and 0xFFFFFF }
+            (index shl 16) or ((index * 3 and 0xFF) shl 8) or (255 - index)
         }
         val indices = ByteArray(width * height) { (it * 7 % 256).toByte() }
 
+        assertRoundTrip(indices, width, height, palette)
+    }
+
+    /**
+     * 噪声图会让字典一路填到 4096 并触发 Clear Code，覆盖码长回退那一段。
+     */
+    @Test
+    fun `handles dictionary overflow and clear code`() {
+        val width = 64
+        val height = 64
+        val palette = IntArray(256) { index -> (index shl 16) or ((255 - index) shl 8) or (index * 5 and 0xFF) }
+        val random = java.util.Random(7L)
+        val indices = ByteArray(width * height) { random.nextInt(256).toByte() }
+
+        assertRoundTrip(indices, width, height, palette)
+    }
+
+    private fun assertRoundTrip(indices: ByteArray, width: Int, height: Int, palette: IntArray) {
         val gif = GifEncoder.encode(indices, width, height, palette)
         val decoded = ImageIO.read(ByteArrayInputStream(gif))
 
@@ -55,6 +74,6 @@ class GifEncoderTest {
                 if (decoded.getRGB(x, y) and 0xFFFFFF != palette[index] and 0xFFFFFF) mismatches++
             }
         }
-        assertEquals(0, mismatches, "渐变图解码后有 $mismatches 个像素不一致")
+        assertEquals(0, mismatches, "解码后有 $mismatches 个像素不一致")
     }
 }

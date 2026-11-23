@@ -16,6 +16,10 @@ object GifEncoder {
     private const val MAX_COLORS = 256
     private const val MIN_CODE_SIZE = 8
 
+    /** LZW 码长上限；再大就必须发 Clear Code 重来。 */
+    private const val MAX_CODE_SIZE = 12
+    private const val MAX_CODES = 1 shl MAX_CODE_SIZE
+
     /**
      * @param indices 逐像素的调色板下标，长度必须是 [width] * [height]，行优先。
      * @param palette 调色板，ARGB 或 RGB 均可，只用低 24 位；不足 256 色时补黑。
@@ -111,12 +115,14 @@ object GifEncoder {
                 continue
             }
             writeCode(prefix)
-            if (nextCode < 4096) {
+            if (nextCode < MAX_CODES) {
                 dictionary[key] = nextCode
-                nextCode++
-                if (nextCode == (1 shl codeSize) && codeSize < 12) {
+                // 码长切换用「刚分配出去的码」判定：解码器要读到下一个码才会补登这条表项，
+                // 所以编码器必须按已分配的码号提升位宽，不能等 nextCode 自增之后再比。
+                if (nextCode >= (1 shl codeSize) && codeSize < MAX_CODE_SIZE) {
                     codeSize++
                 }
+                nextCode++
             } else {
                 writeCode(clearCode)
                 dictionary.clear()
