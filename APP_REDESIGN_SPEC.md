@@ -507,3 +507,73 @@ WLED 本身是设备自描述的，规格通过 API 暴露：
 - `tools/gen_effect_catalog.py`：从 `firmware/effects_enabled.json` 生成 `EffectCatalog.kt`
 - `tools/gen_effect_gifs.py`：生成通用规格（256×144）预览 GIF
 - `tools/add_android_strings.py`：四语言字符串同步（幂等）
+
+## 13. 实现记录（v8.1.0-test5，按 Gemini 设计稿重做四栏）
+
+本节**取代第 5 节（逐页设计）与第 12 节的部分描述**。设计目标从「功能齐全」转向「高频页面零视觉负担」，
+视觉语言固定为深空灰玻璃拟态（不做浅色主题，也不跟随系统动态取色）。
+
+### 13.1 四栏信息架构
+
+| 页签 | 定位 | 关键交互 |
+|---|---|---|
+| 设备 | 高频日常主控台 | 顶栏：品牌名 + 在线状态 + 设备名 +「N 台设备」；右侧「多灯同步」「定时」两枚**微缩胶囊图标**紧贴电源圆钮。主体：灯管示意图 → 亮度 → 四枚律动模式胶囊（幻彩极光 / 音乐律动 / 动态字幕 / 睡眠夜灯）→ **2×2 快捷卡片** |
+| 灯效库 | 全量浏览与收藏 | 顶部同四分类 Tab + 搜索（可折叠）；双列瀑布流展示全部 187 个效果，卡片右上角星标点亮即推送到首页快捷卡片 |
+| 创作 | 自定义 | 顶部分段胶囊切「纯色氛围创作」/「像素图文创作」：色轮双锚点取色 + 流速/饱和度，或 16×10 像素画板 + 滚动字幕；「保存收藏」直接归入对应分类 |
+| 设置 | 生态 / 硬件 / 系统 | 三大模块；固件未开放的能力（Matter 桥接、麦克风灵敏度、顶部触控校准）**明确标注「固件未开放」并给 Toast**，不做按下去没反应的假开关 |
+
+首页快捷卡片规则（`DeviceHomeViewModel.quickCards`）：先取该模式下的收藏，不足 4 张用该模式的常用效果补齐，
+**永远只有 4 张**，并与顶盖模式切换触摸键的循环列表保持一致。
+
+### 13.2 灯光预览：按效果 id 命名的 32×18 动图
+
+第 12 节「15 张 GIF / 256×144 通用画布」的做法有**两个错**，本节修正：
+
+1. **文件与灯效可能错配**：旧做法维护「灯效名 → 文件名」的手工映射，名字拼错或漏配就会张冠李戴。
+   现在文件名就是**效果 id**（`assets/effect_previews/<idx>.gif`，`0.gif` ~ `186.gif`），
+   与 `seg.fx` 严格一一对应，`EffectCatalog` 的 `preview` 字段直接写 id 字符串 —— 机制上不可能错配。
+2. **1D 灯效被画成一条光带**：产品是 32×18 的灯珠矩阵（原型为 9 列 × 23 颗 S 形贴片圆管），
+   固件里 1D 效果也是沿**蛇形**铺满整块的。现在 `gen_effect_gifs.py` 的 `from_strip()` 先算一条
+   576 颗的灯带，再由 `serpentine()` 按 S 形铺到矩阵，画出来才是实际观感。
+
+规格：`CELL=4, GAP=1` → 画布 128×72；16 帧 @12fps；量化 40 色；叠一层 `GaussianBlur(2.6)` 的柔光副本。
+全量 187 个共 **6.99 MB**。播放端 `EffectPreviewGif` 用 `ImageDecoder` + `AnimatedImageDrawable`（API 28+），
+`CENTER_CROP` 铺满卡片，低版本退回首帧。
+
+### 13.3 「动态字幕」的观感约束（固件侧待落地）
+
+`100mm 黑透亚克力管 + 0.2mm 乳白扩散膜 + 20mm 空气混光腔` 会把细笔画晕开，因此字幕模式必须是：
+**加粗等宽点阵大字体**（笔画 ≥2 颗灯珠宽、字高占满纵向 10~12 颗灯珠）+ **纯黑底 + 高亮单色**拉满对比度。
+
+预览 GIF（`123.gif` / `38.gif`）已按此规则渲染：`BOLD_SCALE=2`，5×7 点阵放大成 10×14，字高 14/18。
+**固件 `mode_scrolling_text` 目前仍是 1 像素细笔画，需按同一规则改造**（未做，见 13.6）。
+
+### 13.4 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `ui/isle/IsleTheme.kt` | 颜色令牌 + 全屏柔光背景 |
+| `ui/isle/IsleGlyphs.kt` | 24×24 细线图标集（`material-icons-core` 只有实心剪影，故手绘） |
+| `ui/isle/IsleComponents.kt` | `GlassCard` / `IsleCapsule` / `GlowCircleButton` / `StarButton` / `IsleSlider` / `EffectArtwork` / `DeviceTube` |
+| `ui/isle/SelectedDeviceStore.kt` | 四页签共享「当前设备」（单例，Koin `single`） |
+| `ui/device/` | 首页 + `DeviceHomeViewModel`（电源/亮度/模式/快捷卡片/同步/定时） |
+| `ui/library/` | 灯效库 + 搜索 + 星标 |
+| `ui/create/` | 色轮 + 像素画板 + 字幕 + `GifEncoder` 上传 |
+| `ui/settings/` | 三组设置 + 语言切换 |
+| `util/GifEncoder.kt` | 手写最小 GIF89a 编码器（单帧、256 色、LZW 9→12 位） |
+
+### 13.5 与设计的偏离
+
+- **灯管图用 Canvas 现画**（`DeviceTube`），不用渲染图：颜色要跟着当前灯效变，静态图做不到。
+- **`EffectMood` 是 App 侧概念**：固件没有「律动模式」，四分类由 `tools/gen_effect_catalog.py` 的 id 白名单硬编码
+  （`AURORA` 156 / `MUSIC` 14 / `TEXT` 4 / `SLEEP` 13）。
+- **外层套了一层深色 `MaterialTheme`**：光屿本身是固定深色，若系统处于浅色主题，弹层/涟漪/默认文字色会漏白。
+- **旧的 `homeScreen/` 列表详情链未删除**：`DeviceListDetail` / `DeviceDetail` / `ControlScreen` 已无入口，
+  但删除牵动 `DeviceListDetailViewModel` 与 widget 相关引用，为控制风险暂留。
+
+### 13.6 未做
+
+1. **固件字幕加粗**（13.3）：需要改 `firmware/wled00/FX.cpp` 的 `mode_scrolling_text`，改用加粗点阵并按 2 倍块放大。
+2. **Matter / 米家 / HomeKit 桥接**、**I2S 麦克风灵敏度**、**顶部四键触控校准**：固件均无接口。
+3. 旧 `homeScreen/` 列表链清理（见 13.5）。
+4. iOS 仍搁置。
