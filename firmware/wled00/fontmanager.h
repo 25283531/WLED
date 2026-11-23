@@ -93,7 +93,9 @@ public:
   uint8_t getGlyphWidth(uint32_t unicode);
 
   // Rendering
-  void drawCharacter(uint32_t unicode, int16_t x, int16_t y, uint32_t color, uint32_t col2, int8_t rotate);
+  // `bold` 会把每个点亮像素沿字身的"横"方向再补一颗，让 1 像素笔画变成 2 像素宽。
+  // 熏黑亚克力 + 乳白扩散膜会把细笔画晕开，小字号根本读不清，字幕大字需要这个。
+  void drawCharacter(uint32_t unicode, int16_t x, int16_t y, uint32_t color, uint32_t col2, int8_t rotate, bool bold = false);
 
 private:
   Segment* _segment;

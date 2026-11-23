@@ -386,7 +386,7 @@ uint8_t FontManager::collectNeededCodes(const char* text, FontHeader* hdr, uint8
   return count;
 }
 
-void FontManager::drawCharacter(uint32_t unicode, int16_t x, int16_t y, uint32_t color, uint32_t col2, int8_t rotate) {
+void FontManager::drawCharacter(uint32_t unicode, int16_t x, int16_t y, uint32_t color, uint32_t col2, int8_t rotate, bool bold) {
   uint8_t w, h;
   const uint8_t* bitmap = getGlyphBitmap(unicode, w, h);
   if (!bitmap || w == 0) return;
@@ -408,6 +408,18 @@ void FontManager::drawCharacter(uint32_t unicode, int16_t x, int16_t y, uint32_t
           default: x0 = x + col;         y0 = y + row;         break;
         }
         _segment->setPixelColorXY(x0, y0, c.color32); // bounds checking is done in setPixelColorXY
+        if (bold) {
+          // 沿字身的"横向"补一颗像素（旋转时该方向变成 y），把 1px 笔画加粗成 2px
+          int bx = x0, by = y0;
+          switch (rotate) {
+            case -1: bx = x0;         by = y0 + 1; break; // 90° CW：字身横向 = +y
+            case  1: bx = x0;         by = y0 - 1; break; // 90° CCW：字身横向 = -y
+            case -2:
+            case  2: bx = x0 - 1;     by = y0;     break; // 上下翻转：字身横向 = -x
+            default: bx = x0 + 1;     by = y0;     break;
+          }
+          _segment->setPixelColorXY(bx, by, c.color32);
+        }
       }
       bitIndex++;
     }

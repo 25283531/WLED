@@ -33,6 +33,9 @@ enum class PixelTool { BRUSH, ERASER, PICKER }
 data class CreateStatus(val message: String, val isError: Boolean)
 
 private const val SCROLLING_TEXT_EFFECT = 123
+
+/** `seg.c2` = 255 时固件映射到 font 4（5×12），并启用加粗笔画。 */
+private const val SCROLLING_TEXT_BIG_FONT = 255
 private const val IMAGE_EFFECT = 38
 private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
@@ -219,6 +222,9 @@ class CreateViewModel(
                     // 纯黑底 + 单色高亮字：透过熏黑亚克力罩仍能读清
                     colors = listOf(listOf(255, 255, 255), listOf(0, 0, 0), listOf(0, 0, 0)),
                     effectSpeed = (_speed.value * 255).toInt().coerceIn(0, 255),
+                    // c2 = 255 -> 固件选中 font 4（5×12 大字），并自动启用 2 像素加粗笔画
+                    custom2 = SCROLLING_TEXT_BIG_FONT,
+                    custom3 = 0,
                 )
             }
             _status.value = CreateStatus(

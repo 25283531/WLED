@@ -6552,6 +6552,12 @@ void mode_2Dscrollingtext(void) {
   uint8_t fontWidth = fontManager.getFontWidth(); // for fonts with variable width, this is the max letter width
   uint8_t letterSpacing = isRotated ? 1 : fontManager.getFontSpacing(); // when rotated use spacing of 1, otherwise use font defined spacing
 
+  // 字幕加粗：只在最大字号（font 4 = 5x12）启用。
+  // 灯罩是 100mm 黑透亚克力 + 0.2mm 乳白扩散膜 + 20mm 空气混光腔，1px 的细笔画会被晕开读不清，
+  // 所以每个点亮像素沿字身横向再补一颗，笔画宽 2、字高占满 12 行，并把对比度交给纯黑底 + 高亮单色。
+  const bool boldText = !isRotated && (fontNum == 4);
+  const uint8_t boldExtra = boldText ? 1 : 0;
+
   // Calculate total text width
   int totalTextWidth = 0;
   int idx = 0;
@@ -6565,7 +6571,7 @@ void mode_2Dscrollingtext(void) {
     if (isRotated) {
       totalTextWidth += fontHeight + letterSpacing; // use height when rotated, spacing of 1
     } else {
-      totalTextWidth += fontManager.getGlyphWidth(unicode) + letterSpacing;
+      totalTextWidth += fontManager.getGlyphWidth(unicode) + letterSpacing + boldExtra;
     }
   }
   totalTextWidth -= letterSpacing; // remove spacing after last character
@@ -6625,7 +6631,7 @@ void mode_2Dscrollingtext(void) {
     uint32_t unicode = utf8_decode(&text[idx], &charLen);
     idx += charLen;
     int unrotatedWidth = fontManager.getGlyphWidth(unicode);
-    int glyphWidth  = isRotated ? fontHeight     : unrotatedWidth;  // use font height for width if 90° rotated
+    int glyphWidth  = isRotated ? fontHeight     : unrotatedWidth + boldExtra;  // use font height for width if 90° rotated
     int glyphHeight = isRotated ? unrotatedWidth : fontHeight;      // use (variable) glyph-width for height if 90° rotated
     int drawX = int(cols) - int(SEGENV.aux0) + currentXOffset;      // aux0 is (scrolling) offset, no offset position is right side boarder (cols)
     if (drawX >= cols) break; // skip if character is off-screen on the right
@@ -6638,7 +6644,7 @@ void mode_2Dscrollingtext(void) {
 
     int16_t drawY = yoffset + (rows - glyphHeight) / 2; // center glyph vertically
 
-    fontManager.drawCharacter(unicode, drawX, drawY, col1, col2, rotate);
+    fontManager.drawCharacter(unicode, drawX, drawY, col1, col2, rotate, boldText);
     currentXOffset += advance;
   }
 }
