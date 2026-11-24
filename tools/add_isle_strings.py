@@ -47,7 +47,27 @@ STRINGS: dict[str, tuple[str, str, str, str]] = {
     "isle_mood_aurora": ("Aurora", "幻彩极光", "Aurore", "Aurora"),
     "isle_mood_music": ("Music", "音乐律动", "Musique", "Musik"),
     "isle_mood_text": ("Captions", "动态字幕", "Texte", "Text"),
-    "isle_mood_sleep": ("Sleep", "睡眠夜灯", "Veilleuse", "Nachtlicht"),
+    "isle_sleep_light": ("Sleep light", "睡眠夜灯", "Veilleuse", "Nachtlicht"),
+    "isle_sleep_light_applied": (
+        "Switched to a warm sleep light", "已切换到睡眠夜灯暖光",
+        "Lumière douce de veilleuse activée", "Warmes Nachtlicht aktiviert",
+    ),
+    "isle_nightlight_remaining": ("%1$s left", "剩余 %1$s", "%1$s restantes", "Noch %1$s"),
+    "isle_nightlight_started": (
+        "Will turn off in %1$d min", "已设置 %1$d 分钟后关灯",
+        "Extinction dans %1$d min", "Ausschalten in %1$d Min.",
+    ),
+    "isle_nightlight_cancelled": ("Timer cancelled", "已取消定时关灯", "Minuterie annulée", "Timer abgebrochen"),
+    "isle_nightlight_failed": (
+        "Could not send the timer. Check the connection.", "定时指令发送失败，请检查连接",
+        "Envoi de la minuterie impossible. Vérifiez la connexion.",
+        "Timer konnte nicht gesendet werden. Verbindung prüfen.",
+    ),
+    "isle_nightlight_light_off": (
+        "The light is off, so the timer will not take effect.", "灯当前是关闭状态，定时关灯不会生效",
+        "La lampe est éteinte, la minuterie ne fera rien.",
+        "Die Lampe ist aus, der Timer hat keine Wirkung.",
+    ),
 
     "isle_favorite_add": ("Add to favorites", "收藏", "Ajouter aux favoris", "Zu Favoriten hinzufügen"),
     "isle_favorite_remove": ("Remove from favorites", "取消收藏", "Retirer des favoris", "Aus Favoriten entfernen"),

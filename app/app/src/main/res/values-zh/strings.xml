@@ -233,7 +233,13 @@
     <string name="isle_mood_aurora">幻彩极光</string>
     <string name="isle_mood_music">音乐律动</string>
     <string name="isle_mood_text">动态字幕</string>
-    <string name="isle_mood_sleep">睡眠夜灯</string>
+    <string name="isle_sleep_light">睡眠夜灯</string>
+    <string name="isle_sleep_light_applied">已切换到睡眠夜灯暖光</string>
+    <string name="isle_nightlight_remaining">剩余 %1$s</string>
+    <string name="isle_nightlight_started">已设置 %1$d 分钟后关灯</string>
+    <string name="isle_nightlight_cancelled">已取消定时关灯</string>
+    <string name="isle_nightlight_failed">定时指令发送失败，请检查连接</string>
+    <string name="isle_nightlight_light_off">灯当前是关闭状态，定时关灯不会生效</string>
     <string name="isle_favorite_add">收藏</string>
     <string name="isle_favorite_remove">取消收藏</string>
     <string name="isle_library_title">灯效库</string>

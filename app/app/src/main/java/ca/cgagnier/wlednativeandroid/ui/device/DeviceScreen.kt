@@ -75,6 +75,7 @@ import ca.cgagnier.wlednativeandroid.util.CHANNEL_MAX
 import ca.cgagnier.wlednativeandroid.util.channelToNormalized
 import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
 import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 private val NIGHTLIGHT_OPTIONS = listOf(5, 10, 15, 30, 60, 120)
@@ -94,6 +95,7 @@ private val PRESET_COLORS = listOf(
     0xFF8A3C,         // 橙
     0x3CFF8A,         // 翠绿
     0xFFE9D7,         // 暖白
+    0xFFB46B,         // 暖黄（约 2700K，睡眠夜灯的基准色）
 )
 
 /** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
@@ -106,8 +108,8 @@ private fun packedToColor(packed: Int): Color = Color(
 /**
  * 首页（设备）：高频日常主控台。
  *
- * 电源、亮度、四个律动模式、2×2 快捷卡片都在一屏内；多灯同步和定时收进顶部的两个微缩胶囊，
- * 点开是底部弹层 —— 它们不是每天都改的参数，不该占据主视觉。
+ * 电源、亮度、三个律动模式 + 睡眠夜灯、2×2 快捷卡片都在一屏内；
+ * 多灯同步和定时收进顶部的两个微缩胶囊，点开是底部弹层 —— 它们不是每天都改的参数，不该占据主视觉。
  */
 @Composable
 fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel = koinViewModel()) {
@@ -138,6 +140,22 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val segment = state?.segment?.firstOrNull()
     val currentEffect = segment?.effect
 
+    val nightlight = state?.nightlight
+    val nightlightActive = nightlight?.isOn == true
+    val nightlightRemaining = rememberNightlightRemaining(nightlight?.remainingTime)
+
+    LaunchedEffect(Unit) {
+        viewModel.nightlightEvents.collect { event ->
+            val message = when (event) {
+                is NightlightEvent.Started -> context.getString(R.string.isle_nightlight_started, event.minutes)
+                NightlightEvent.Cancelled -> context.getString(R.string.isle_nightlight_cancelled)
+                NightlightEvent.Failed -> context.getString(R.string.isle_nightlight_failed)
+                NightlightEvent.LightOff -> context.getString(R.string.isle_nightlight_light_off)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val quickCards = remember(favorites, mood) { viewModel.quickCards(favorites, mood) }
     val favoriteIds = remember(favorites) { favorites.map { it.effectId }.toSet() }
 
@@ -154,6 +172,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     device = device,
                     isOn = isOn,
                     syncEnabled = syncEnabled,
+                    nightlightActive = nightlightActive,
                     onTogglePower = { device?.let { viewModel.setPower(it, !isOn) } },
                     onOpenSync = { showSyncSheet = true },
                     onOpenTimer = { showTimerSheet = true },
@@ -210,7 +229,19 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     text = stringResource(R.string.isle_rhythm_mode),
                     modifier = Modifier.padding(top = 18.dp),
                 )
-                MoodRow(selected = mood, onSelect = viewModel::selectMood)
+                MoodRow(
+                    selected = mood,
+                    onSelect = viewModel::selectMood,
+                    onSleepLight = {
+                        val target = device
+                        if (target == null) {
+                            Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.startSleepLight(target)
+                            Toast.makeText(context, R.string.isle_sleep_light_applied, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                )
             }
 
             item {
@@ -270,9 +301,21 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     if (showTimerSheet) {
         BottomSheet(onDismiss = { showTimerSheet = false }) {
             SheetTitle(stringResource(R.string.isle_nightlight_off))
+            if (nightlightRemaining != null) {
+                Text(
+                    text = stringResource(
+                        R.string.isle_nightlight_remaining,
+                        formatCountdown(nightlightRemaining),
+                    ),
+                    color = IsleColors.Cyan,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
             NIGHTLIGHT_OPTIONS.forEach { minutes ->
                 SheetRow(
                     label = stringResource(R.string.isle_minutes, minutes),
+                    selected = nightlightActive && nightlight?.duration == minutes,
                     onClick = {
                         device?.let { viewModel.startNightlight(it, minutes) }
                         showTimerSheet = false
@@ -333,6 +376,7 @@ private fun HeaderRow(
     device: DeviceWithState?,
     isOn: Boolean,
     syncEnabled: Boolean,
+    nightlightActive: Boolean,
     onTogglePower: () -> Unit,
     onOpenSync: () -> Unit,
     onOpenTimer: () -> Unit,
@@ -394,7 +438,7 @@ private fun HeaderRow(
         MiniAction(
             glyph = Glyph.Timer,
             label = stringResource(R.string.isle_timer),
-            active = false,
+            active = nightlightActive,
             onClick = onOpenTimer,
         )
         Spacer(Modifier.width(12.dp))
@@ -697,26 +741,40 @@ private fun TuningSlider(
 }
 
 @Composable
-private fun MoodRow(selected: EffectMood, onSelect: (EffectMood) -> Unit) {    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+private fun MoodRow(
+    selected: EffectMood,
+    onSelect: (EffectMood) -> Unit,
+    onSleepLight: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         EffectMood.entries.forEach { mood ->
-            MoodItem(
-                mood = mood,
+            MoodTile(
+                glyph = mood.glyph(),
+                label = stringResource(mood.labelRes()),
                 selected = mood == selected,
                 onClick = { onSelect(mood) },
                 modifier = Modifier.weight(1f),
             )
         }
+        // 「睡眠夜灯」不是筛选项：点一下直接切到低亮度暖光，之后颜色与亮度仍可继续调。
+        MoodTile(
+            glyph = Glyph.Moon,
+            label = stringResource(R.string.isle_sleep_light),
+            selected = false,
+            onClick = onSleepLight,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
 @Composable
-private fun MoodItem(mood: EffectMood, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val glyph = when (mood) {
-        EffectMood.AURORA -> Glyph.Aurora
-        EffectMood.MUSIC -> Glyph.Music
-        EffectMood.TEXT -> Glyph.Text
-        EffectMood.SLEEP -> Glyph.Moon
-    }
+private fun MoodTile(
+    glyph: Glyph,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
@@ -744,7 +802,7 @@ private fun MoodItem(mood: EffectMood, selected: Boolean, onClick: () -> Unit, m
             )
         }
         Text(
-            text = stringResource(mood.labelRes()),
+            text = label,
             color = if (selected) IsleColors.TextPrimary else IsleColors.TextMuted,
             fontSize = 10.5.sp,
             maxLines = 1,
@@ -753,12 +811,43 @@ private fun MoodItem(mood: EffectMood, selected: Boolean, onClick: () -> Unit, m
     }
 }
 
+private fun EffectMood.glyph(): Glyph = when (this) {
+    EffectMood.AURORA -> Glyph.Aurora
+    EffectMood.MUSIC -> Glyph.Music
+    EffectMood.TEXT -> Glyph.Text
+}
+
 private fun EffectMood.labelRes(): Int = when (this) {
     EffectMood.AURORA -> R.string.isle_mood_aurora
     EffectMood.MUSIC -> R.string.isle_mood_music
     EffectMood.TEXT -> R.string.isle_mood_text
-    EffectMood.SLEEP -> R.string.isle_mood_sleep
 }
+
+/**
+ * 把设备报来的 `nl.rem`（秒）做成每秒递减的本地倒计时。
+ *
+ * 固件只在状态变化时推送，倒计时期间不会每秒来一帧，所以必须本地自减；
+ * 每当设备发来新的 `rem`（例如重新设定时），基准值会被重置。
+ */
+@Composable
+private fun rememberNightlightRemaining(seconds: Long?): Long? {
+    var remaining by remember { mutableStateOf(seconds) }
+    LaunchedEffect(seconds) {
+        remaining = seconds
+        var left = seconds ?: return@LaunchedEffect
+        while (left > 0) {
+            remaining = left
+            delay(1_000)
+            left -= 1
+        }
+        remaining = 0L
+    }
+    return remaining?.takeIf { it > 0 }
+}
+
+/** `90` -> `1:30`。 */
+private fun formatCountdown(seconds: Long): String =
+    "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 
 @Composable
 private fun QuickGrid(

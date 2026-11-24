@@ -315,5 +315,4 @@ private fun EffectFilter.labelRes(): Int = when (this) {
     EffectFilter.AURORA -> R.string.isle_mood_aurora
     EffectFilter.MUSIC -> R.string.isle_mood_music
     EffectFilter.TEXT -> R.string.isle_mood_text
-    EffectFilter.SLEEP -> R.string.isle_mood_sleep
 }

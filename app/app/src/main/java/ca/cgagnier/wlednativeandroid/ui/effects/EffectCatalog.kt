@@ -6,11 +6,11 @@ package ca.cgagnier.wlednativeandroid.ui.effects
 enum class EffectCategory { ONE_D, TWO_D, ART }
 
 /**
- * 律动模式：App 侧的产品分类，对应首页的四个胶囊与灯效库的四个 Tab。
+ * 律动模式：App 侧的产品分类，对应设备页的律动胶囊与灯效库的 Tab。
  *
  * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。
  */
-enum class EffectMood { AURORA, MUSIC, TEXT, SLEEP }
+enum class EffectMood { AURORA, MUSIC, TEXT }
 
 /**
  * 一个固件灯效。
@@ -19,7 +19,7 @@ enum class EffectMood { AURORA, MUSIC, TEXT, SLEEP }
  * @property name 固件提供的英文名称（`/json/effects` 同一份数据，此处固化以便离线展示）。
  * @property nameZh 中文显示名；未收录时与 [name] 相同。
  * @property category 见 [EffectCategory]。
- * @property mood 首页四胶囊的分组，见 [EffectMood]。
+ * @property mood 律动胶囊的分组，见 [EffectMood]。
  * @property isPopular 是否列入「常用」。
  * @property preview 预览 GIF 的资源名（assets/effect_previews/<preview>.gif），即效果 id。
  */
@@ -42,7 +42,7 @@ object EffectCatalog {
     val all: List<EffectInfo> = listOf(
         EffectInfo(0, "Solid", "纯色", EffectCategory.ONE_D, EffectMood.AURORA, false, "0"),
         EffectInfo(1, "Blink", "明灭", EffectCategory.ONE_D, EffectMood.AURORA, true, "1"),
-        EffectInfo(2, "Breathe", "呼吸", EffectCategory.ONE_D, EffectMood.SLEEP, true, "2"),
+        EffectInfo(2, "Breathe", "呼吸", EffectCategory.ONE_D, EffectMood.AURORA, true, "2"),
         EffectInfo(3, "Wipe", "擦拭", EffectCategory.ONE_D, EffectMood.AURORA, true, "3"),
         EffectInfo(5, "Random Colors", "随机彩", EffectCategory.ONE_D, EffectMood.AURORA, false, "5"),
         EffectInfo(6, "Sweep", "扫光", EffectCategory.ONE_D, EffectMood.AURORA, false, "6"),
@@ -50,13 +50,13 @@ object EffectCatalog {
         EffectInfo(8, "Colorloop", "循环彩", EffectCategory.ONE_D, EffectMood.AURORA, true, "8"),
         EffectInfo(9, "Rainbow", "七彩流光", EffectCategory.ONE_D, EffectMood.AURORA, true, "9"),
         EffectInfo(10, "Scan", "扫描", EffectCategory.ONE_D, EffectMood.AURORA, false, "10"),
-        EffectInfo(12, "Fade", "渐隐", EffectCategory.ONE_D, EffectMood.SLEEP, false, "12"),
+        EffectInfo(12, "Fade", "渐隐", EffectCategory.ONE_D, EffectMood.AURORA, false, "12"),
         EffectInfo(13, "Theater", "剧院追光", EffectCategory.ONE_D, EffectMood.AURORA, false, "13"),
         EffectInfo(15, "Running", "奔走", EffectCategory.ONE_D, EffectMood.AURORA, false, "15"),
-        EffectInfo(17, "Twinkle", "星闪", EffectCategory.ONE_D, EffectMood.SLEEP, true, "17"),
+        EffectInfo(17, "Twinkle", "星闪", EffectCategory.ONE_D, EffectMood.AURORA, true, "17"),
         EffectInfo(18, "Dissolve", "溶解", EffectCategory.ONE_D, EffectMood.AURORA, false, "18"),
         EffectInfo(20, "Sparkle", "闪耀", EffectCategory.ONE_D, EffectMood.AURORA, false, "20"),
-        EffectInfo(21, "Sparkle Dark", "暗夜星屑", EffectCategory.ONE_D, EffectMood.SLEEP, false, "21"),
+        EffectInfo(21, "Sparkle Dark", "暗夜星屑", EffectCategory.ONE_D, EffectMood.AURORA, false, "21"),
         EffectInfo(23, "Strobe", "频闪", EffectCategory.ONE_D, EffectMood.AURORA, false, "23"),
         EffectInfo(25, "Strobe Mega", "疾速频闪", EffectCategory.ONE_D, EffectMood.AURORA, false, "25"),
         EffectInfo(27, "Android", "安卓", EffectCategory.ONE_D, EffectMood.AURORA, false, "27"),
@@ -96,19 +96,19 @@ object EffectCatalog {
         EffectInfo(69, "Fill Noise", "噪声填充", EffectCategory.ONE_D, EffectMood.AURORA, false, "69"),
         EffectInfo(70, "Noise 1", "噪声 I", EffectCategory.ONE_D, EffectMood.AURORA, false, "70"),
         EffectInfo(73, "Noise 4", "噪声 IV", EffectCategory.ONE_D, EffectMood.AURORA, false, "73"),
-        EffectInfo(74, "Colortwinkles", "彩屑闪烁", EffectCategory.ONE_D, EffectMood.SLEEP, false, "74"),
-        EffectInfo(75, "Lake", "湖光", EffectCategory.ONE_D, EffectMood.SLEEP, false, "75"),
+        EffectInfo(74, "Colortwinkles", "彩屑闪烁", EffectCategory.ONE_D, EffectMood.AURORA, false, "74"),
+        EffectInfo(75, "Lake", "湖光", EffectCategory.ONE_D, EffectMood.AURORA, false, "75"),
         EffectInfo(76, "Meteor", "流星", EffectCategory.ONE_D, EffectMood.AURORA, true, "76"),
         EffectInfo(77, "Copy Segment", "复制段落", EffectCategory.ONE_D, EffectMood.AURORA, false, "77"),
         EffectInfo(78, "Railway", "铁道", EffectCategory.ONE_D, EffectMood.AURORA, false, "78"),
         EffectInfo(79, "Ripple", "涟漪", EffectCategory.ONE_D, EffectMood.AURORA, true, "79"),
-        EffectInfo(80, "Twinklefox", "萤火", EffectCategory.ONE_D, EffectMood.SLEEP, false, "80"),
+        EffectInfo(80, "Twinklefox", "萤火", EffectCategory.ONE_D, EffectMood.AURORA, false, "80"),
         EffectInfo(82, "Halloween Eyes", "万圣之眼", EffectCategory.ONE_D, EffectMood.AURORA, false, "82"),
         EffectInfo(83, "Solid Pattern", "纯色图案", EffectCategory.ONE_D, EffectMood.AURORA, true, "83"),
         EffectInfo(84, "Solid Pattern Tri", "三色图案", EffectCategory.ONE_D, EffectMood.AURORA, false, "84"),
         EffectInfo(85, "Spots", "光斑", EffectCategory.ONE_D, EffectMood.AURORA, false, "85"),
         EffectInfo(87, "Glitter", "碎钻", EffectCategory.ONE_D, EffectMood.AURORA, false, "87"),
-        EffectInfo(88, "Candle", "烛光", EffectCategory.ONE_D, EffectMood.SLEEP, true, "88"),
+        EffectInfo(88, "Candle", "烛光", EffectCategory.ONE_D, EffectMood.AURORA, true, "88"),
         EffectInfo(89, "Fireworks Starburst", "星爆焰火", EffectCategory.ONE_D, EffectMood.AURORA, false, "89"),
         EffectInfo(90, "Fireworks 1D", "线型焰火", EffectCategory.ONE_D, EffectMood.AURORA, false, "90"),
         EffectInfo(91, "Bouncing Balls", "弹跳球", EffectCategory.ONE_D, EffectMood.AURORA, true, "91"),
@@ -118,12 +118,12 @@ object EffectCatalog {
         EffectInfo(97, "Plasma", "等离子", EffectCategory.ONE_D, EffectMood.AURORA, true, "97"),
         EffectInfo(98, "Percent", "百分比", EffectCategory.ONE_D, EffectMood.AURORA, false, "98"),
         EffectInfo(100, "Heartbeat", "心跳", EffectCategory.ONE_D, EffectMood.AURORA, false, "100"),
-        EffectInfo(101, "Pacifica", "深海潮汐", EffectCategory.ONE_D, EffectMood.SLEEP, false, "101"),
-        EffectInfo(102, "Candle Multi", "多簇烛光", EffectCategory.ONE_D, EffectMood.SLEEP, false, "102"),
+        EffectInfo(101, "Pacifica", "深海潮汐", EffectCategory.ONE_D, EffectMood.AURORA, false, "101"),
+        EffectInfo(102, "Candle Multi", "多簇烛光", EffectCategory.ONE_D, EffectMood.AURORA, false, "102"),
         EffectInfo(103, "Solid Glitter", "纯色碎钻", EffectCategory.ONE_D, EffectMood.AURORA, true, "103"),
-        EffectInfo(104, "Sunrise", "日出", EffectCategory.ONE_D, EffectMood.SLEEP, false, "104"),
+        EffectInfo(104, "Sunrise", "日出", EffectCategory.ONE_D, EffectMood.AURORA, false, "104"),
         EffectInfo(105, "Phased", "相位", EffectCategory.ONE_D, EffectMood.AURORA, false, "105"),
-        EffectInfo(106, "Twinkleup", "上升星点", EffectCategory.ONE_D, EffectMood.SLEEP, false, "106"),
+        EffectInfo(106, "Twinkleup", "上升星点", EffectCategory.ONE_D, EffectMood.AURORA, false, "106"),
         EffectInfo(107, "Noise Pal", "噪声调色", EffectCategory.ONE_D, EffectMood.AURORA, false, "107"),
         EffectInfo(108, "Sine", "正弦波", EffectCategory.ONE_D, EffectMood.AURORA, false, "108"),
         EffectInfo(110, "Flow", "流动", EffectCategory.ONE_D, EffectMood.AURORA, false, "110"),
@@ -237,15 +237,8 @@ object EffectCatalog {
 
     fun nameOf(id: Int?): String? = find(id)?.name
 
-    /**
-     * 按固件英文名反查灯效 id。
-     *
-     * 业务代码**不应硬编码灯效 id** —— 固件调整效果槽位后 id 会整体漂移，
-     * 写死的数字会静默指向另一个效果。例如固件把 Image 从 38 挪到 53 之后，
-     * 写死 38 的代码会切到 Aurora（极光）；同理写死 123 会切到 Drift Rose（玫瑰漂移）。
-     * 英文名是稳定的（固件改了名字才需要改这里），按名反查可让槽位变更自动跟随。
-     */
-    fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name }
+    /** 按固件英文名反查灯效。业务代码不写死 id —— 固件插入新效果后 id 会整体前移。 */
+    fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name.trim() }
 
     val popular: List<EffectInfo> = all.filter { it.isPopular }
 

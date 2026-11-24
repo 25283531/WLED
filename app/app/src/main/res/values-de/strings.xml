@@ -235,7 +235,13 @@
     <string name="isle_mood_aurora">Aurora</string>
     <string name="isle_mood_music">Musik</string>
     <string name="isle_mood_text">Text</string>
-    <string name="isle_mood_sleep">Nachtlicht</string>
+    <string name="isle_sleep_light">Nachtlicht</string>
+    <string name="isle_sleep_light_applied">Warmes Nachtlicht aktiviert</string>
+    <string name="isle_nightlight_remaining">Noch %1$s</string>
+    <string name="isle_nightlight_started">Ausschalten in %1$d Min.</string>
+    <string name="isle_nightlight_cancelled">Timer abgebrochen</string>
+    <string name="isle_nightlight_failed">Timer konnte nicht gesendet werden. Verbindung prüfen.</string>
+    <string name="isle_nightlight_light_off">Die Lampe ist aus, der Timer hat keine Wirkung.</string>
     <string name="isle_favorite_add">Zu Favoriten hinzufügen</string>
     <string name="isle_favorite_remove">Aus Favoriten entfernen</string>
     <string name="isle_library_title">Effektbibliothek</string>

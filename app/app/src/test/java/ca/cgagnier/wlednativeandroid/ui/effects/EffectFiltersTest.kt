@@ -71,13 +71,20 @@ class EffectFiltersTest {
             EffectFilter.AURORA to EffectMood.AURORA,
             EffectFilter.MUSIC to EffectMood.MUSIC,
             EffectFilter.TEXT to EffectMood.TEXT,
-            EffectFilter.SLEEP to EffectMood.SLEEP,
         ).forEach { (filter, mood) ->
             val result = filterEffects(all, filter, "")
             assertTrue(result.isNotEmpty(), "$filter 不应为空")
             assertTrue(result.all { it.mood == mood }, "$filter 混入了其它模式的灯效")
             assertEquals(EffectCatalog.byMood(mood).size, result.size)
         }
+    }
+
+    @Test
+    fun `睡眠夜灯不再是灯效分类`() {
+        // 「睡眠夜灯」已改为设备页的一键暖光动作，不应再出现在筛选/分类里
+        assertTrue(EffectFilter.entries.none { it.name == "SLEEP" })
+        assertTrue(EffectMood.entries.none { it.name == "SLEEP" })
+        assertTrue(EffectCatalog.byName("Solid") != null, "睡眠暖光依赖纯色灯效")
     }
 
     @Test

@@ -8,7 +8,7 @@
     AURORA 幻彩极光 —— 一切以色彩流动为主的氛围效果
     MUSIC  音乐律动 —— 由音频频谱驱动的效果（GEQ、频谱、声波类）
     TEXT   动态字幕 —— 直接显示用户内容的字画（文字、图片、时钟、数字雨）
-    SLEEP  睡眠夜灯 —— 低亮度、低刺激的慢节奏效果
+「睡眠夜灯」不是分类，而是设备页的一键暖光动作，故不在此建模。
 分类按效果 id 白名单硬编码，宁可漏收也不猜。
 
 用法:
@@ -46,9 +46,6 @@ MUSIC_IDS = {68, 136, 137, 139, 141, 148, 155, 159, 186, 198, 199, 212, 214, 215
 
 # 「动态字幕」：直接显示用户内容（文字、图片、时钟、数字雨）
 TEXT_IDS = {53, 122, 153, 220}
-
-# 「睡眠夜灯」：低亮度、慢节奏，适合睡前
-SLEEP_IDS = {2, 12, 17, 21, 74, 75, 80, 88, 101, 102, 104, 106}
 
 # 中文显示名。没收录的灯效直接用固件英文名，不做机器翻译。
 NAME_ZH = {
@@ -107,8 +104,6 @@ def mood_of(entry: dict) -> str:
         return "TEXT"
     if idx in MUSIC_IDS:
         return "MUSIC"
-    if idx in SLEEP_IDS:
-        return "SLEEP"
     return "AURORA"
 
 
@@ -142,11 +137,11 @@ def main() -> int:
         "enum class EffectCategory { ONE_D, TWO_D, ART }",
         "",
         "/**",
-        " * 律动模式：App 侧的产品分类，对应首页的四个胶囊与灯效库的四个 Tab。",
+        " * 律动模式：App 侧的产品分类，对应设备页的律动胶囊与灯效库的 Tab。",
         " *",
         " * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。",
         " */",
-        "enum class EffectMood { AURORA, MUSIC, TEXT, SLEEP }",
+        "enum class EffectMood { AURORA, MUSIC, TEXT }",
         "",
         "/**",
         " * 一个固件灯效。",
@@ -155,7 +150,7 @@ def main() -> int:
         " * @property name 固件提供的英文名称（`/json/effects` 同一份数据，此处固化以便离线展示）。",
         " * @property nameZh 中文显示名；未收录时与 [name] 相同。",
         " * @property category 见 [EffectCategory]。",
-        " * @property mood 首页四胶囊的分组，见 [EffectMood]。",
+        " * @property mood 律动胶囊的分组，见 [EffectMood]。",
         " * @property isPopular 是否列入「常用」。",
         " * @property preview 预览 GIF 的资源名（assets/effect_previews/<preview>.gif），即效果 id。",
         " */",
@@ -201,6 +196,9 @@ def main() -> int:
         "    fun find(id: Int?): EffectInfo? = id?.let { byId[it] }",
         "",
         "    fun nameOf(id: Int?): String? = find(id)?.name",
+        "",
+        "    /** 按固件英文名反查灯效。业务代码不写死 id —— 固件插入新效果后 id 会整体前移。 */",
+        "    fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name.trim() }",
         "",
         "    val popular: List<EffectInfo> = all.filter { it.isPopular }",
         "",

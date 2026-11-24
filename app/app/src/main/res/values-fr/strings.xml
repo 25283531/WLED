@@ -235,7 +235,13 @@
     <string name="isle_mood_aurora">Aurore</string>
     <string name="isle_mood_music">Musique</string>
     <string name="isle_mood_text">Texte</string>
-    <string name="isle_mood_sleep">Veilleuse</string>
+    <string name="isle_sleep_light">Veilleuse</string>
+    <string name="isle_sleep_light_applied">Lumière douce de veilleuse activée</string>
+    <string name="isle_nightlight_remaining">%1$s restantes</string>
+    <string name="isle_nightlight_started">Extinction dans %1$d min</string>
+    <string name="isle_nightlight_cancelled">Minuterie annulée</string>
+    <string name="isle_nightlight_failed">Envoi de la minuterie impossible. Vérifiez la connexion.</string>
+    <string name="isle_nightlight_light_off">La lampe est éteinte, la minuterie ne fera rien.</string>
     <string name="isle_favorite_add">Ajouter aux favoris</string>
     <string name="isle_favorite_remove">Retirer des favoris</string>
     <string name="isle_library_title">Bibliothèque d\'effets</string>

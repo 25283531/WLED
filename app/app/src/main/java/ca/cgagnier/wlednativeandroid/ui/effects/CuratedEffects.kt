@@ -128,7 +128,7 @@ object CuratedEffects {
             gradient = listOf(0x00E676, 0x00B0FF),
         ),
 
-        // ── 睡眠夜灯 ──────────────────────────────────────────────
+        // ── 温馨慢节奏 ────────────────────────────────────────────
         Spec(
             effectName = "Breathe",
             paletteName = "Color 1",

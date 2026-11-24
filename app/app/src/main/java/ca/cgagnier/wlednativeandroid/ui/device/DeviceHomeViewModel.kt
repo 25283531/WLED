@@ -12,13 +12,17 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.buildEffectSegment
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -26,6 +30,34 @@ import kotlinx.coroutines.launch
 private const val FAVORITES_SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val NIGHTLIGHT_MODE_FADE = 1
 private const val NIGHTLIGHT_TARGET_BRIGHTNESS_OFF = 0
+
+/**
+ * 睡眠夜灯配方：纯色 + 暖黄 + 低亮度。
+ *
+ * 「睡眠夜灯」不再是灯效分类，只是一个一键参数组合，所以效果与调色板按名字反查，
+ * 不写死 id。
+ */
+private const val SLEEP_LIGHT_EFFECT_NAME = "Solid"
+private const val SLEEP_LIGHT_PALETTE_NAME = "Default"
+private const val SLEEP_LIGHT_COLOR = 0xFFB46B
+private const val SLEEP_LIGHT_BRIGHTNESS = 51
+
+/** 定时关灯的一次操作结果，用于给用户明确反馈。 */
+sealed interface NightlightEvent {
+    data class Started(val minutes: Int) : NightlightEvent
+
+    data object Cancelled : NightlightEvent
+
+    /** 指令没写进连接（设备离线或 WebSocket 未连上）。 */
+    data object Failed : NightlightEvent
+
+    /**
+     * 指令已发出，但灯是关闭状态。
+     *
+     * 固件在 `bri == tbri` 时会立刻清掉夜灯，所以灯关着时设定时不会生效 —— 必须如实告知用户。
+     */
+    data object LightOff : NightlightEvent
+}
 
 /** WLED 颜色槽位数量（主色 / 次色 / 第三色）。 */
 private const val COLOR_SLOT_COUNT = 3
@@ -42,7 +74,7 @@ data class QuickCardItem(
 )
 
 /**
- * 首页（设备）：电源、亮度、四个律动模式、快捷卡片、多灯同步、定时关灯。
+ * 首页（设备）：电源、亮度、三个律动模式 + 睡眠夜灯、快捷卡片、多灯同步、定时关灯。
  *
  * 所有下发都走 WebSocket 的 [`seg` 补丁]，不会覆盖其它段落。
  */
@@ -73,6 +105,11 @@ class DeviceHomeViewModel(
      * 「灯效库」点灯效时也要跟随，否则开了同步却只有当前这台灯在变。
      */
     val syncEnabled: StateFlow<Boolean> = selectedDeviceStore.syncEnabled
+
+    private val _nightlightEvents = MutableSharedFlow<NightlightEvent>(extraBufferCapacity = 4)
+
+    /** 定时关灯的操作结果，界面用它弹 Toast，避免「点完什么都没发生」。 */
+    val nightlightEvents: SharedFlow<NightlightEvent> = _nightlightEvents.asSharedFlow()
 
     fun selectDevice(macAddress: String?) = selectedDeviceStore.select(macAddress)
 
@@ -181,8 +218,61 @@ class DeviceHomeViewModel(
         }
     }
 
+    /**
+     * 睡眠夜灯：一键切到低亮度温馨暖光。
+     *
+     * 只下发一组参数（纯色 + 暖黄 + 低亮度），之后亮度滑杆与色板仍然可调，
+     * 不需要为它单独做一个灯效分类。
+     */
+    fun startSleepLight(device: DeviceWithState) {
+        val solid = EffectCatalog.byName(SLEEP_LIGHT_EFFECT_NAME)
+        val palette = PaletteCatalog.byName(SLEEP_LIGHT_PALETTE_NAME)
+        val colors = listOf(
+            SLEEP_LIGHT_COLOR.unpackRgb(),
+        ) + List(COLOR_SLOT_COUNT - 1) { listOf(0, 0, 0) }
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                segment.copy(
+                    effect = solid?.id ?: segment.effect,
+                    palette = palette?.id ?: segment.palette,
+                    colors = colors,
+                )
+            }
+            deviceConnectionManager.setBrightness(mac, SLEEP_LIGHT_BRIGHTNESS)
+            deviceConnectionManager.setPower(mac, true)
+        }
+    }
+
     /** 定时关灯：[minutes] 分钟后淡出熄灭。 */
-    fun startNightlight(device: DeviceWithState, minutes: Int) = broadcast(device) { mac ->
+    fun startNightlight(device: DeviceWithState, minutes: Int) {
+        // 灯关着时固件会立刻清掉夜灯（bri 与目标亮度相等），此时必须先告知用户，
+        // 否则又是一次「点了没反应」。
+        val lightWasOn = device.stateInfo?.state?.isOn == true
+        viewModelScope.launch {
+            val delivered = targets(device).map { mac -> sendNightlight(mac, minutes) }
+            _nightlightEvents.emit(
+                when {
+                    delivered.isEmpty() || delivered.any { !it } -> NightlightEvent.Failed
+                    !lightWasOn -> NightlightEvent.LightOff
+                    else -> NightlightEvent.Started(minutes)
+                },
+            )
+        }
+    }
+
+    fun cancelNightlight(device: DeviceWithState) {
+        viewModelScope.launch {
+            val delivered = targets(device).map { mac ->
+                deviceConnectionManager.sendState(mac, State(nightlight = Nightlight(isOn = false)))
+            }
+            _nightlightEvents.emit(
+                if (delivered.isEmpty() || delivered.any { !it }) NightlightEvent.Failed
+                else NightlightEvent.Cancelled,
+            )
+        }
+    }
+
+    private suspend fun sendNightlight(mac: String, minutes: Int): Boolean =
         deviceConnectionManager.sendState(
             mac,
             State(
@@ -195,11 +285,6 @@ class DeviceHomeViewModel(
                 ),
             ),
         )
-    }
-
-    fun cancelNightlight(device: DeviceWithState) = broadcast(device) { mac ->
-        deviceConnectionManager.sendState(mac, State(nightlight = Nightlight(isOn = false)))
-    }
 
     private fun broadcast(device: DeviceWithState, action: suspend (String) -> Boolean) {
         viewModelScope.launch {

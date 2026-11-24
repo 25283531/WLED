@@ -22,7 +22,6 @@ enum class EffectFilter {
     AURORA,
     MUSIC,
     TEXT,
-    SLEEP,
 }
 
 /**
@@ -49,7 +48,6 @@ fun filterEffects(
         EffectFilter.AURORA -> effects.filter { it.mood == EffectMood.AURORA }
         EffectFilter.MUSIC -> effects.filter { it.mood == EffectMood.MUSIC }
         EffectFilter.TEXT -> effects.filter { it.mood == EffectMood.TEXT }
-        EffectFilter.SLEEP -> effects.filter { it.mood == EffectMood.SLEEP }
     }
     if (trimmed.isEmpty()) return byFilter
     return byFilter.filter {
