@@ -4,14 +4,15 @@
   "hasMigratedSharedPref": false,
   "theme": "Auto",
   "automaticDiscovery": true,
-  "version": 1,
+  "version": 2,
   "showOfflineLast": true,
   "sendCrashData": false,
   "sendPerformanceData": false,
   "lastUpdateCheckDate": 0,
   "dateLastWritten": 0,
   "showHiddenDevices": false,
-  "lastChangelogVersionSeen": ""
+  "lastChangelogVersionSeen": "",
+  "multiLampSyncEnabled": false
 }
 ╔═ readFrom_partialJson_usesDefaultValuesForMissingFields ═╗
 {
@@ -19,14 +20,15 @@
   "hasMigratedSharedPref": false,
   "theme": "Dark",
   "automaticDiscovery": true,
-  "version": 1,
+  "version": 2,
   "showOfflineLast": true,
   "sendCrashData": false,
   "sendPerformanceData": false,
   "lastUpdateCheckDate": 0,
   "dateLastWritten": 0,
   "showHiddenDevices": false,
-  "lastChangelogVersionSeen": ""
+  "lastChangelogVersionSeen": "",
+  "multiLampSyncEnabled": false
 }
 ╔═ readFrom_unknownKeys_ignoresThemGracefully ═╗
 {
@@ -34,14 +36,15 @@
   "hasMigratedSharedPref": false,
   "theme": "Light",
   "automaticDiscovery": true,
-  "version": 1,
+  "version": 2,
   "showOfflineLast": true,
   "sendCrashData": false,
   "sendPerformanceData": false,
   "lastUpdateCheckDate": 0,
   "dateLastWritten": 0,
   "showHiddenDevices": false,
-  "lastChangelogVersionSeen": ""
+  "lastChangelogVersionSeen": "",
+  "multiLampSyncEnabled": false
 }
 ╔═ roundTrip_serializesAndDeserializesCorrectly ═╗
 {
@@ -56,6 +59,7 @@
   "lastUpdateCheckDate": 1710000000,
   "dateLastWritten": 1710000010,
   "showHiddenDevices": true,
-  "lastChangelogVersionSeen": "1.5.0"
+  "lastChangelogVersionSeen": "1.5.0",
+  "multiLampSyncEnabled": false
 }
 ╔═ [end of file] ═╗
