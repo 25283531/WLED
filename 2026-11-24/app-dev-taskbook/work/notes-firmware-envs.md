@@ -44,7 +44,7 @@
 | `cfg.hw.led.ins` | `[{start:0,len:207,pin:[10],type:22}]` | 与 info 一致 |
 | `cfg.hw.led.matrix` | 9×23，`b=true,r=false,v=true,s=true` | S 形、底部起、第一列最左 |
 | 开机默认 | `bootfx=0` | 不再强制极光之舞 |
-| 音频 | `um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`；`info.u` → `Audio Source=["I2S digital"," - quiet"]`、`Sound Processing=["running"]` | v1.6 OTA 后实测通过，不再报 `not initialized` |
+| 音频 | `um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`；`info.u` → `Audio Source=["I2S digital"," - quiet"]`、`Sound Processing=["running"]` | v1.6 OTA 后初始化通过；v1.7 播放音乐实测 `peak 53–97%`（10 次 9 有声），`GEQ(139) sx=64` 功率 452–1999 mA 随节拍变化，真拾音与律动均通过 |
 | 第 46 颗 | 物理拆除 + 数据线短接（实际 206 颗，链前移 1 格） | `/ledmap.json` 207 项映射修正，该位置指向死包 206；APP 留空 |
 
 > **重要（历史根因）**：刷机初期 `count` 仍为 346 / 15×23，是设备残留旧 `/ledmap.json`（width=15、height=23、346 项）

@@ -213,5 +213,69 @@ ledmap.json = {"width":9,"height":23,"map":[207 项]}  # map[198]=0, map[199]=20
 结论：**ES7210 初始化通过、音频处理任务 running**；`- quiet` 表示当前环境无输入（未播放音乐），
 实际拾音与静音不闪烁留待 T2 联调。
 
+## v1.7：真拾音与 GEQ 律动实测（2026-11-24，用户现场播放音乐）
+
+设备：`10.0.1.172`，`17.0.0-devV5`，`release=ColorLamp-S3-C01`，`count=207 / 9×23`，
+`um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`。
+测试亮度：全局 `bri=153`（彩色 60%），未超 §0.4 约束。
+
+### 1. 连续采样 `/json/info.u`（间隔 1.5 s，10 次）
+
+| # | 时间 | Audio Source | Sound Processing | leds.pwr |
+|---|---|---|---|---|
+| 1 | 00:14:08 | `I2S digital` / `- peak  75%` | running | 427 |
+| 2 | 00:14:09 | `I2S digital` / `- peak  75%` | running | 374 |
+| 3 | 00:14:11 | `I2S digital` / `- peak  53%` | running | 457 |
+| 4 | 00:14:12 | `I2S digital` / `- peak  85%` | running | 494 |
+| 5 | 00:14:14 | `I2S digital` / `- peak  58%` | running | 337 |
+| 6 | 00:14:15 | `I2S digital` / `- peak  97%` | running | 447 |
+| 7 | 00:14:17 | `I2S digital` / `- quiet`     | running | 420 |
+| 8 | 00:14:18 | `I2S digital` / `- peak  95%` | running | 590 |
+| 9 | 00:14:20 | `I2S digital` / `- peak  95%` | running | 410 |
+| 10 | 00:14:21 | `I2S digital` / `- peak  75%` | running | 649 |
+
+`peak%` 采样前另有一次 `peak 80%`。**10 次中 9 次有声**，仅 1 次落到 `- quiet`（对应音乐间隙），
+`Sound Processing` 始终 `running`，`leds.pwr` 337–649 mA 随音乐波动。
+
+第二组 55 次采样（0.35 s 间隔，效果 PS GEQ 2D）：`peak%` 均值 **79.9**，`min=27 max=100`，**55/55 有声**。
+
+### 2. 效果侧律动对照（同一音乐窗口，`bri=153`）
+
+| 效果 | fx | 参数 | pwr min..max | Δ | 说明 |
+|---|---|---|---|---|---|
+| Solid | 0 | — | 2604..2604 | 0 | 静态基准（207 颗常亮） |
+| GEQ (2D) | 139 | 默认 `sx=200` | 327..426 | 99 | 淡出过快，几乎全黑 |
+| GEQ (2D) | 139 | `sx=64, ix=240, c1=64` | 452..1999 | **1547** | 柱状律动明显 |
+| GEQ (2D) | 139 | `sx=64, ix=240, c1=255` | 327..1275 | 948 | 16 频带，亮度低于 4 频带 |
+| PS GEQ 2D | 198 | `sx=155, ix=200` | 346..1083 | **737** | 与 `peak%` 正相关（corr +0.41） |
+| PS GEQ 1D | 212 | 默认 | 327..557 | 230 | 可动但幅度小 |
+| Freqwave | 137 | 默认 | 398..1278 | 880 | 有变化 |
+| Ripple Peak | 148 | 默认 | 1708..2604 | 896 | 有变化 |
+| Noise2D（反例，非音频） | 146 | — | 2712..2768 | 56 | 仅噪声自走，功率几乎不变 |
+
+**结论：音频数据确实进入了效果层**，`GEQ(139)` / `PS GEQ 2D(198)` 均随节拍变化；用户目视确认「音律灯效测试正常」。
+`GEQ(139)` 用默认 `sx=200` 时 `SEGMENT.fadeToBlackBy(speed)` 每帧淡出 200/255，柱高被瞬间抹掉，
+功率恒 327 mA，**极易误判为「音频未到效果」**——验收必须把 `sx` 降到 ~64 或调高 `ix`。
+
+> 一次 A/B 对照（关 `AudioReactive.enabled`）因当时音乐已停、`peak%` 全 0，数据被污染，**不作为结论**；
+> 判定以参数扫描 + 用户目视确认为准。测试后已恢复 `enabled=true`，末尾回读 `Audio Source=["I2S digital"," - peak  91%"]`、`running`。
+
+### 3. 复现命令
+
+```powershell
+# 单次/连续读
+curl.exe -s http://10.0.1.172/json/info
+
+# 设 GEQ 并给可见参数（彩色 60%）
+curl.exe -s -X POST http://10.0.1.172/json/state -H "Content-Type: application/json" -d '{"on":true,"bri":153,"transition":0,"mainseg":0,"seg":[{"id":0,"start":0,"stop":9,"startY":0,"stopY":23,"on":true,"fx":139,"pal":0,"sx":64,"ix":240,"c1":64,"c2":64,"c3":16}]}'
+
+# 切换 PS GEQ 2D
+curl.exe -s -X POST http://10.0.1.172/json/state -H "Content-Type: application/json" -d '{"on":true,"bri":153,"transition":0,"mainseg":0,"seg":[{"id":0,"start":0,"stop":9,"startY":0,"stopY":23,"on":true,"fx":198,"pal":0,"sx":155,"ix":200}]}'
+```
+
+波形脚本：`%TEMP%\wled_audio_probe.py`（采样 `peak%`）、`wled_geq_variants.py`（参数扫描）、
+`wled_geq_corr.py`（`peak%` 与 `pwr` 相关性）。
+
+
 
 
