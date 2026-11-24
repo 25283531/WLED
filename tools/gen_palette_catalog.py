@@ -112,7 +112,8 @@ def parse_palettes() -> list[str]:
 #      注意字节序：CRGB(uint32_t) 取的是 0xRRGGBB，即 R=(c>>16)&0xFF、G=(c>>8)&0xFF、B=c&0xFF。
 #
 #   2. 渐变调色板（id 13-72）：
-#      const uint8_t Sunset_Real_gp[] PROGMEM = { 0,181,0,0, 22,218,85,0, ... };    // 16 组 RGBA
+#      const uint8_t Sunset_Real_gp[] PROGMEM = { 0,181,0,0, 22,218,85,0, ... };    // 每组 4 字节是 (pos, r, g, b)
+#      这类调色板只有 6-8 个色标，要按 pos 展开成 16 个颜色才能和 FastLED 的取色一致。
 #
 # id 0-5 是「动态调色板」，本身没有固定颜色：
 #   0 Default(用 PartyColors 渲染) / 1 随机 / 2 主色 / 3 主色+次色 / 4 主色渐变 / 5 三色
@@ -161,6 +162,44 @@ def _parse_named_colors() -> dict[str, int]:
     return {name: value for name, value in best}
 
 
+def _expand_gradient(stops: list[tuple[int, tuple[int, int, int]]]) -> list[int]:
+    """把 `(pos, RGB)` 色标展开成 16 个 0xRRGGBB。
+
+    固件的渐变调色板交给 FastLED 的 `CRGBPalette16` 使用：调色板索引 0-15 对应
+    位置 0/16/32/.../240，取色时在相邻两个色标之间做线性插值。APP 的色块预览
+    按这 16 个颜色等距画渐变，才能和灯上实际取到的颜色一致。
+    """
+    if not stops:
+        return []
+    stops = sorted(stops, key=lambda stop: stop[0])
+    if len(stops) == 1:
+        r, g, b = stops[0][1]
+        return [(r << 16) | (g << 8) | b]
+
+    colors: list[int] = []
+    for index in range(16):
+        pos = index * 16
+        left, right = stops[0], stops[-1]
+        for i in range(len(stops) - 1):
+            if stops[i][0] <= pos <= stops[i + 1][0]:
+                left, right = stops[i], stops[i + 1]
+                break
+        else:
+            # 位置落在首色标之前或末色标之后：沿用端点颜色
+            if pos < stops[0][0]:
+                left = right = stops[0]
+            else:
+                left = right = stops[-1]
+        span = right[0] - left[0]
+        frac = 0 if span == 0 else ((pos - left[0]) * 255) // span
+        rgb = tuple(
+            left[1][channel] + (right[1][channel] - left[1][channel]) * frac // 255
+            for channel in range(3)
+        )
+        colors.append((rgb[0] << 16) | (rgb[1] << 8) | rgb[2])
+    return colors
+
+
 def parse_palette_colors() -> dict[int, list[int]]:
     """调色板 id -> 16 个 0xRRGGBB 颜色。动态调色板（1-5）不在其中。"""
     text = _strip_c_comments(open(PALETTES_CPP, encoding="utf-8", errors="replace").read())
@@ -185,19 +224,21 @@ def parse_palette_colors() -> dict[int, list[int]]:
     ):
         consts[match.group(1)] = _parse_int_list(substitute_named(match.group(2)))
 
-    # 渐变形式：16 组 RGBA（每组第 4 字节是填充，取前 3 个）
+    # 渐变形式：每组 4 字节是 `(pos, r, g, b)`，pos 是 0-255 的色标位置。
     # 固件里类型写成 `uint8_t` 或 `byte` 两种，都要认。
+    # 注意：不能把第 1 字节当 R —— 那是 pos，直接取会整体错位一字节（曾导致
+    # Aurora 等 60 个渐变调色板在 APP 里显示成紫红色，而灯上是绿色系）。
     for match in re.finditer(
         r"const\s+(?:uint8_t|byte)\s+(\w+)\s*\[\]\s*PROGMEM\s*=\s*\{(.*?)\}\s*;",
         text,
         re.S,
     ):
         raw = _parse_int_list(match.group(2))
-        colors: list[int] = []
-        for i in range(0, len(raw) - 3, 4):
-            r, g, b = raw[i], raw[i + 1], raw[i + 2]
-            colors.append((r << 16) | (g << 8) | b)
-        consts[match.group(1)] = colors
+        stops = [
+            (raw[i], (raw[i + 1], raw[i + 2], raw[i + 3]))
+            for i in range(0, len(raw) - 3, 4)
+        ]
+        consts[match.group(1)] = _expand_gradient(stops)
 
     def array_items(pattern: str) -> list[str]:
         m = re.search(pattern, text, re.S)

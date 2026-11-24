@@ -51,6 +51,12 @@ private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
 
 /** `seg.c2` = 255 时固件映射到 font 4（5×12），并启用加粗笔画。 */
 private const val SCROLLING_TEXT_BIG_FONT = 255
+
+/**
+ * `seg.c3` 的字幕朝向。固件 `map(custom3, 0, 31, -2, 2)`：0 → -2（上下颠倒）、
+ * 16 → 0（正常）、24 → 1（逆时针 90°）。之前写 0，实体灯上的字幕就是倒的。
+ */
+private const val SCROLLING_TEXT_ROTATE_NORMAL = 16
 private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
 private const val DEFAULT_GRID_ROWS = 10
@@ -238,7 +244,7 @@ class CreateViewModel(
                     effectSpeed = normalizedToChannel(_speed.value),
                     // c2 = 255 -> 固件选中 font 4（5×12 大字），并自动启用 2 像素加粗笔画
                     custom2 = SCROLLING_TEXT_BIG_FONT,
-                    custom3 = 0,
+                    custom3 = SCROLLING_TEXT_ROTATE_NORMAL,
                 )
             }
             _status.value = CreateStatus(
