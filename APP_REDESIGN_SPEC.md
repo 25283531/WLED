@@ -906,3 +906,114 @@ App 侧做展示层收敛，报告第四节的分组直接可用。
 2. **配方导入导出与配方预览**（P1）。
 3. **per-fx 参数 schema**（P2 的前置）。
 4. iOS 仍搁置。
+
+## 16. 实现记录（v8.1.0-test8 续，滑块 tap 精度问题定位与修复）
+
+第 15 节补的「灯效参数」区上线后，滑块被反馈「拖不动 / 不跟手」。上一阶段收尾时
+给的结论是「`IsleSlider` 是既有组件，属组件通病」——**这个结论是错的**，
+本节记录完整的定位过程与修复。
+
+### 16.1 现象
+
+设备页速度滑块：点任意位置，界面百分比几乎不变，但设备端 `seg.sx` 会在几个
+极小值之间跳（实测只在 `0` 和 `5` 之间摆动）。
+
+### 16.2 根因 A：换算做了两遍（双重百分比）
+
+`DeviceScreen.kt` 里「比例 → 通道值」被换算了两次：
+
+```kotlin
+// EffectTuning：比例 → 小整数（这里就乘了 255/100）
+onCommit = { onSpeed((localSpeed * MAX_CHANNEL_VALUE / PERCENT_MAX).roundToInt()) }
+
+// DeviceScreen 回调：再乘一次 255/100
+onSpeed = { value -> device?.let { viewModel.setSpeed(it, value * MAX_CHANNEL_VALUE / PERCENT_MAX) } }
+```
+
+两级相乘使最终输出被压缩到极小集合。把它写成纯函数模型后，与 4 个真机实测
+观测点**逐点吻合**：
+
+| 滑块位置 | 比例 | 旧链路输出 `sx` | 实测 |
+|---|---|---|---|
+| 0.0% | 0.000 | 0 | 0 |
+| 25.0% | 0.250 | 2 | — |
+| 50.0% | 0.500 | 2 | — |
+| 67.3% | 0.673 | 5 | 5 |
+| 76.9% | 0.769 | 5 | 5 |
+| 100.0% | 1.000 | **7** | — |
+
+可输出集合只有 `{0, 2, 5, 7}` —— **最大 7/255，实际可达量程 2.7%**。
+界面恒显「速度 2%」也由此得到解释：`sx=5` → `5/255 = 1.96%` → 2%。
+
+### 16.3 根因 B：`pointerInput(Unit)` 的陈旧闭包
+
+`IsleSlider` 的手势协程写成 `pointerInput(Unit)`。Compose 的 `pointerInput`
+以 key 为重启依据，key 恒为 `Unit` 时协程**永不重启**，块内捕获的 lambda
+永久停留在**首次组合**的那一份。
+
+上层 `EffectTuning` 用 `remember(speed)` 持有本地状态：设备回写使 `speed`
+变化 → `remember` 重建 `MutableFloatState` → 而手势回调仍在写**已被废弃的旧
+state**。表现为「圆头纹丝不动、后台数值却在跳」——这正是此前最矛盾的现象。
+
+`CreateScreen` 的 `ColorWheel` 是同族问题（用旧的 `primary`/`secondary`
+判主副色），一并修掉。
+
+### 16.4 几何正确性的独立验证（排除误判）
+
+用像素反推证明 `IsleSlider` 的比例计算本身没问题：滑块 Box 边界
+`x ∈ [199, 1239]`（宽 1040），圆头中心 = `199 + clamp(ch/255 × 1040, 32, 1008)`。
+亮度滑块多一层 `padding(horizontal = 12.dp)` 与 40dp 百分比文字，Box 为
+`[199, 1151]`（宽 952）。
+
+- 亮度 50% → 理论圆头 x=676，实测 677
+- 速度 `sx=5` → 理论圆头 x=232（受 `thumbRadius` 钳位），实测 231
+
+→ `offset.x / size.width` 无误，**Bug B 是组件缺陷，但 Bug A 才是主因**，
+两者叠加才产生「拖不动」的现象。
+
+### 16.5 修复
+
+1. **换算收敛为单一入口**：新增 `app/shared/.../util/ChannelScale.kt`，
+   提供 `normalizedToChannel` / `channelToNormalized` / `channelToPercent` /
+   `percentToChannel` / `normalizedToPercent`，把亮度（`bri`）、速度（`seg.sx`）、
+   强度（`seg.ix`）统一到同一个 0..255 通道刻度。
+2. **删除页面内的 `PERCENT_MAX` / `MAX_CHANNEL_VALUE` 私有常量** ——
+   重复换算的写法（`* 255 / 100`）从此在设备页无处可写。
+3. **三个滑块统一「内部保留比例、提交时落通道值」**，调用方不再二次换算。
+4. **`IsleSlider` / `ColorWheel` 用 `rememberUpdatedState`** 消除陈旧闭包。
+5. `CreateViewModel` 的 `× 255` 收敛到 `normalizedToChannel`。
+
+### 16.6 验收结果
+
+`tools/verify_slider_tap.py` 在模拟器上按等分位置 tap 滑块，并从 mock WLED
+读回通道值，同时用像素扫描比对圆头位置：
+
+| 滑块 | 字段 | 全量程 | 单调 | 圆头跟随 |
+|---|---|---|---|---|
+| 速度 | `seg.sx` | 0 → 255 ✅ | ✅ | Δ = 0.0 px |
+| 强度 | `seg.ix` | 0 → 255 ✅ | ✅ | Δ = 0.0 px |
+| 亮度 | `bri` | 0 → 254 ✅ | ✅ | Δ ≤ 0.5 px |
+
+拖动路径 4/4 命中（200→1000、1238→600、400→900、200→1238）。
+
+CI：Android run 45302471919 **success**（含 `:shared:testAndroidHostTest`
+新单测 `:app:testDebugUnitTest`）。
+
+### 16.7 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `shared/.../util/ChannelScale.kt` | 比例/百分比/通道值三向换算的单一入口 |
+| `shared/.../commonTest/.../ChannelScaleTest.kt` | 换算单测 + 「旧实现只能输出 {0,2,5,7}」的失败形态锁定 |
+| `ui/device/DeviceScreen.kt` | 三个滑块统一单级换算；删除页面私有刻度常量 |
+| `ui/isle/IsleComponents.kt` | `IsleSlider` 用 `rememberUpdatedState` 消除陈旧闭包 |
+| `ui/create/CreateScreen.kt` | `ColorWheel` 同族修复；百分比显示走统一入口 |
+| `ui/create/CreateViewModel.kt` | 换算收敛到 `normalizedToChannel` |
+| `tools/verify_slider_tap.py` | 滑块 tap/拖动端到端校验（tap→通道值→圆头像素三重比对） |
+
+### 16.8 未做
+
+1. 旧 `homeScreen/` 列表链清理（见 15.8）。
+2. 配方导入导出与配方预览（P1）。
+3. per-fx 参数 schema（P2 的前置）。
+4. iOS 仍搁置。
