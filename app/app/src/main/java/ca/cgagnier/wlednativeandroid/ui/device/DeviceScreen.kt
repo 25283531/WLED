@@ -647,7 +647,8 @@ private fun PaletteSwatch(
             .size(width = 46.dp, height = 30.dp)
             .clip(shape)
             .background(
-                if (palette.hasPreview) {
+                // 有固定色标才画渐变；`*` 系列调色板没有色标，用中性底纹示意，避免出现空白方框
+                if (palette.hasPreview && palette.colors.isNotEmpty()) {
                     Brush.horizontalGradient(palette.colors.map { Color(0xFF000000.toInt() or it) })
                 } else {
                     Brush.horizontalGradient(listOf(IsleColors.SurfaceHigh, IsleColors.Surface))
