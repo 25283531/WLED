@@ -234,6 +234,13 @@
     <string name="isle_library_title">Bibliothèque d\'effets</string>
     <string name="isle_search">Rechercher un effet</string>
     <string name="isle_search_empty">Aucun effet trouvé</string>
+    <string name="isle_filter_all">Tous</string>
+    <string name="isle_filter_popular">Populaires</string>
+    <string name="isle_filter_favorite">Favoris</string>
+    <string name="isle_filter_art">Image/Texte</string>
+    <string name="isle_filter_1d">1D</string>
+    <string name="isle_filter_2d">2D</string>
+    <string name="isle_favorite_empty">Aucun effet en favori</string>
     <string name="isle_create_title">Atelier créatif</string>
     <string name="isle_create_color">Roue chromatique</string>
     <string name="isle_create_pixel">Pixel art</string>

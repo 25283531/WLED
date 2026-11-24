@@ -1,0 +1,190 @@
+{
+  "generated_from": "firmware/effects_enabled.json + firmware/wled00/FX.cpp",
+  "total_effects": 189,
+  "excluded_from_build": [
+    "FX_MODE_BLINK_RAINBOW",
+    "FX_MODE_CHASE_RAINBOW",
+    "FX_MODE_CHASE_RANDOM",
+    "FX_MODE_COLOR_SWEEP_RANDOM",
+    "FX_MODE_COLOR_WIPE_RANDOM",
+    "FX_MODE_DISSOLVE_RANDOM",
+    "FX_MODE_DUAL_LARSON_SCANNER",
+    "FX_MODE_DUAL_SCAN",
+    "FX_MODE_DYNAMIC_SMOOTH",
+    "FX_MODE_FREQMATRIX",
+    "FX_MODE_GRAVCENTRIC",
+    "FX_MODE_GRAVFREQ",
+    "FX_MODE_HYPER_SPARKLE",
+    "FX_MODE_LOADING",
+    "FX_MODE_METEOR_SMOOTH",
+    "FX_MODE_NOISE16_2",
+    "FX_MODE_NOISE16_3",
+    "FX_MODE_PHASEDNOISE",
+    "FX_MODE_PRIDE_2015",
+    "FX_MODE_PUDDLEPEAK",
+    "FX_MODE_RIPPLE_RAINBOW",
+    "FX_MODE_RUNNING_COLOR",
+    "FX_MODE_RUNNING_DUAL",
+    "FX_MODE_SAW",
+    "FX_MODE_SINELON_DUAL",
+    "FX_MODE_SINELON_RAINBOW",
+    "FX_MODE_SPOTS_FADE",
+    "FX_MODE_STROBE_RAINBOW",
+    "FX_MODE_THEATER_CHASE_RAINBOW",
+    "FX_MODE_TWINKLECAT"
+  ],
+  "verdicts": [
+    {
+      "idx": 6,
+      "zh": "扫光",
+      "name": "Sweep",
+      "macro": "FX_MODE_COLOR_SWEEP",
+      "verdict": "variant",
+      "duplicate_of": 3,
+      "duplicate_zh": "擦拭",
+      "reason": "与 #3 擦拭 共用核心实现 `color_wipe`，仅参数不同，视觉可区分"
+    },
+    {
+      "idx": 23,
+      "zh": "频闪",
+      "name": "Strobe",
+      "macro": "FX_MODE_STROBE",
+      "verdict": "variant",
+      "duplicate_of": 1,
+      "duplicate_zh": "明灭",
+      "reason": "与 #1 明灭 共用核心实现 `blink`，仅参数不同，视觉可区分"
+    },
+    {
+      "idx": 32,
+      "zh": "乱序追闪",
+      "name": "Chase Flash Rnd",
+      "macro": "FX_MODE_CHASE_FLASH_RANDOM",
+      "verdict": "similar",
+      "duplicate_of": 31,
+      "duplicate_zh": "追逐闪白",
+      "reason": "与 #31 追逐闪白 实现相似度 0.79，核心不同"
+    },
+    {
+      "idx": 102,
+      "zh": "多簇烛光",
+      "name": "Candle Multi",
+      "macro": "FX_MODE_CANDLE_MULTI",
+      "verdict": "variant",
+      "duplicate_of": 88,
+      "duplicate_zh": "烛光",
+      "reason": "与 #88 烛光 共用核心实现 `candle`，仅参数不同，视觉可区分"
+    },
+    {
+      "idx": 131,
+      "zh": "矩阵像素",
+      "name": "Matripix",
+      "macro": "FX_MODE_MATRIPIX",
+      "verdict": "similar",
+      "duplicate_of": 129,
+      "duplicate_zh": "像素波",
+      "reason": "与 #129 像素波 实现相似度 0.75，核心不同"
+    },
+    {
+      "idx": 136,
+      "zh": "噪声电平",
+      "name": "Noisemeter",
+      "macro": "FX_MODE_NOISEMETER",
+      "verdict": "similar",
+      "duplicate_of": 135,
+      "duplicate_zh": "中段噪声",
+      "reason": "与 #135 中段噪声 实现相似度 0.71，核心不同"
+    },
+    {
+      "idx": 155,
+      "zh": "频谱映射",
+      "name": "Freqmap",
+      "macro": "FX_MODE_FREQMAP",
+      "verdict": "similar",
+      "duplicate_of": 141,
+      "duplicate_zh": "频谱像素",
+      "reason": "与 #141 频谱像素 实现相似度 0.73，核心不同"
+    },
+    {
+      "idx": 156,
+      "zh": "重力中心",
+      "name": "Gravcenter",
+      "macro": "FX_MODE_GRAVCENTER",
+      "verdict": "variant",
+      "duplicate_of": 132,
+      "duplicate_zh": "重力表",
+      "reason": "与 #132 重力表 共用核心实现 `mode_gravcenter_base`，仅参数不同，视觉可区分"
+    }
+  ],
+  "family_groups": {
+    "团块": [
+      {
+        "idx": 121,
+        "zh": "团块",
+        "path": "1D"
+      },
+      {
+        "idx": 201,
+        "zh": "粒子团块",
+        "path": "PS"
+      }
+    ],
+    "瀑布": [
+      {
+        "idx": 140,
+        "zh": "瀑布",
+        "path": "1D"
+      },
+      {
+        "idx": 196,
+        "zh": "粒子瀑布",
+        "path": "PS"
+      }
+    ],
+    "焰火": [
+      {
+        "idx": 42,
+        "zh": "焰火",
+        "path": "1D"
+      },
+      {
+        "idx": 90,
+        "zh": "线型焰火",
+        "path": "1D"
+      },
+      {
+        "idx": 189,
+        "zh": "粒子焰火",
+        "path": "PS"
+      },
+      {
+        "idx": 205,
+        "zh": "线型粒子焰火",
+        "path": "PS"
+      }
+    ],
+    "舞影": [
+      {
+        "idx": 112,
+        "zh": "舞影",
+        "path": "1D"
+      },
+      {
+        "idx": 204,
+        "zh": "粒子舞影",
+        "path": "PS"
+      }
+    ],
+    "追逐": [
+      {
+        "idx": 28,
+        "zh": "追逐",
+        "path": "1D"
+      },
+      {
+        "idx": 210,
+        "zh": "粒子追逐",
+        "path": "PS"
+      }
+    ]
+  }
+}

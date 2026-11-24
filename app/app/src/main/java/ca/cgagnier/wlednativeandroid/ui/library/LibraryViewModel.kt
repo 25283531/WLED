@@ -3,13 +3,15 @@ package ca.cgagnier.wlednativeandroid.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ca.cgagnier.wlednativeandroid.model.FavoriteEffect
+import ca.cgagnier.wlednativeandroid.model.restoreFrom
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectFilter
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
-import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.filterEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +26,11 @@ import kotlinx.coroutines.launch
 private const val FAVORITES_SUBSCRIPTION_TIMEOUT_MS = 5_000L
 
 /**
- * 灯效库：四个律动模式 Tab + 搜索 + 星标收藏。
+ * 灯效库：一行筛选胶囊 + 搜索 + 星标收藏。
  *
- * 目录来自 [EffectCatalog]（由固件源码生成），因此离线也能浏览全部 187 个效果；
+ * 目录来自 [EffectCatalog]（由固件源码生成），因此离线也能浏览全部灯效；
  * 收藏只是打标，星标点亮后首页的 2×2 快捷卡片会同步出现。
+ * 收藏本身也存了完整参数（速度/强度/调色板/三色），见 [FavoriteEffect]。
  */
 class LibraryViewModel(
     private val deviceConnectionManager: DeviceConnectionManager,
@@ -54,40 +57,44 @@ class LibraryViewModel(
             initialValue = emptySet(),
         )
 
-    private val _mood = MutableStateFlow(EffectMood.AURORA)
-    val mood: StateFlow<EffectMood> = _mood.asStateFlow()
+    private val _filter = MutableStateFlow(EffectFilter.ALL)
+    val filter: StateFlow<EffectFilter> = _filter.asStateFlow()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    val visibleEffects: StateFlow<List<EffectInfo>> = combine(_mood, _query) { mood, query ->
-        val base = EffectCatalog.byMood(mood)
-        val trimmed = query.trim()
-        if (trimmed.isEmpty()) {
-            base
-        } else {
-            base.filter {
-                it.name.contains(trimmed, ignoreCase = true) || it.nameZh.contains(trimmed)
-            }
-        }
+    val visibleEffects: StateFlow<List<EffectInfo>> = combine(_filter, _query, favoriteIds) {
+            filter, query, favoriteIds ->
+        filterEffects(EffectCatalog.all, filter, query, favoriteIds)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(FAVORITES_SUBSCRIPTION_TIMEOUT_MS),
-        initialValue = EffectCatalog.byMood(EffectMood.AURORA),
+        initialValue = EffectCatalog.all,
     )
 
-    fun selectMood(mood: EffectMood) {
-        _mood.value = mood
+    fun selectFilter(filter: EffectFilter) {
+        _filter.value = filter
     }
 
     fun updateQuery(query: String) {
         _query.value = query
     }
 
-    fun applyEffect(device: DeviceWithState, effectId: Int, onResult: (Boolean) -> Unit = {}) {
+    /**
+     * 应用灯效。
+     *
+     * 若该灯效已被收藏，则**连同收藏时存下的速度、强度、调色板与三色一起恢复**，
+     * 与首页快捷卡片的行为一致。
+     */
+    fun applyEffect(
+        device: DeviceWithState,
+        effectId: Int,
+        onResult: (Boolean) -> Unit = {},
+    ) {
         viewModelScope.launch {
+            val favorite = favoriteEffectDao.findByEffectId(effectId)
             val success = deviceConnectionManager.sendSegmentPatch(device.device.macAddress) { segment ->
-                segment.copy(effect = effectId)
+                segment.copy(effect = effectId).restoreFrom(favorite)
             }
             onResult(success)
         }

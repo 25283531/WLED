@@ -232,6 +232,13 @@
     <string name="isle_library_title">灯效库</string>
     <string name="isle_search">搜索灯效</string>
     <string name="isle_search_empty">没有匹配的灯效</string>
+    <string name="isle_filter_all">全部</string>
+    <string name="isle_filter_popular">常用</string>
+    <string name="isle_filter_favorite">收藏</string>
+    <string name="isle_filter_art">字画</string>
+    <string name="isle_filter_1d">1D</string>
+    <string name="isle_filter_2d">2D</string>
+    <string name="isle_favorite_empty">还没有收藏的灯效</string>
     <string name="isle_create_title">创作工坊</string>
     <string name="isle_create_color">色轮调色</string>
     <string name="isle_create_pixel">自定义图文</string>

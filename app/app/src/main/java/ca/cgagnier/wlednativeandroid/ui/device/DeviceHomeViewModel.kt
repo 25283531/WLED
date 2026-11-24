@@ -3,6 +3,7 @@ package ca.cgagnier.wlednativeandroid.ui.device
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ca.cgagnier.wlednativeandroid.model.FavoriteEffect
+import ca.cgagnier.wlednativeandroid.model.restoreFrom
 import ca.cgagnier.wlednativeandroid.model.wledapi.Nightlight
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.model.wledapi.State
@@ -24,6 +25,17 @@ import kotlinx.coroutines.launch
 private const val FAVORITES_SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val NIGHTLIGHT_MODE_FADE = 1
 private const val NIGHTLIGHT_TARGET_BRIGHTNESS_OFF = 0
+
+/**
+ * 首页快捷卡片的一项。
+ *
+ * [favorite] 只在用户收藏过该灯效时非空 —— 点下去时用它把收藏时存下的
+ * 速度、强度、调色板与三色一并恢复，而不只是切一个效果 id。
+ */
+data class QuickCardItem(
+    val effect: EffectInfo,
+    val favorite: FavoriteEffect?,
+)
 
 /**
  * 首页（设备）：电源、亮度、四个律动模式、快捷卡片、多灯同步、定时关灯。
@@ -71,8 +83,20 @@ class DeviceHomeViewModel(
         deviceConnectionManager.setBrightness(mac, brightness.coerceIn(0, 255))
     }
 
-    fun applyEffect(device: DeviceWithState, effectId: Int) = broadcast(device) { mac ->
-        deviceConnectionManager.sendSegmentPatch(mac) { it.copy(effect = effectId) }
+    /**
+     * 应用灯效。
+     *
+     * [favorite] 非空时是这张卡片的收藏记录，会**连同收藏时存下的速度、强度、
+     * 调色板与三色一起恢复** —— 否则收藏就只是个书签，调不出收藏当时的观感。
+     */
+    fun applyEffect(
+        device: DeviceWithState,
+        effectId: Int,
+        favorite: FavoriteEffect? = null,
+    ) = broadcast(device) { mac ->
+        deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+            segment.copy(effect = effectId).restoreFrom(favorite)
+        }
     }
 
     /**
@@ -140,16 +164,22 @@ class DeviceHomeViewModel(
     /**
      * 首页 2×2 快捷卡片：先放该律动模式下已收藏的，不够四张再用该模式下最常用的补齐。
      * 这样首页永远只有 4 张，且优先呈现用户自己的选择。
+     *
+     * 收藏项带上收藏记录本身，点下去才能连参数一起恢复。
      */
-    fun quickCards(favorites: List<FavoriteEffect>, mood: EffectMood): List<EffectInfo> {
-        val inMood = favorites.mapNotNull { EffectCatalog.find(it.effectId) }
-            .filter { it.mood == mood }
-            .distinctBy { it.id }
+    fun quickCards(favorites: List<FavoriteEffect>, mood: EffectMood): List<QuickCardItem> {
+        val favoriteById = favorites.associateBy { it.effectId }
+        val inMood = favorites.mapNotNull { fav ->
+            EffectCatalog.find(fav.effectId)?.let { QuickCardItem(it, fav) }
+        }.filter { it.effect.mood == mood }
         if (inMood.size >= QUICK_CARD_COUNT) return inMood.take(QUICK_CARD_COUNT)
+        val takenIds = inMood.map { it.effect.id }.toSet()
         val fillers = EffectCatalog.byMood(mood)
-            .filter { it.isPopular && it.id !in inMood.map { effect -> effect.id } }
-            .ifEmpty { EffectCatalog.byMood(mood) }
-        return (inMood + fillers).distinctBy { it.id }.take(QUICK_CARD_COUNT)
+            .filter { it.isPopular && it.id !in takenIds }
+            .ifEmpty { EffectCatalog.byMood(mood).filter { it.id !in takenIds } }
+        return (inMood + fillers.map { QuickCardItem(it, favoriteById[it.id]) })
+            .distinctBy { it.effect.id }
+            .take(QUICK_CARD_COUNT)
     }
 
     private companion object {

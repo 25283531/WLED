@@ -45,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectFilter
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
-import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
 import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
@@ -57,16 +57,17 @@ import ca.cgagnier.wlednativeandroid.ui.isle.StarButton
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * 灯效库：四个律动模式 Tab + 搜索 + 星标收藏。
+ * 灯效库：一行筛选胶囊 + 搜索 + 星标收藏。
  *
- * 分类与首页的四胶囊一一对应，点亮星标后该灯效会同步到首页的 2×2 快捷卡片。
+ * 筛选是扁平的一维选择（全部 / 四个律动模式 / 字画 / 收藏 / 常用），
+ * 点亮星标后该灯效会同步到首页的 2×2 快捷卡片。
  */
 @Composable
 fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = koinViewModel()) {
     val context = LocalContext.current
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val selectedMac by viewModel.selectedMacAddress.collectAsStateWithLifecycle()
-    val mood by viewModel.mood.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val effects by viewModel.visibleEffects.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
@@ -146,15 +147,15 @@ fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = k
                             .padding(top = 16.dp, bottom = 4.dp)
                             .horizontalScroll(rememberScrollState()),
                     ) {
-                        EffectMood.entries.forEach { item ->
+                        EffectFilter.entries.forEach { item ->
                             IsleCapsule(
-                                selected = item == mood,
-                                onClick = { viewModel.selectMood(item) },
+                                selected = item == filter,
+                                onClick = { viewModel.selectFilter(item) },
                                 contentPadding = 11.dp,
                             ) {
                                 Text(
                                     text = stringResource(item.labelRes()),
-                                    color = if (item == mood) IsleColors.TextPrimary else IsleColors.TextMuted,
+                                    color = if (item == filter) IsleColors.TextPrimary else IsleColors.TextMuted,
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     softWrap = false,
@@ -174,7 +175,13 @@ fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = k
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = stringResource(R.string.isle_search_empty),
+                            text = stringResource(
+                                if (filter == EffectFilter.FAVORITE) {
+                                    R.string.isle_favorite_empty
+                                } else {
+                                    R.string.isle_search_empty
+                                }
+                            ),
                             color = IsleColors.TextMuted,
                             fontSize = 13.sp,
                         )
@@ -278,9 +285,15 @@ private fun LibraryCard(
     }
 }
 
-private fun EffectMood.labelRes(): Int = when (this) {
-    EffectMood.AURORA -> R.string.isle_mood_aurora
-    EffectMood.MUSIC -> R.string.isle_mood_music
-    EffectMood.TEXT -> R.string.isle_mood_text
-    EffectMood.SLEEP -> R.string.isle_mood_sleep
+private fun EffectFilter.labelRes(): Int = when (this) {
+    EffectFilter.ALL -> R.string.isle_filter_all
+    EffectFilter.POPULAR -> R.string.isle_filter_popular
+    EffectFilter.FAVORITE -> R.string.isle_filter_favorite
+    EffectFilter.ART -> R.string.isle_filter_art
+    EffectFilter.ONE_D -> R.string.isle_filter_1d
+    EffectFilter.TWO_D -> R.string.isle_filter_2d
+    EffectFilter.AURORA -> R.string.isle_mood_aurora
+    EffectFilter.MUSIC -> R.string.isle_mood_music
+    EffectFilter.TEXT -> R.string.isle_mood_text
+    EffectFilter.SLEEP -> R.string.isle_mood_sleep
 }

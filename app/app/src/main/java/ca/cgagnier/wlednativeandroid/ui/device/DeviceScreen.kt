@@ -167,12 +167,12 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     cards = quickCards,
                     favoriteIds = favoriteIds,
                     currentEffect = currentEffect,
-                    onApply = { effect ->
+                    onApply = { card ->
                         val target = device
                         if (target == null) {
                             Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
                         } else {
-                            viewModel.applyEffect(target, effect.id)
+                            viewModel.applyEffect(target, card.effect.id, card.favorite)
                         }
                     },
                     onToggleFavorite = { effect ->
@@ -480,22 +480,22 @@ private fun EffectMood.labelRes(): Int = when (this) {
 
 @Composable
 private fun QuickGrid(
-    cards: List<EffectInfo>,
+    cards: List<QuickCardItem>,
     favoriteIds: Set<Int>,
     currentEffect: Int?,
-    onApply: (EffectInfo) -> Unit,
+    onApply: (QuickCardItem) -> Unit,
     onToggleFavorite: (EffectInfo) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         cards.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { effect ->
+                row.forEach { card ->
                     QuickCard(
-                        effect = effect,
-                        isFavorite = effect.id in favoriteIds,
-                        isActive = effect.id == currentEffect,
-                        onClick = { onApply(effect) },
-                        onToggleFavorite = { onToggleFavorite(effect) },
+                        effect = card.effect,
+                        isFavorite = card.effect.id in favoriteIds,
+                        isActive = card.effect.id == currentEffect,
+                        onClick = { onApply(card) },
+                        onToggleFavorite = { onToggleFavorite(card.effect) },
                         modifier = Modifier.weight(1f),
                     )
                 }

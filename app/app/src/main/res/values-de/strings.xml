@@ -234,6 +234,13 @@
     <string name="isle_library_title">Effektbibliothek</string>
     <string name="isle_search">Effekte suchen</string>
     <string name="isle_search_empty">Kein Effekt gefunden</string>
+    <string name="isle_filter_all">Alle</string>
+    <string name="isle_filter_popular">Beliebt</string>
+    <string name="isle_filter_favorite">Favoriten</string>
+    <string name="isle_filter_art">Bild/Text</string>
+    <string name="isle_filter_1d">1D</string>
+    <string name="isle_filter_2d">2D</string>
+    <string name="isle_favorite_empty">Noch kein Effekt favorisiert</string>
     <string name="isle_create_title">Kreativstudio</string>
     <string name="isle_create_color">Farbrad</string>
     <string name="isle_create_pixel">Pixelkunst</string>

@@ -234,6 +234,13 @@
     <string name="isle_library_title">Effects library</string>
     <string name="isle_search">Search effects</string>
     <string name="isle_search_empty">No matching effect</string>
+    <string name="isle_filter_all">All</string>
+    <string name="isle_filter_popular">Popular</string>
+    <string name="isle_filter_favorite">Favorites</string>
+    <string name="isle_filter_art">Art</string>
+    <string name="isle_filter_1d">1D</string>
+    <string name="isle_filter_2d">2D</string>
+    <string name="isle_favorite_empty">No favorited effect yet</string>
     <string name="isle_create_title">Create studio</string>
     <string name="isle_create_color">Color wheel</string>
     <string name="isle_create_pixel">Pixel art</string>
