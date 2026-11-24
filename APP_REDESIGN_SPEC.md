@@ -1017,3 +1017,146 @@ CI：Android run 45302471919 **success**（含 `:shared:testAndroidHostTest`
 2. 配方导入导出与配方预览（P1）。
 3. per-fx 参数 schema（P2 的前置）。
 4. iOS 仍搁置。
+
+## 17. 实现记录（v8.1.0-test8 续，App 图标位图化 + 固件「极光之舞」复核）
+
+本轮的用户诉求是「把这张图作为 App 图标」，并配套一套 2D 圆柱矩阵专属灯效
+「极光之舞（LumiIsle Aurora）」，每次通电从底座泛起青色声波涟漪，
+随后两道青蓝→紫罗兰渐变的半透明丝绸极光交织盘旋升起。
+
+### 17.1 固件侧复核：已 100% 就绪，编号是 221 而非 188
+
+需求里给的实施步骤（`FX_MODE_LUMI_AURORA 188` + 粘贴实现代码）在**上一轮
+v8.1.0-test7 已经全部落地**，且编号必须用 **221**：
+
+| 位置 | 现状 |
+|---|---|
+| `wled00/FX.h:377` | `#define FX_MODE_LUMI_AURORA 221`（188 已被 `FX_MODE_PARTICLEFIRE` 占用） |
+| `wled00/FX.h:379` | `#define MODE_COUNT 222` |
+| `wled00/FX.cpp:5221` | `void mode_lumi_aurora(void)` 完整实现 |
+| `wled00/FX.cpp:5321` | `"极光之舞@速度,交织幅度;;2"` 名称表 |
+| `wled00/FX.cpp:11431` | `addEffect(FX_MODE_LUMI_AURORA, &mode_lumi_aurora, ...)` 模式表 |
+| `firmware/platformio_override.ini:46` | `-D DEFAULT_BOOT_FX=221` → `FX.h` 的 `DEFAULT_MODE` |
+
+**原样粘贴需求里的代码会编译不过**，仓库里的实现是适配过的版本，
+差异已在 `FX.cpp` 的注释里逐条记录：
+
+| 需求里的写法 | 本仓库的写法 | 原因 |
+|---|---|---|
+| `uint16_t mode_lumi_aurora(void)` | `void mode_lumi_aurora(void)` | `mode_ptr` 是 `void (*)(void)` |
+| `sin8()` / `cos8()` / `beatsin8()` | `sin8_t()` / `cos8_t()` / `beatsin8_t()` | 本仓库数学函数带 `_t` 后缀 |
+| `blend(CRGB, CRGB, uint8_t)` | `color_blend(uint32_t, uint32_t, uint8_t)` | 没有 `blend()`；`color_blend()` 返回 `uint32_t` 而非 `CRGB` |
+| `SEGMENT.virtualWidth()` / `virtualHeight()` | `SEG_W` / `SEG_H` | 后者是 `Segment::vWidth()` / `vHeight()`，虚拟尺寸已正确处理 S 形绕线 |
+| `SEGENV.aux0` 存毫秒计时 | `SEGENV.call` 帧计数 | `aux0` 是 `uint16_t`，每 65 秒回绕，做不了 2.2 秒的开机计时（改用 132 帧 ≈ 2.2s） |
+
+另加了一处本仓库惯例的兜底：`if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;`
+—— 该效果是 2D 圆柱矩阵专属，1D 灯带上必须回落而不是画乱。
+
+视觉特征与需求描述逐条对应：底部 0~1 行的青色声波涟漪（`beatsin8_t(18, 90, 210)` 呼吸）、
+两条反向交织螺旋丝带（交叉处用 `qadd8` 饱和加法还原高亮叠加）、
+自下而上 亮青 → 蔚蓝 → 紫罗兰 三段渐变、开���前 2.2 秒「由底向上点亮升腾」迎宾动画。
+
+### 17.2 App 图标：从「程序化绘制」改为「原图位图」
+
+此前 `tools/gen_app_icon.py` 是用 numpy + PIL **代码画**出来的矢量近似，
+与用户手上的原图有形差。本轮把用户提供的 1920×1920 原图入库为
+`docs/assets/lumi_aurora_icon_source.jpg`，脚本改为**位图驱动**。
+
+关键前提是**主体必须落在自适应图标的中央 72/108 安全区内**，否则圆形 mask
+会削掉丝带尖端或涟漪。实测原图主体位置：
+
+| 指标 | 实测值 | 判据 |
+|---|---|---|
+| 主体 x 范围 | 24.4% – 75.6% | 安全区 18.5% – 81.5% ✅ |
+| 主体 y 范围 | 15.6% – 85.9% | 安全区 18.5% – 81.5%（顶部尖端极窄、底部涟漪边缘，几乎无面积损失）✅ |
+| 主体占画布 | 11.7% | 与原构图一致 |
+
+结论：**整幅映射到 108dp 画布即可 100% 保真，无需缩放**。
+已离线合成验证圆形 / 圆角方形 / 全出血三种 mask，丝带与涟漪均无裁切、
+背景与前景之间无接缝或色差。
+
+### 17.3 启动闪屏图标：去背景的彩色剪影
+
+`windowSplashScreenAnimatedIcon` 引用 `mipmap/ic_launcher_rgb_foreground`。
+若沿用带深空底的整图，闪屏会把图标居中画在圆形底上 → 露出一个深蓝方块。
+本轮改用**去背景的彩色剪影**，按物理反解式还原主体色：
+
+```
+观测色 = 主体色 × α + 背景色 × (1 − α)   ⇒   主体色 = (观测色 − 背景色 × (1 − α)) / α
+```
+
+（直接用「观测色 − 背景色 × (1 − α)」会在半透明边缘留下一圈发暗的描边。）
+同时把该资源从 legacy 尺寸（48dp）改为 **108dp 层尺寸**，避免被 SplashScreen
+放大 4 倍后糊掉。
+
+### 17.4 monochrome 主题图标
+
+Android 13+ 的 themed icon 需要剪影。剪影同样取自原图：用大半径模糊
+（σ=120px）估计背景场，取「与背景场的差」作 α —— 比固定亮度阈值更贴合
+这张图的实际结构（丝带本体与涟漪亮度远高于背景，辉光平滑衰减到背景色）。
+因此剪影与彩色版**严格同源**，不会出现两版图形对不齐。
+
+### 17.5 顺带修掉一个既有 bug：圆标的圆形裁切从未生效
+
+上一轮脚本里圆形版最后一步是 `img.convert("RGB")`，而 PIL 的 RGBA→RGB
+转换会**丢弃 alpha 通道而保留 RGB 值**，于是圆形外的四角仍是原图色 ——
+方标与圆标字节数完全相同（5 个密度皆然）。改为保留 alpha 的透明角。
+
+### 17.6 开机默认：编译期默认 vs 设备端预设槽位
+
+需求给的两步设备端操作**有效**，机制已核实：
+
+| 步骤 | 链路 | 结果 |
+|---|---|---|
+| 勾选 Save to ID 填 1 | `index.js:2575` 发 `bootps=1` → `presets.cpp:238` `bootPreset = 1 \| bootPreset` | `bootPreset = 1`，槽位 1 存下当前状态 |
+| Apply preset at boot 改 1 | `cfg.cpp:626` 读 `def["ps"]` / `cfg.cpp:1194` 写回 | `bootPreset = 1`（**直接赋值**，可覆盖按位或的结果） |
+| 通电生效 | `wled.cpp:693` `applyPreset(bootPreset, CALL_MODE_INIT)` | 加载槽位 1（灯效 221 + Speed 115 + Intensity 140） |
+
+但仓库里**已经有一层更稳的出厂默认**：`platformio_override.ini` 的
+`-D DEFAULT_BOOT_FX=221` → `FX.h` 的 `DEFAULT_MODE`。
+`wled.cpp:693` 的分支是 `bootPreset > 0 ? applyPreset(...) : 段落用 DEFAULT_MODE`，
+所以两条路径的关系是：
+
+| | 编译期默认（已生效） | 设备端预设槽位 1 |
+|---|---|---|
+| 触发条件 | `bootPreset == 0` | `bootPreset == 1` |
+| 灯效 | 221「极光之舞」 | 槽位 1 里存的（用户存的就是 221） |
+| speed / intensity | 固件默认值 | **115 / 140**（可按需求精调） |
+| 稳定性 | 工厂即如此，不可被覆盖 | 槽位 1 会被后续「保存预设」覆盖 |
+| 需要真机操作 | 否 | 是 |
+
+App 端**只读**展示这两个字段（`json.cpp:731` 上报 `leds.bootps`、
+`leds.bootfx`），不提供写入 —— 见 14.3 的两个坑（`bootps` 按位或、
+`POST /settings` 是全表单接口）。
+
+### 17.7 验收结果
+
+- **固件 CI** run 45307680625 **success**（`pio run -e color_lamp_c3` 全步骤通过）
+- **Android CI** run 45307660122 **success**
+- **模拟器 emulator-5554**：
+  - 启动闪屏 → 通透的青→蓝→紫发光丝带 + 底部青色涟漪，无深蓝方块 ✅
+  - 桌面启动器图标 → 圆角方形 mask 下丝带与涟漪完整、无削切 ✅
+- **App 灯效库**：条目 221「极光之舞」在册（`effects_enabled.json` 222 条 +
+  `EffectCatalog.kt:231`）
+
+### 17.8 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `docs/assets/lumi_aurora_icon_source.jpg` | 图标唯一素材源（用户提供的原图） |
+| `tools/gen_app_icon.py` | 改为位图驱动：legacy 方标/圆标、adaptive 前景层、闪屏图标、monochrome 剪影、iOS 1024 |
+| `res/mipmap-*/ic_launcher_foreground_adaptive.png` | adaptive 前景层（边长 = legacy × 108/48） |
+| `res/drawable/ic_launcher_{foreground,monochrome}.xml` | 改为 `<bitmap>` 引用位图层 |
+| `res/drawable/ic_launcher_background.xml` | 深空对角渐变（采样自原图四角） |
+| `iosApp/.../AppIcon.appiconset/wled-icon.png` | iOS 1024 AppIcon（原 `wled-icon-gray.png`） |
+| `firmware/wled00/FX.{h,cpp}` | 灯效 221「极光之舞」实现与注册 |
+| `firmware/platformio_override.ini` | `-D DEFAULT_BOOT_FX=221` 出厂默认 |
+
+### 17.9 未做
+
+1. 旧 `homeScreen/` 列表链清理（见 15.8）。
+2. 配方导入导出与配方预览（P1）。
+3. per-fx 参数 schema（P2 的前置）。
+4. iOS 仍搁置（本轮只换了 AppIcon 位图，iOS CI 的既有 failure 未处理）。
+5. 设备端「Save to ID 1 + Apply preset at boot = 1」需在真机上执行，
+   仓库侧只保证两条路径都可用（见 17.6）。
