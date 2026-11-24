@@ -65,11 +65,12 @@ import ca.cgagnier.wlednativeandroid.ui.isle.IsleSlider
 import ca.cgagnier.wlednativeandroid.ui.isle.SectionLabel
 import ca.cgagnier.wlednativeandroid.ui.isle.StarButton
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAdd
+import ca.cgagnier.wlednativeandroid.util.CHANNEL_MAX
+import ca.cgagnier.wlednativeandroid.util.channelToNormalized
+import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
+import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
 import org.koin.androidx.compose.koinViewModel
-import kotlin.math.roundToInt
 
-private const val PERCENT_MAX = 100
-private const val MAX_CHANNEL_VALUE = 255
 private val NIGHTLIGHT_OPTIONS = listOf(5, 10, 15, 30, 60, 120)
 
 /**
@@ -127,7 +128,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
-    val brightness = (state?.brightness ?: 128).coerceIn(0, MAX_CHANNEL_VALUE)
+    val brightness = (state?.brightness ?: 128).coerceIn(0, CHANNEL_MAX)
     val segment = state?.segment?.firstOrNull()
     val currentEffect = segment?.effect
 
@@ -158,7 +159,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                 DeviceTube(
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     isOn = isOn,
-                    brightness = brightness / MAX_CHANNEL_VALUE.toFloat(),
+                    brightness = channelToNormalized(brightness),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(250.dp)
@@ -169,8 +170,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
             item {
                 BrightnessRow(
                     value = brightness,
-                    onCommit = { percent ->
-                        device?.let { viewModel.setBrightness(it, percent * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    onCommit = { channel ->
+                        device?.let { viewModel.setBrightness(it, channel) }
                     },
                 )
             }
@@ -182,11 +183,11 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     intensity = segment?.effectIntensity ?: 0,
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     onToggle = { tuningExpanded = !tuningExpanded },
-                    onSpeed = { value ->
-                        device?.let { viewModel.setSpeed(it, value * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    onSpeed = { channel ->
+                        device?.let { viewModel.setSpeed(it, channel) }
                     },
-                    onIntensity = { value ->
-                        device?.let { viewModel.setIntensity(it, value * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    onIntensity = { channel ->
+                        device?.let { viewModel.setIntensity(it, channel) }
                     },
                     onColor = { packed ->
                         device?.let { viewModel.setPrimaryColor(it, packed) }
@@ -429,7 +430,7 @@ private fun MiniAction(glyph: Glyph, label: String, active: Boolean, onClick: ()
 
 @Composable
 private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
-    var local by remember(value) { mutableFloatStateOf(value / MAX_CHANNEL_VALUE.toFloat()) }
+    var local by remember(value) { mutableFloatStateOf(channelToNormalized(value)) }
     Column(modifier = Modifier.padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.isle_brightness),
@@ -442,13 +443,13 @@ private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
             IsleSlider(
                 value = local,
                 onValueChange = { local = it },
-                onValueChangeFinished = { onCommit((local * PERCENT_MAX).roundToInt()) },
+                onValueChangeFinished = { onCommit(normalizedToChannel(local)) },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 12.dp),
             )
             Text(
-                text = "${(local * PERCENT_MAX).roundToInt()}%",
+                text = "${normalizedToPercent(local)}%",
                 color = IsleColors.TextPrimary,
                 fontSize = 13.sp,
                 modifier = Modifier.width(40.dp),
@@ -474,9 +475,9 @@ private fun EffectTuning(
     onIntensity: (Int) -> Unit,
     onColor: (Int) -> Unit,
 ) {
-    var localSpeed by remember(speed) { mutableFloatStateOf(speed / MAX_CHANNEL_VALUE.toFloat()) }
+    var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
-        mutableFloatStateOf(intensity / MAX_CHANNEL_VALUE.toFloat())
+        mutableFloatStateOf(channelToNormalized(intensity))
     }
 
     Column(modifier = Modifier.padding(top = 14.dp)) {
@@ -498,8 +499,8 @@ private fun EffectTuning(
                 } else {
                     stringResource(
                         R.string.isle_effect_tuning_summary,
-                        (localSpeed * PERCENT_MAX).roundToInt(),
-                        (localIntensity * PERCENT_MAX).roundToInt(),
+                        normalizedToPercent(localSpeed),
+                        normalizedToPercent(localIntensity),
                     )
                 },
                 color = IsleColors.TextMuted,
@@ -515,7 +516,7 @@ private fun EffectTuning(
                         value = localSpeed,
                         onValueChange = { localSpeed = it },
                         onCommit = {
-                            onSpeed((localSpeed * MAX_CHANNEL_VALUE / PERCENT_MAX).roundToInt())
+                            onSpeed(normalizedToChannel(localSpeed))
                         },
                     )
                     TuningSlider(
@@ -523,7 +524,7 @@ private fun EffectTuning(
                         value = localIntensity,
                         onValueChange = { localIntensity = it },
                         onCommit = {
-                            onIntensity((localIntensity * MAX_CHANNEL_VALUE / PERCENT_MAX).roundToInt())
+                            onIntensity(normalizedToChannel(localIntensity))
                         },
                     )
 
@@ -579,7 +580,7 @@ private fun TuningSlider(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${(value * PERCENT_MAX).roundToInt()}%",
+                text = "${normalizedToPercent(value)}%",
                 color = IsleColors.TextPrimary,
                 fontSize = 12.sp,
                 modifier = Modifier.width(40.dp),

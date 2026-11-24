@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -213,22 +214,29 @@ fun IsleSlider(
     modifier: Modifier = Modifier,
     accent: List<Color> = IsleColors.Accent,
 ) {
+    // pointerInput(Unit) 的协程以 key 为重启依据，key 恒为 Unit 时它永不重启，
+    // 会永久捕获「首次组合」那一刻的回调。上层若用 remember(key) 持有本地状态，
+    // 设备回写让 key 变化后 state 对象会被重建，而这里的回调还在往旧对象里写 ——
+    // 表现为「圆头纹丝不动、后台数值却在跳」。
+    // 用 rememberUpdatedState 让手势协程始终拿到最新回调。
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    val currentOnValueChangeFinished by rememberUpdatedState(onValueChangeFinished)
     Box(
         modifier = modifier
             .height(30.dp)
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    onValueChange((offset.x / size.width).coerceIn(0f, 1f))
-                    onValueChangeFinished()
+                    currentOnValueChange((offset.x / size.width).coerceIn(0f, 1f))
+                    currentOnValueChangeFinished()
                 }
             }
             .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragEnd = { onValueChangeFinished() },
-                    onDragCancel = { onValueChangeFinished() },
+                    onDragEnd = { currentOnValueChangeFinished() },
+                    onDragCancel = { currentOnValueChangeFinished() },
                 ) { change, _ ->
                     change.consume()
-                    onValueChange((change.position.x / size.width).coerceIn(0f, 1f))
+                    currentOnValueChange((change.position.x / size.width).coerceIn(0f, 1f))
                 }
             },
         contentAlignment = Alignment.CenterStart,

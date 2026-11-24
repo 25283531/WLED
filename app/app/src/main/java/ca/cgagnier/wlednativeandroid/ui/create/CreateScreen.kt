@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,11 +60,11 @@ import ca.cgagnier.wlednativeandroid.ui.isle.IsleCapsule
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleSlider
 import ca.cgagnier.wlednativeandroid.ui.isle.SectionLabel
+import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val WHEEL_RING_DP = 26
@@ -358,7 +359,7 @@ private fun LabeledSlider(label: String, glyph: Glyph, value: Float, onChange: (
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "${(value * 100).roundToInt()}%",
+            text = "${normalizedToPercent(value)}%",
             color = IsleColors.TextPrimary,
             fontSize = 11.5.sp,
             modifier = Modifier.width(38.dp),
@@ -376,6 +377,12 @@ private fun ColorWheel(
     var dragging by remember { mutableIntStateOf(-1) }
     val hues = remember { List(37) { index -> Color.hue(index / 36f) } }
 
+    // pointerInput(Unit) 的手势协程永不重启，会永久捕获首次组合的回调，
+    // 这里用 rememberUpdatedState 让它每次都能读到最新的主/副色与回调。
+    val currentPrimary by rememberUpdatedState(primary)
+    val currentSecondary by rememberUpdatedState(secondary)
+    val currentOnPick by rememberUpdatedState(onPick)
+
     fun pick(pos: Offset, size: Size) {
         val cx = size.width / 2f
         val cy = size.height / 2f
@@ -387,11 +394,11 @@ private fun ColorWheel(
         var angle = atan2(dy, dx) / (2f * Math.PI.toFloat())
         if (angle < 0f) angle += 1f
         if (dragging == -1) {
-            val primaryAngle = hueOf(primary)
-            val secondaryAngle = hueOf(secondary)
+            val primaryAngle = hueOf(currentPrimary)
+            val secondaryAngle = hueOf(currentSecondary)
             dragging = if (angleDistance(angle, primaryAngle) <= angleDistance(angle, secondaryAngle)) 0 else 1
         }
-        onPick(dragging == 0, colorOfHue(angle))
+        currentOnPick(dragging == 0, colorOfHue(angle))
     }
 
     Canvas(

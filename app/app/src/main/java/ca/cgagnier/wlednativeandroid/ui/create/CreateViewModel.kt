@@ -14,6 +14,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import ca.cgagnier.wlednativeandroid.util.GifEncoder
+import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -197,7 +198,7 @@ class CreateViewModel(
             val ok = deviceConnectionManager.sendSegmentPatch(device.device.macAddress) { segment ->
                 segment.copy(
                     colors = colors,
-                    effectSpeed = (_speed.value * 255).toInt().coerceIn(0, 255),
+                    effectSpeed = normalizedToChannel(_speed.value),
                 )
             }
             _status.value = CreateStatus(
@@ -221,7 +222,7 @@ class CreateViewModel(
                     name = value,
                     // 纯黑底 + 单色高亮字：透过熏黑亚克力罩仍能读清
                     colors = listOf(listOf(255, 255, 255), listOf(0, 0, 0), listOf(0, 0, 0)),
-                    effectSpeed = (_speed.value * 255).toInt().coerceIn(0, 255),
+                    effectSpeed = normalizedToChannel(_speed.value),
                     // c2 = 255 -> 固件选中 font 4（5×12 大字），并自动启用 2 像素加粗笔画
                     custom2 = SCROLLING_TEXT_BIG_FONT,
                     custom3 = 0,
@@ -286,7 +287,7 @@ class CreateViewModel(
                 FavoriteEffect(
                     effectId = effectId,
                     effectName = name,
-                    speed = (_speed.value * 255).toInt(),
+                    speed = normalizedToChannel(_speed.value),
                     intensity = null,
                     palette = currentSegment(device)?.palette,
                     color1 = applyPacked(_primary.value),
