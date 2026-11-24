@@ -914,14 +914,6 @@ static void chase(uint32_t color1, uint32_t color2, uint32_t color3, bool do_pal
     }
   } else SEGMENT.fill(color1);
 
-  //if random, fill old background between a and end
-  if (chase_random)
-  {
-    color1 = SEGMENT.color_wheel(SEGENV.aux1);
-    for (unsigned i = a; i < SEGLEN; i++)
-      SEGMENT.setPixelColor(i, color1);
-  }
-
   //fill between points a and b with color2
   if (a < b)
   {
