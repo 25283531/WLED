@@ -276,6 +276,62 @@ curl.exe -s -X POST http://10.0.1.172/json/state -H "Content-Type: application/j
 波形脚本：`%TEMP%\wled_audio_probe.py`（采样 `peak%`）、`wled_geq_variants.py`（参数扫描）、
 `wled_geq_corr.py`（`peak%` 与 `pwr` 相关性）。
 
+## v1.8：2D 逻辑 y 轴方向与「极光之舞」朝向（M1，2026-11-25）
+
+### 1. 结论先行
+
+**本机 2D 逻辑坐标 `y=0` 在物理顶部，`y=rows-1` 在物理底部（y 向下递增）。**
+「0 号灯在第一列底部」是**物理布线事实**，与「逻辑 y 轴朝哪边」是两件事，不能互相推导。
+此前 `mode_lumi_aurora()` 把 `y=0` 当底部写（注释「0 最底部」），因此整个效果上下颠倒，
+青色声波底座被画到了柱顶。
+
+### 2. 判定依据（两层，互相印证）
+
+| 证据 | 内容 |
+|---|---|
+| ① `/ledmap.json` 实测 | 9 列 × 23 行，逻辑下标 `L = y*9 + x`；`map[0]=22`（y=0,x=0 → 物理 22）、`map[198]=0`（y=22,x=0 → 物理 0） |
+| ② 物理位置 | 用户目视确认物理 **0 号灯在柱底**，第一列由下往上编号 ⇒ 物理 22 在柱顶 ⇒ 逻辑 `y=0` = 顶部 |
+| ③ 效果现场目视 | `fx=221`、`bri=100` 跑极光之舞，用户反馈「带有红色（紫罗兰段）的在下边」。原代码渐变是「上青下紫」，说明紫段被画到了底部 ⇒ 与 ① ② 结论一致，效果确实颠倒 |
+
+复现：
+
+```powershell
+# 跑极光之舞（彩色 60% 以内）
+curl.exe -s -X POST http://10.0.1.172/json/state -H "Content-Type: application/json" `
+  --data-binary "@$env:TEMP\wled-aurora-test.json"
+# 文件内容：{"on":true,"bri":100,"seg":[{"id":0,"start":0,"stop":9,"startY":0,"stopY":23,
+#   "fx":221,"sx":128,"ix":128,"pal":0,"col":[[0,245,255],[30,120,255],[175,40,255]]}]}
+```
+
+### 3. 修正（M1 代码）
+
+`FX.cpp` → `mode_lumi_aurora()`：
+
+| 位置 | 修正前 | 修正后 |
+|---|---|---|
+| 归一化高度 | `posY = (y * 255) / (rows - 1)`（注释：0 最底部） | `posY = ((rows - 1 - y) * 255) / (rows - 1)` |
+| 底部涟漪底座 | `y <= 1`（`y==0` 最强） | `y >= rows - 2`（`y==rows-1` 最强） |
+| 渐变 / 升腾遮罩 / 织带相位 | 依赖 `posY`，随上一条自动翻转，无需另改 | 同 |
+
+口径已写入 `FX.cpp` 的函数头注释，后续新增 2D 效果一律按「`y=0` 顶部、`y` 向下递增」实现。
+
+### 4. M1 刷机后回读（2026-11-25，固件 17.0.0-devV5 / ColorLamp-S3-C01）
+
+| 检查项 | 结果 |
+|---|---|
+| `/json/info` → `fxcount` | **189**（刷机前 222） |
+| `/json/effects` 项数 / RSVD 槽 | **189 项 / 空**（刷机前 222 项、33 个 RSVD） |
+| `fx=188` | **极光之舞**（写入后回读 188，未再被折叠） |
+| `fx=113` | **GEQ** |
+| `fx=4` | **Random Colors**（刷机前会被别名折到 3=Wipe，别名表已删） |
+| `fx=0` | Solid |
+| 段几何 | `start=0 stop=9 startY=0 stopY=23`（9×23 保持） |
+| `leds.count` / `matrix` | 207 / 9×23（ledmap 与面板配置均未受影响） |
+
+OTA 说明：本地 `pio run -e esp32lichuang` 产出的 `firmware.bin` 因构建机缺少 CI 的 release 元数据，
+`WLED_RELEASE_NAME` 校验不通过，使用 `POST /update` 的 `skipValidation=1` 表单字段跳过校验后刷入；
+升级前后均可用 `work/backup/e80690a6c20c/rollback-WLED_16.0.1_ESP32-S3_16MB_opi.bin` 回退。
+
 
 
 

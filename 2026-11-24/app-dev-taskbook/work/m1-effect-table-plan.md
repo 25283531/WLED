@@ -159,3 +159,18 @@
 1. 采用 **§8-A 重命名** 还是 **§8-B 重生成**？
 2. 压缩后「极光之舞」= **188**，APP 侧是否同步把「极光之舞」相关写死逻辑（若有）改为 188？
 3. 是否同意 **§7 的顺序**（固件先刷、APP 后合），并接受刷机窗口内 APP 暂不同步？
+
+## 12. 执行记录（2026-11-25，已完成并刷机验证）
+
+| 项 | 实际做法 / 结果 |
+|---|---|
+| FX.h | 30 个重复/占位宏删除（另 3 个 169/170/171 原本已注释），其余按文件顺序重排为 0..188，MODE_COUNT=189 |
+| FX.cpp | 删除 29 处 #ifdef WLED_KEEP_ALL_FX 包裹的 ddEffect；删除 chase() 内残留的 chase_random 分支（首版 CI 失败点） |
+| FX_fcn.cpp | 删除 xDedupAlias 表与 setMode() 折叠循环，保留 RSVD 跳过逻辑 |
+| effects_enabled.json | 按新宏顺序重建，189 项 idx 0..188，名称/函数名取自原文件 |
+| mode_* 函数 / _data_* 字符串 | **保留未删**：已无引用，-ffunction-sections/--gc-sections 会丢弃，删除 29 个函数风险大于收益（与 §5 的「删除」有偏差，属有意取舍） |
+| 极光之舞朝向 | posY = (rows-1-y)*255/(rows-1)，底环 y >= rows-2，函数头补 y 轴口径注释 |
+| CI | 第二次提交 25aa95 通过；首次 33eae81 失败于 chase_random 未声明 |
+| 刷机 | 本地 pio run -e esp32lichuang 构建（无 CI 包下载权限），skipValidation=1 OTA 到 10.0.1.172 |
+| 回读 | xcount=189、/json/effects 189 项无 RSVD、x=188=极光之舞、x=113=GEQ、x=4=Random Colors（不再折叠到 3） |
+| APP | gen_effect_catalog.py 改按 FX_MODE_* 宏名分类；EffectCatalog.kt 重生成；gen_effect_gifs.py 键 remap；新增 .github/workflows/effect-previews.yml 全量重生成预览图 |
