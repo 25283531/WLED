@@ -28,7 +28,7 @@
 | 灯数 | `PIXEL_COUNTS=207`（9×23） |
 | 矩阵 | `DEFAULT_MATRIX_VERTICAL=1`、`SERPENTINE=1`、`BOTTOM_START=1`、`RIGHT_START=0` |
 | 默认效果 | **不定义 `DEFAULT_BOOT_FX`**，开机按用户设置 |
-| 麦克风 | `SR_DMTYPE=1`、`I2S_SDPIN=12`、`I2S_CKPIN=14`、`I2S_WSPIN=13`、`MCLK_PIN=38`（ES7210 需额外 I²C 初始化） |
+| 麦克风 | `SR_DMTYPE=4`、`AR_ES7210=1`、`ES7210_ADDR=0x41`、`ES7210_SDA=1`、`ES7210_SCL=2`、`I2S_SDPIN=12`、`I2S_CKPIN=14`、`I2S_WSPIN=13`、`MCLK_PIN=38`（I²C 初始化已内置） |
 | 按键 | `BTNPIN=0,3,7`（**IO1 与 I²C SDA 冲突，已移除**） |
 | 型号 | `WLED_BRAND="LumiIsle"`、`WLED_PRODUCT_NAME="C01"`、`WLED_RELEASE_NAME="ColorLamp-S3-C01"` |
 | 限流 | `ABL_MILLIAMPS_DEFAULT=4500`（按实际电源容量复核） |
@@ -44,7 +44,7 @@
 | `cfg.hw.led.ins` | `[{start:0,len:207,pin:[10],type:22}]` | 与 info 一致 |
 | `cfg.hw.led.matrix` | 9×23，`b=true,r=false,v=true,s=true` | S 形、底部起、第一列最左 |
 | 开机默认 | `bootfx=0` | 不再强制极光之舞 |
-| 音频 | `um.AudioReactive.enabled=false`；临时开启后仍报 `not initialized - check pin settings` | ES7210 驱动未实现（T2.3.1） |
+| 音频 | `um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`；`info.u` → `Audio Source=["I2S digital"," - quiet"]`、`Sound Processing=["running"]` | v1.6 OTA 后实测通过，不再报 `not initialized` |
 | 第 46 颗 | 物理拆除 + 数据线短接（实际 206 颗，链前移 1 格） | `/ledmap.json` 207 项映射修正，该位置指向死包 206；APP 留空 |
 
 > **重要（历史根因）**：刷机初期 `count` 仍为 346 / 15×23，是设备残留旧 `/ledmap.json`（width=15、height=23、346 项）
@@ -67,8 +67,11 @@
 ## 烧录
 
 1. **OTA（首选）**
-   `POST http://10.0.1.172/update`，`multipart/form-data`，字段 `update`，文件 `ColorLamp-S3-C01-ota.bin`；
+   `POST http://10.0.1.172/update`，`multipart/form-data`，字段 `update`，文件 `ColorLamp-S3-C01-ota.bin`。
+   跨 release name 刷写（本地构建 vs 设备上的 release）会报 `Firmware release name mismatch`；
+   `skipValidation` 必须作为**表单字段**（`curl -F "skipValidation=1" -F "update=@..."`），放 URL 查询串无效。
    刷后校验 `GET /json/info` 的 `ver`、`fxcount`（T5 后为 189）、`product=C01`。
+   样例（v1.6 实测）：`curl.exe -F "skipValidation=1" -F "update=@ColorLamp-S3-C01-ota.bin" http://10.0.1.172/update` → `Update successful! Rebooting now...`。
 2. **USB 救砖**
    `esptool.py --chip esp32s3 write_flash 0x0 <firmware.bin>`（按实际串口与分区偏移）。
 3. **刷前备份**
@@ -83,5 +86,5 @@
 - 测试亮度上限：白光 ≤50%、彩色 ≤60%，避免超出灯珠供电能力。
 - flash/PSRAM 参数错误会导致无法启动；必须保留 USB 恢复路径。
 - OTA 分区不足会失败；4 MB 版需裁剪资源（与 T3 语言包、T6 预览资源体积相关）。
-- ES7210 无 WLED 原生驱动，寄存器初始化错误会得到全零/爆音；I²C IO1/IO2 与按键 IO1 冲突已处理。
+- 上游 WLED 无 ES7210 驱动，本项目已补 `ES7210Source`；寄存器配错会得到全零/爆音；I²C IO1/IO2 与按键 IO1 冲突已处理。
 - T5 删除效果会改变 `fx` id，固件与 APP catalog 必须成套发布，禁止单独降级。

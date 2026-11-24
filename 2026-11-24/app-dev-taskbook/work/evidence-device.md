@@ -194,15 +194,24 @@ ledmap.json = {"width":9,"height":23,"map":[207 项]}  # map[198]=0, map[199]=20
 → {"success":true}
 ```
 
-回读 `cfg.um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`，`GET /win&RB` 重启后：
+回读 `cfg.um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`，`GET /win&RB` 重启后（uptime≈186 s）：
 
 ```json
-info.u.AudioReactive = ["<button ... requestJson({AudioReactive:{enabled:false}}) ... icons on ...>"]
+"u": {
+  "AudioReactive":       ["<button ... {AudioReactive:{enabled:false}} ... icons on ...>"],
+  "Audio Input Level":   ["... type=\"range\" value=128 ..."],
+  "Audio Source":        ["I2S digital", " - quiet"],
+  "Sound Processing":    ["running"],
+  "Manual Gain":         [1.56, "x"],
+  "UDP Sound Sync":      ["off"]
+}
 ```
 
-即 usermod 处于**已启用/已初始化**状态；对比 M0 的失败态 `["not initialized"," - check pin settings"]` + `"suspended"` 已消失。
+对比 M0 的失败态（`Audio Source: "not initialized" / " - check pin settings"`、`Sound Processing: "suspended"`）已消失。
 `info.leds.count=207 / matrix 9×23` 保持不变。
 
-结论：**ES7210 I²C 初始化通过、音频源可用**；`I2S digital` 文案、采集质量、静音不闪烁留待 T2 联调。
+结论：**ES7210 初始化通过、音频处理任务 running**；`- quiet` 表示当前环境无输入（未播放音乐），
+实际拾音与静音不闪烁留待 T2 联调。
+
 
 
