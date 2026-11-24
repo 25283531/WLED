@@ -125,3 +125,84 @@ info.u.AudioReactive = {"Audio Source":["not initialized"," - check pin settings
 ```
 
 结论：**未通过**。WLED usermod 无 ES7210 驱动，M0 只写入 I²S 引脚与 `SR_DMTYPE=1`，需在 T2.3.1 补 I²C 寄存器初始化。已还原 `enabled=false`。
+
+## v1.6：46 号拆除导致一位偏移，ledmap 修正（2026-11-24 实测）
+
+### 硬件事实
+
+第 46 颗（第 2 列底部）**已物理拆除，数据线短接**；灯带实际 **206 颗**，固件仍发 207 包，第 46 颗之后**整链前移 1 格**（末包无灯承接）。
+
+### 偏移量化（三锚点，`bri=128`，最底一排 `startY=22/stopY=23`）
+
+下发 3 段：`(x=0,y=22)` 白、`(x=1,y=22)` 红、`(x=2,y=22)` 紫；回读 `segcount=3`、坐标与颜色均生效。
+
+| 逻辑位置 | 修正前实测（用户目视） | 修正后实测 |
+|---|---|---|
+| `(0,22)` 第 1 列最底 | 白在第 1 列最底 | 白在第 1 列最底 |
+| `(1,22)` 第 2 列最底（第 46 颗原位） | **红在第 3 列最底** | **不亮** |
+| `(2,22)` 第 3 列最底 | **紫在第 3 列倒数第二颗** | 紫在第 3 列最底 |
+
+→ 两轮目视一致，**偏移恰好 1 格**；修正后红消失、紫回到应落位置，映射定稿。
+
+### 修正文件与校验
+
+`work/ledmap.json`：`{"width":9,"height":23,"map":[207 项]}`，按 `map[L]=p(L)-(p(L)>45)`，
+`p(L)=x*23+(x 奇?y:22-y)`，被拆位置 `map[199]=206`（第 207 包无灯承接，等效熄灭）。
+
+写入与回读：
+
+```
+POST /upload   (multipart, field=data, filename=ledmap.json)   # 用 curl -F "data=@work/ledmap.json"
+GET  /ledmap.json                                              # 回读，与本地逐键比对一致
+GET  /win&RB                                                   # 重启
+GET  /json/info → leds.count=207, matrix={w:9,h:23}, bootfx=0   # 保持 207，矩阵未少格
+GET  /ledmap.json → 内容仍在，重启后仍生效
+```
+
+踩坑记录：最初把空位写成 `-1`，`numPhy=206` 导致 WLED 补一个尾部幽灵像素，
+`info.leds.count` 变 **208**；改为 `206` 后 `count` 恢复 207。
+
+## v1.6：ES7210 固件 OTA 与音频初始化验证（2026-11-24）
+
+### OTA
+
+- 产物：`work/fw-es7210/ColorLamp-S3-C01-ota.bin`（1,277,600 B，SHA256 `1B73F1DD…E77190`，CI run `45429545563` / commit `3830390`）。
+- 第一次失败：`Firmware release name mismatch: current='ColorLamp-S3-C01', uploaded='ColorLamp-S3-C01evV5'`。
+  原因：`ota_update.cpp` 用 `request->getParam("skipValidation", true)` 读 **POST 表单字段**，
+  放在 URL 查询串 `?skipValidation=1` 不生效。
+- 正确命令（`-F "skipValidation=1"` 作为表单字段）：
+
+```
+curl.exe -F "skipValidation=1" -F "update=@ColorLamp-S3-C01-ota.bin" http://10.0.1.172/update
+→ "Update successful! Rebooting now..."
+```
+
+### 刷后回读
+
+```json
+info.ver = "17.0.0-devV5", release="ColorLamp-S3-C01", product="C01"
+info.leds = {"count":207,"matrix":{"w":9,"h":23},"fps":43,"maxpwr":4500,"bootfx":0}
+ledmap.json = {"width":9,"height":23,"map":[207 项]}  # map[198]=0, map[199]=206, map[200]=45，OTA 未影响文件系统
+```
+
+### 音频配置与结果
+
+`POST /json/cfg`（部分更新即可）：
+
+```json
+{"um":{"AudioReactive":{"enabled":true,"digitalmic":{"type":4,"pin":[12,13,14,38]}}}}
+→ {"success":true}
+```
+
+回读 `cfg.um.AudioReactive = {enabled:true, digitalmic:{type:4, pin:[12,13,14,38]}}`，`GET /win&RB` 重启后：
+
+```json
+info.u.AudioReactive = ["<button ... requestJson({AudioReactive:{enabled:false}}) ... icons on ...>"]
+```
+
+即 usermod 处于**已启用/已初始化**状态；对比 M0 的失败态 `["not initialized"," - check pin settings"]` + `"suspended"` 已消失。
+`info.leds.count=207 / matrix 9×23` 保持不变。
+
+结论：**ES7210 I²C 初始化通过、音频源可用**；`I2S digital` 文案、采集质量、静音不闪烁留待 T2 联调。
+
+

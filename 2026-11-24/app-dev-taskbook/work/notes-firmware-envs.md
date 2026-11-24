@@ -1,15 +1,16 @@
-# 固件环境对照与构建/烧录注意（v1.5）
+# 固件环境对照与构建/烧录注意（v1.6）
 
 ## 结论
 
 - 主线平台：**立创实战派 ESP32-S3**（WROOM-1-N16R8：16 MB Flash / 8 MB OPI PSRAM），实机测试就在这上面做。
 - **`firmware/esp32lichuang/` 与 env `esp32lichuang` 保留且为必需**：当前产品原型开发用的就是它，CI 必须构建。
 - 布局：**9 列 × 23 颗 = 207**；S 形走线；1 号位在第 1 列底部；**第 1 列在最左**（`DEFAULT_MATRIX_RIGHT_START=0`）。
-- 坏点：**第 46 颗（第 2 列底部）由 APP 端留黑点跳过**，不做相邻补偿；固件不跳过。
+- 空位：**第 46 颗（第 2 列底部）已物理拆除、数据线短接**，实际 206 颗、整链前移 1 格；用 `/ledmap.json` 修正，
+  该逻辑位置（`(1,22)`，下标 199）不分配物理灯；APP 同格留空。**不要**把 `count` 改成 206。
 - 外观：实物为 φ50 mm 圆柱，9 列贴外表面，正视只见**第 2–8 列**；设备页只取 **7 列 × 23 行** 发光区，逻辑矩阵仍 9×23。
 - 麦克风：原理图定稿为**双路 ZTS6216 模拟麦 + ES7210 四通道 ADC**（「数字硅麦」表述已作废）：
   I²C `0x41`（SCL=IO2、SDA=IO1）；I²S BCK=IO14、WS=IO13、MCLK=IO38、DI=IO12。
-  ES8311 是 DAC（I²C `0x18`，DO=IO45）。WLED usermod 无 ES7210 驱动，需自补 I²C 初始化。
+  ES8311 是 DAC（I²C `0x18`，DO=IO45）。ES7210 I²C 初始化已内置在 usermod（`AR_ES7210`，`dmType=4`，MCLK/LRCK=512）。
 - 音频：APP 侧 **A 内录 + C 麦克风**，静音检测命中后弹框确认才降级，不静默切换。
 - 预览：灯效 GIF 按**通用 32×18 画布**渲染，不按 9×23 灯珠排列。
 - 开机默认：**取消「极光之舞」作为默认**，完全按用户设置执行。
@@ -44,11 +45,16 @@
 | `cfg.hw.led.matrix` | 9×23，`b=true,r=false,v=true,s=true` | S 形、底部起、第一列最左 |
 | 开机默认 | `bootfx=0` | 不再强制极光之舞 |
 | 音频 | `um.AudioReactive.enabled=false`；临时开启后仍报 `not initialized - check pin settings` | ES7210 驱动未实现（T2.3.1） |
-| 坏点 | 第 46 颗（第 2 列底部）损坏 | **APP 端留黑点**，固件不动 |
+| 第 46 颗 | 物理拆除 + 数据线短接（实际 206 颗，链前移 1 格） | `/ledmap.json` 207 项映射修正，该位置指向死包 206；APP 留空 |
 
-> **重要**：刷机后 `count` 仍为 346 / 15×23 的根因是设备残留旧 `/ledmap.json`（width=15、height=23、346 项），
-> 它会覆盖 `cfg.hw.led.matrix`。必须 `GET /edit?func=delete&path=/ledmap.json` 删除后重启，布局才生效。
-> 已备份到 `work/backup/e80690a6c20c/ledmap.json`。
+> **重要（历史根因）**：刷机初期 `count` 仍为 346 / 15×23，是设备残留旧 `/ledmap.json`（width=15、height=23、346 项）
+> 覆盖了 `cfg.hw.led.matrix`。当时必须 `GET /edit?func=delete&path=/ledmap.json` 删除后重启，布局才生效；
+> 旧文件已备份到 `work/backup/e80690a6c20c/ledmap.json`。
+>
+> **v1.6 起**：`/ledmap.json` 是**有意部署**的修正文件（`work/ledmap.json`，9×23、207 项、`map[199]=206`），
+> **不要再删**；它存在时依然优先于 `cfg.hw.led.matrix`，所以今后调整面板/颗数必须先删它、改 cfg、再按新几何重写。
+> 写入用 `POST /upload`（multipart，字段 `data`），写入后 `GET /ledmap.json` 回读比对，再 `GET /win&RB` 重启，
+> 回读 `info.leds.count=207`、`matrix=9×23`。实测三锚点：`(0,22)` 白在第 1 列最底、`(1,22)` 不亮、`(2,22)` 紫在第 3 列最底。
 
 ## 构建（CI-only）
 
@@ -68,7 +74,8 @@
 3. **刷前备份**
    `GET /json/cfg`、`GET /json/presets` 存到 `work/backup/<mac>/`（仅留档）。
 4. **刷后校正**
-   写入 207 / 9×23 / pin 10；**同时删除旧 `/ledmap.json`**（否则面板配置不生效），再重启校验 `info.leds.count=207`、`matrix=9×23`；最后验证字幕方向（`c3=16`）与 2D 效果方向。
+   写入 207 / 9×23 / pin 10；若设备上有**旧的** `/ledmap.json`（如 15×23/346 项）先删除（否则面板配置不生效），
+   再上传 v1.6 修正文件 `work/ledmap.json`，重启校验 `info.leds.count=207`、`matrix=9×23`；最后验证字幕方向（`c3=16`）与 2D 效果方向。
 
 ## 风险
 
