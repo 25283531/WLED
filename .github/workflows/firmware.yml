@@ -20,9 +20,19 @@ defaults:
 
 jobs:
   build:
-    name: Build color_lamp_c3
+    name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: esp32lichuang
+            artifact: firmware-esp32lichuang
+            ota: ColorLamp-S3-C01-ota.bin
+          - env: color_lamp_c3
+            artifact: firmware-color_lamp_c3
+            ota: ColorLamp-C3-ota.bin
     steps:
       - uses: actions/checkout@v4
 
@@ -46,32 +56,46 @@ jobs:
       - run: pip install -r requirements.txt
 
       # Fail fast with an actionable message instead of "Unknown environment".
-      # color_lamp_c3 is defined only in firmware/platformio_override.ini.
-      - name: Verify color_lamp_c3 environment is defined
+      # Product envs are defined only in firmware/platformio_override.ini.
+      - name: Verify ${{ matrix.env }} environment is defined
         run: |
-          if ! pio project config | grep -q 'env:color_lamp_c3'; then
-            echo "::error::env:color_lamp_c3 not found. firmware/platformio_override.ini must be committed (it defines the whole product env)."
+          if ! pio project config | grep -q 'env:${{ matrix.env }}'; then
+            echo "::error::env:${{ matrix.env }} not found. firmware/platformio_override.ini must be committed."
             exit 1
           fi
 
-      - run: pio run -e color_lamp_c3
+      - run: pio run -e ${{ matrix.env }}
 
       - name: Collect binaries
         run: |
           mkdir -p "$GITHUB_WORKSPACE/out"
+          BUILD_DIR=".pio/build/${{ matrix.env }}"
+          cp "$BUILD_DIR/firmware.bin" "$GITHUB_WORKSPACE/out/${{ matrix.ota }}"
+          cp "$BUILD_DIR/bootloader.bin" "$GITHUB_WORKSPACE/out/${{ matrix.env }}-bootloader.bin" 2>/dev/null || true
+          cp "$BUILD_DIR/partitions.bin" "$GITHUB_WORKSPACE/out/${{ matrix.env }}-partitions.bin" 2>/dev/null || true
+          cp "$BUILD_DIR/spiffs.bin" "$GITHUB_WORKSPACE/out/${{ matrix.env }}-spiffs.bin" 2>/dev/null || true
+          cp "$BUILD_DIR/firmware.elf" "$GITHUB_WORKSPACE/out/${{ matrix.env }}-firmware.elf" 2>/dev/null || true
           cp build_output/release/*.bin "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
-          cp .pio/build/color_lamp_c3/firmware.bin "$GITHUB_WORKSPACE/out/ColorLamp-C3-ota.bin"
-          cp .pio/build/color_lamp_c3/bootloader.bin .pio/build/color_lamp_c3/partitions.bin "$GITHUB_WORKSPACE/out/" 2>/dev/null || true
           ls -la "$GITHUB_WORKSPACE/out"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: firmware-color_lamp_c3
-          path: out/*.bin
+          name: ${{ matrix.artifact }}
+          path: |
+            out/*.bin
+            out/*.elf
           retention-days: 30
 
-      - name: Publish GitHub Release (tag fw-v*)
-        if: startsWith(github.ref, 'refs/tags/fw-v')
-        uses: softprops/action-gh-release@v2
+  release:
+    name: Publish GitHub Release (tag fw-v*)
+    if: startsWith(github.ref, 'refs/tags/fw-v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          files: out/*.bin
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.bin
