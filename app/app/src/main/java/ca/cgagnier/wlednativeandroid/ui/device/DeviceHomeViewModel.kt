@@ -107,6 +107,18 @@ class DeviceHomeViewModel(
     }
 
     /**
+     * 调色板（`seg.pal`）。
+     *
+     * id 取自 [ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog]，
+     * 不在业务代码里写死 —— 固件插一个调色板，后面所有 id 都会前移。
+     */
+    fun setPalette(device: DeviceWithState, palette: Int) = broadcast(device) { mac ->
+        deviceConnectionManager.sendSegmentPatch(mac) {
+            it.copy(palette = palette.coerceIn(0, 255))
+        }
+    }
+
+    /**
      * 设置主色，保留次色与第三色。
      *
      * WLED 的颜色是 `[[r,g,b], ...]`，这里始终补齐成三个槽位，

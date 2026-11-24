@@ -21,6 +21,11 @@ class UserPreferencesRepository(private val dataStore: DataStore<UserPreferences
         it.lastChangelogVersionSeen
     }.distinctUntilChanged()
 
+    /** 多灯同步开关。设备级偏好，设备页与灯效库共用。 */
+    val multiLampSyncEnabled: Flow<Boolean> = dataStore.data.map {
+        it.multiLampSyncEnabled
+    }.distinctUntilChanged()
+
     suspend fun updateThemeMode(themeSettings: ThemeSettings) {
         logger.d { "updateThemeMode" }
         dataStore.updateData {
@@ -76,6 +81,16 @@ class UserPreferencesRepository(private val dataStore: DataStore<UserPreferences
         dataStore.updateData {
             it.copy(
                 lastChangelogVersionSeen = version,
+                dateLastWritten = currentTimeMillis(),
+            )
+        }
+    }
+
+    suspend fun updateMultiLampSyncEnabled(enabled: Boolean) {
+        logger.d { "updateMultiLampSyncEnabled" }
+        dataStore.updateData {
+            it.copy(
+                multiLampSyncEnabled = enabled,
                 dateLastWritten = currentTimeMillis(),
             )
         }

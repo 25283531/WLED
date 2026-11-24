@@ -7,6 +7,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.core.okio.OkioSerializer
 import androidx.datastore.core.okio.OkioStorage
 import ca.cgagnier.wlednativeandroid.repository.migrations.UserPreferencesV0ToV1
+import ca.cgagnier.wlednativeandroid.repository.migrations.UserPreferencesV1ToV2
 import co.touchlab.kermit.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,7 @@ fun createUserPreferencesDataStore(
         logger.w(exception) { "User preferences corrupted, falling back to default preferences" }
         UserPreferences()
     },
-    migrations: List<DataMigration<UserPreferences>> = listOf(UserPreferencesV0ToV1()),
+    migrations: List<DataMigration<UserPreferences>> = listOf(UserPreferencesV0ToV1(), UserPreferencesV1ToV2()),
     scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ): DataStore<UserPreferences> = DataStoreFactory.create(
     storage = OkioStorage(

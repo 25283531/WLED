@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
@@ -37,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +57,8 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
 import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
@@ -182,6 +187,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     expanded = tuningExpanded,
                     speed = segment?.effectSpeed ?: 0,
                     intensity = segment?.effectIntensity ?: 0,
+                    palette = segment?.palette ?: 0,
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
@@ -189,6 +195,9 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     },
                     onIntensity = { channel ->
                         device?.let { viewModel.setIntensity(it, channel) }
+                    },
+                    onPalette = { paletteId ->
+                        device?.let { viewModel.setPalette(it, paletteId) }
                     },
                     onColor = { packed ->
                         device?.let { viewModel.setPrimaryColor(it, packed) }
@@ -470,10 +479,12 @@ private fun EffectTuning(
     expanded: Boolean,
     speed: Int,
     intensity: Int,
+    palette: Int,
     colors: List<Color>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
     onIntensity: (Int) -> Unit,
+    onPalette: (Int) -> Unit,
     onColor: (Int) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
@@ -559,10 +570,96 @@ private fun EffectTuning(
                             )
                         }
                     }
+
+                    PalettePicker(
+                        selected = palette,
+                        onSelect = onPalette,
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
                 }
             }
         }
     }
+}
+
+/**
+ * 调色板选择器：一排横向滚动的渐变色块。
+ *
+ * 每个色块画的是该调色板**真实的色标**（从固件 `palettes.cpp` 提取，
+ * 见 `tools/gen_palette_catalog.py`），所以用户点之前就能看见它长什么样，
+ * 而不是面对一串编号。固件里「只取当前颜色槽位」的那几个动态调色板
+ * 没有固定颜色，用中性底纹示意，名字仍会显示在标题右侧。
+ */
+@Composable
+private fun PalettePicker(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palettes = remember { PaletteCatalog.all }
+    val current = palettes.firstOrNull { it.id == selected }
+    Column(modifier = modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(R.string.isle_palette),
+                color = IsleColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = current?.canonicalName ?: "-",
+                color = IsleColors.TextMuted,
+                fontSize = 11.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            palettes.forEach { palette ->
+                PaletteSwatch(
+                    palette = palette,
+                    selected = palette.id == selected,
+                    onClick = { onSelect(palette.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteSwatch(
+    palette: PaletteInfo,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = Modifier
+            .size(width = 46.dp, height = 30.dp)
+            .clip(shape)
+            .background(
+                if (palette.hasPreview) {
+                    Brush.horizontalGradient(palette.colors.map { Color(0xFF000000.toInt() or it) })
+                } else {
+                    Brush.horizontalGradient(listOf(IsleColors.SurfaceHigh, IsleColors.Surface))
+                }
+            )
+            .border(
+                width = if (selected) 1.8.dp else 1.dp,
+                color = if (selected) IsleColors.Cyan else IsleColors.StrokeStrong,
+                shape = shape,
+            )
+            .clickable(onClick = onClick),
+    )
 }
 
 @Composable

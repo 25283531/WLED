@@ -227,6 +227,7 @@
     <string name="isle_effect_speed">速度</string>
     <string name="isle_effect_intensity">强度</string>
     <string name="isle_effect_color">颜色</string>
+    <string name="isle_palette">调色板</string>
     <string name="isle_rhythm_mode">律动模式</string>
     <string name="isle_quick_effects">快捷灯效</string>
     <string name="isle_mood_aurora">幻彩极光</string>

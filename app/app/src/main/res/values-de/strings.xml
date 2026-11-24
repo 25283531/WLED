@@ -229,6 +229,7 @@
     <string name="isle_effect_speed">Tempo</string>
     <string name="isle_effect_intensity">Intensität</string>
     <string name="isle_effect_color">Farbe</string>
+    <string name="isle_palette">Farbpalette</string>
     <string name="isle_rhythm_mode">Rhythmusmodus</string>
     <string name="isle_quick_effects">Schnelleffekte</string>
     <string name="isle_mood_aurora">Aurora</string>

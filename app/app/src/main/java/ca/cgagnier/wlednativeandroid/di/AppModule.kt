@@ -14,6 +14,7 @@ import ca.cgagnier.wlednativeandroid.repository.createUserPreferencesDataStore
 import ca.cgagnier.wlednativeandroid.repository.getDatabase
 import ca.cgagnier.wlednativeandroid.repository.migrations.LegacyProtoToKotlinxPreferencesMigration
 import ca.cgagnier.wlednativeandroid.repository.migrations.UserPreferencesV0ToV1
+import ca.cgagnier.wlednativeandroid.repository.migrations.UserPreferencesV1ToV2
 import ca.cgagnier.wlednativeandroid.service.AndroidDeviceDiscovery
 import ca.cgagnier.wlednativeandroid.service.AndroidNetworkConnectivityManager
 import ca.cgagnier.wlednativeandroid.service.DeviceDiscovery
@@ -61,8 +62,8 @@ val appModule: Module = module {
 
     single<FavoriteEffectDao> { get<DevicesDatabase>().favoriteEffectDao() }
 
-    // 四个页签共享同一个「当前设备」
-    single { SelectedDeviceStore() }
+    // 四个页签共享同一个「当前设备」与多灯同步开关（开关持久化在 UserPreferences 里）
+    single { SelectedDeviceStore(get()) }
 
     single<DataStore<UserPreferences>> {
         val context = androidContext()
@@ -75,6 +76,7 @@ val appModule: Module = module {
             migrations = listOf(
                 LegacyProtoToKotlinxPreferencesMigration(context),
                 UserPreferencesV0ToV1(),
+                UserPreferencesV1ToV2(),
             ),
         )
     }

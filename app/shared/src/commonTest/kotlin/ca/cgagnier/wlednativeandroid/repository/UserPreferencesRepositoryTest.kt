@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import okio.Buffer
 import okio.FileSystem
 import okio.Path
 import kotlin.random.Random
@@ -107,6 +108,50 @@ class UserPreferencesRepositoryTest {
     fun updateLastChangelogVersionSeen_updatesFlow() = withRepository { repo ->
         repo.updateLastChangelogVersionSeen("v2.5.0")
         assertEquals("v2.5.0", repo.lastChangelogVersionSeen.first())
+    }
+
+    @Test
+    fun defaultPreferences_haveMultiLampSyncDisabled() = withRepository { repo ->
+        assertFalse(repo.multiLampSyncEnabled.first())
+    }
+
+    @Test
+    fun updateMultiLampSyncEnabled_updatesFlow() = withRepository { repo ->
+        repo.updateMultiLampSyncEnabled(true)
+        assertTrue(repo.multiLampSyncEnabled.first())
+
+        repo.updateMultiLampSyncEnabled(false)
+        assertFalse(repo.multiLampSyncEnabled.first())
+    }
+
+    @Test
+    fun multiLampSyncEnabled_persistsAcrossRepositoryRecreation() = withTestDir { testFile ->
+        val scope1 = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext.job))
+        try {
+            createRepository(testFile, scope1).updateMultiLampSyncEnabled(true)
+        } finally {
+            // Cancel scope1 to simulate process termination
+            scope1.cancel()
+        }
+
+        assertTrue(createRepository(testFile, backgroundScope).multiLampSyncEnabled.first())
+    }
+
+    /**
+     * 旧版本写在磁盘上的是 `version = 1` 的 JSON，用同一个 serializer 生成，避免手写格式漂移。
+     * 若 `UserPreferencesV1ToV2` 没被注册进 migrations，读出来仍是 1 —— 这条用例专门锁住注册。
+     */
+    @Test
+    fun existingV1File_isMigratedToVersion2() = withTestDir { testFile ->
+        val buffer = Buffer()
+        UserPreferencesSerializer().writeTo(UserPreferences(version = 1), buffer)
+        FileSystem.SYSTEM.write(testFile) { writeUtf8(buffer.readUtf8()) }
+
+        val dataStore = createUserPreferencesDataStore(
+            producePath = { testFile },
+            scope = backgroundScope,
+        )
+        assertEquals(2, dataStore.data.first().version)
     }
 
     @Test
