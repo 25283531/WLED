@@ -51,11 +51,16 @@ class WifiSettingsViewModel(
     private var loadedAddress: String? = null
     private var scanJob: Job? = null
 
-    /** 同一地址只自动加载一次，来回切换页面不会反复扫描。 */
+    /**
+     * 每次进入页面都刷新一次。
+     *
+     * ViewModel 跟着 Activity 存活，离开页面不会销毁；如果同地址直接复用旧状态，
+     * 上次连接留下的「设备正在重启」提示和旧扫描结果会一直挂在页面上。
+     */
     fun load(address: String) {
-        if (address == loadedAddress) return
+        val knownSsid = if (address == loadedAddress) _uiState.value.currentSsid else null
         loadedAddress = address
-        _uiState.value = UiState()
+        _uiState.value = UiState(currentSsid = knownSsid)
         loadCurrentNetwork(address)
         rescan()
     }
