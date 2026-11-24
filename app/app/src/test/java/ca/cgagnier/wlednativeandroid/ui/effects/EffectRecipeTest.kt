@@ -12,10 +12,12 @@ import org.junit.jupiter.api.Test
 /**
  * 灯效 / 调色板 id 的反查与配方组装。
  *
- * 这组测试锁的是一个已经真实发生过的 bug：创作工坊把 Image 写死成 38、
- * 把 Scrolling Text 写死成 123，而固件调整效果槽位后这两个数字分别变成了
+ * 这组测试锁的是一个已经真实发生过的 bug：创作工坊把 Image 写死成旧效果表的 38、
+ * 把 Scrolling Text 写死成旧效果表的 123，而固件调整效果槽位后这两个数字分别变成了
  * Aurora（极光）和 Drift Rose（玫瑰漂移）—— 上传的图案显示成极光、
  * 投送的字幕变成玫瑰漂移，不报错、极难联想到是 id 漂移。
+ *
+ * M1 把效果表压缩为 0..188 后，下面的断言值已按新表更新（Image=39、Scrolling Text=97）。
  *
  * 现在一律按固件英文名反查，测试就把「反查必须落到正确的槽位」钉死。
  */
@@ -29,7 +31,7 @@ class EffectRecipeTest {
         assertNotNull(image, "固件灯效目录里应有 Image")
         assertEquals(39, image!!.id)
 
-        // 38 曾经是 Image，槽位对齐后变成了 Aurora —— 两者必须分得开
+        // 旧表的 38 曾经是 Image，槽位对齐后变成了 Aurora —— 两者必须分得开
         val aurora = EffectCatalog.byName("Aurora")
         assertNotNull(aurora)
         assertEquals(26, aurora!!.id)
@@ -42,7 +44,7 @@ class EffectRecipeTest {
         assertNotNull(scrolling, "固件灯效目录里应有 Scrolling Text")
         assertEquals(97, scrolling!!.id)
 
-        // 123 曾经是 Scrolling Text，现在是 Drift Rose
+        // 旧表的 123 曾经是 Scrolling Text，现在是 Drift Rose
         val driftRose = EffectCatalog.byName("Drift Rose")
         assertNotNull(driftRose)
         assertEquals(98, driftRose!!.id)
