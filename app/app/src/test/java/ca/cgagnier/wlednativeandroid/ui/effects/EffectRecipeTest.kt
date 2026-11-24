@@ -27,12 +27,12 @@ class EffectRecipeTest {
     fun byName_resolvesImageToItsRealSlotNotTheStaleOne() {
         val image = EffectCatalog.byName("Image")
         assertNotNull(image, "固件灯效目录里应有 Image")
-        assertEquals(53, image!!.id)
+        assertEquals(39, image!!.id)
 
         // 38 曾经是 Image，槽位对齐后变成了 Aurora —— 两者必须分得开
         val aurora = EffectCatalog.byName("Aurora")
         assertNotNull(aurora)
-        assertEquals(38, aurora!!.id)
+        assertEquals(26, aurora!!.id)
         assertNotEquals(image.id, aurora.id)
     }
 
@@ -40,12 +40,12 @@ class EffectRecipeTest {
     fun byName_resolvesScrollingTextToItsRealSlotNotTheStaleOne() {
         val scrolling = EffectCatalog.byName("Scrolling Text")
         assertNotNull(scrolling, "固件灯效目录里应有 Scrolling Text")
-        assertEquals(122, scrolling!!.id)
+        assertEquals(97, scrolling!!.id)
 
         // 123 曾经是 Scrolling Text，现在是 Drift Rose
         val driftRose = EffectCatalog.byName("Drift Rose")
         assertNotNull(driftRose)
-        assertEquals(123, driftRose!!.id)
+        assertEquals(98, driftRose!!.id)
         assertNotEquals(scrolling.id, driftRose.id)
     }
 
@@ -100,8 +100,8 @@ class EffectRecipeTest {
     @Test
     fun curatedEffects_includeTheSignatureAuroraDanceWithItsFactoryParams() {
         val dance = EffectCatalog.byName("极光之舞")
-        assertNotNull(dance, "固件里应有 221「极光之舞」")
-        assertEquals(221, dance!!.id)
+        assertNotNull(dance, "固件里应有 188「极光之舞」")
+        assertEquals(188, dance!!.id)
 
         val recipe = CuratedEffects.find(dance.id)
         assertNotNull(recipe, "招牌灯效应收录进精选配方表")

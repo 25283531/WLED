@@ -30,10 +30,10 @@ class EffectFiltersTest {
 
     @Test
     fun `FAVORITE 只返回收藏中的灯效`() {
-        val favorites = setOf(0, 1, 221)
+        val favorites = setOf(0, 1, 188)
         val result = filterEffects(all, EffectFilter.FAVORITE, "", favorites)
         assertEquals(3, result.size)
-        assertEquals(setOf(0, 1, 221), result.map { it.id }.toSet())
+        assertEquals(setOf(0, 1, 188), result.map { it.id }.toSet())
     }
 
     @Test
@@ -45,7 +45,7 @@ class EffectFiltersTest {
     fun `ART 收录自定义图片与滚动字幕`() {
         val art = filterEffects(all, EffectFilter.ART, "")
         assertEquals(
-            setOf(53, 122),
+            setOf(39, 97),
             art.map { it.id }.toSet(),
             "「字画」应收纳 Image(53) 与 Scrolling Text(122)",
         )
@@ -94,12 +94,12 @@ class EffectFiltersTest {
         assertTrue(byEnglish.isNotEmpty())
         assertTrue(byChinese.isNotEmpty())
         assertTrue(
-            byEnglish.any { it.id == 38 },
-            "英文名 Aurora 应命中 id 38",
+            byEnglish.any { it.id == 26 },
+            "英文名 Aurora 应命中 id 26",
         )
         assertTrue(
-            byChinese.any { it.id == 221 },
-            "中文名「极光之舞」应命中 id 221",
+            byChinese.any { it.id == 188 },
+            "中文名「极光之舞」应命中 id 188",
         )
     }
 

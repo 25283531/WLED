@@ -9,7 +9,7 @@
     MUSIC  音乐律动 —— 由音频频谱驱动的效果（GEQ、频谱、声波类）
     TEXT   动态字幕 —— 直接显示用户内容的字画（文字、图片、时钟、数字雨）
 「睡眠夜灯」不是分类，而是设备页的一键暖光动作，故不在此建模。
-分类按效果 id 白名单硬编码，宁可漏收也不猜。
+分类按固件宏名（FX_MODE_*）白名单硬编码，与 id 解耦，宁可漏收也不猜。
 
 用法:
     python tools/gen_effect_catalog.py
@@ -42,39 +42,80 @@ POPULAR_NAMES = {
 }
 
 # 「音乐律动」：由音频频谱驱动的效果
-MUSIC_IDS = {68, 136, 137, 139, 141, 148, 155, 159, 186, 198, 199, 212, 214, 215}
+MUSIC_IDS = {
+    "FX_MODE_BPM", "FX_MODE_NOISEMETER", "FX_MODE_FREQWAVE", "FX_MODE_2DGEQ", "FX_MODE_FREQPIXELS",
+    "FX_MODE_RIPPLEPEAK", "FX_MODE_FREQMAP", "FX_MODE_DJLIGHT", "FX_MODE_2DAKEMI", "FX_MODE_PARTICLESGEQ",
+    "FX_MODE_PARTICLECENTERGEQ", "FX_MODE_PS1DGEQ", "FX_MODE_PS1DSONICSTREAM", "FX_MODE_PS1DSONICBOOM",
+}
 
 # 「动态字幕」：直接显示用户内容（文字、图片、时钟、数字雨）
-TEXT_IDS = {53, 122, 153, 220}
+TEXT_IDS = {
+    "FX_MODE_IMAGE", "FX_MODE_2DSCROLLTEXT", "FX_MODE_2DMATRIX", "FX_MODE_2DANALOGCLOCK",
+}
 
 # 中文显示名。没收录的灯效直接用固件英文名，不做机器翻译。
 NAME_ZH = {
-    0: '纯色', 1: '明灭', 2: '呼吸', 3: '擦拭', 5: '随机彩', 6: '扫光', 7: '动感', 8: '循环彩', 9: '七彩流光',
-    10: '扫描', 12: '渐隐', 13: '剧院追光', 15: '奔走', 17: '星闪', 18: '溶解', 20: '闪耀', 21: '暗夜星屑',
-    23: '频闪', 25: '疾速频闪', 27: '安卓', 28: '追逐', 31: '追逐闪白', 32: '乱序追闪', 33: '彩虹奔流', 34: '缤纷',
-    35: '红绿灯', 38: '极光', 39: '溪流', 40: '巡航', 41: '灯塔', 42: '焰火', 43: '落雨', 44: '俄罗斯方块',
-    45: '烛火摇曳', 46: '渐变', 48: '滚球', 49: '仙子尘', 50: '双点', 51: '仙尘闪烁', 53: '自定义图片', 54: '三重追逐',
-    55: '三色擦拭', 56: '三色渐隐', 57: '闪电', 58: '监护仪', 59: '多重彗尾', 61: '溪流 II', 62: '振荡', 64: '抛球',
-    65: '调色板', 66: '壁炉篝火', 67: '色浪', 68: '节拍', 69: '噪声填充', 70: '噪声 I', 73: '噪声 IV', 74: '彩屑闪烁',
-    75: '湖光', 76: '流星', 77: '复制段落', 78: '铁道', 79: '涟漪', 80: '萤火', 82: '万圣之眼', 83: '纯色图案',
-    84: '三色图案', 85: '光斑', 87: '碎钻', 88: '烛光', 89: '星爆焰火', 90: '线型焰火', 91: '弹跳球', 92: '正弦彗星',
-    95: '爆米花', 96: '滴落', 97: '等离子', 98: '百分比', 100: '心跳', 101: '深海潮汐', 102: '多簇烛光', 103: '纯色碎钻',
-    104: '日出', 105: '相位', 106: '上升星点', 107: '噪声调色', 108: '正弦波', 110: '流动', 111: '啾啾', 112: '舞影',
-    113: '洗衣机', 114: '旋转缩放', 115: '混色', 116: '电视雪花', 118: '飞船', 119: '疯狂蜜蜂', 120: '恶灵骑士',
-    121: '团块', 122: '动态字幕', 123: '玫瑰漂移', 124: '扭曲波', 125: '皂泡', 126: '章鱼', 127: '波动细胞',
-    128: '像素', 129: '像素波', 130: '流光飞舞', 131: '矩阵像素', 132: '重力表', 133: '等离子团', 134: '水洼',
-    135: '中段噪声', 136: '噪声电平', 137: '频谱波', 139: '音频律动', 140: '瀑布', 141: '频谱像素', 143: '噪声之火',
-    145: '噪声游移', 146: '二维噪声', 147: '柏林游移', 148: '峰值涟漪', 149: '火焰噪声', 150: '方块漩涡', 151: '吃豆人',
-    152: '基因链', 153: '数字雨', 154: '融球', 155: '频谱映射', 156: '重力中心', 159: '打碟灯', 160: '律动板',
-    161: '微光', 162: '脉冲', 163: '模糊', 164: '漂移', 165: '波涌', 166: '日冕', 167: '彩爆', 168: '朱莉娅集',
-    172: '生命游戏', 173: '格纹', 174: '极地之光', 175: '漩涡', 176: '李萨如', 177: '蜷曲', 178: '等离子球',
-    179: '流光条纹', 180: '催眠', 181: '正弦点', 182: '基因螺旋', 183: '黑洞', 184: '波正弦', 185: '摇滚波',
-    186: '阿凯米律动', 187: '火山', 188: '火焰', 189: '粒子焰火', 190: '涡旋', 191: '朦胧噪声', 192: '球池',
-    193: '盒子', 194: '吸引子', 195: '冲击', 196: '粒子瀑布', 197: '喷溅', 198: '二维频谱', 199: '频谱新星',
-    200: '粒子恶灵', 201: '粒子团块', 202: '滴答', 203: '弹珠', 204: '粒子舞影', 205: '线型粒子焰火', 206: '手持烟花',
-    207: '沙漏', 208: '线型喷溅', 209: '线型平衡', 210: '粒子追逐', 211: '星芒', 212: '线型频谱', 213: '线型火焰',
-    214: '声波激流', 215: '声爆', 216: '弹簧', 217: '星海', 218: '彩云', 219: '缓慢流转', 220: '指针时钟',
-    221: '极光之舞',
+    'FX_MODE_2DAKEMI': '阿凯米律动', 'FX_MODE_2DANALOGCLOCK': '指针时钟', 'FX_MODE_2DBLACKHOLE': '黑洞',
+    'FX_MODE_2DBLOBS': '团块', 'FX_MODE_2DCOLOREDBURSTS': '彩爆', 'FX_MODE_2DCRAZYBEES': '疯狂蜜蜂',
+    'FX_MODE_2DDISTORTIONWAVES': '扭曲波', 'FX_MODE_2DDNA': '基因链', 'FX_MODE_2DDNASPIRAL': '基因螺旋',
+    'FX_MODE_2DDRIFT': '漂移', 'FX_MODE_2DDRIFTROSE': '玫瑰漂移', 'FX_MODE_2DFIRENOISE': '火焰噪声',
+    'FX_MODE_2DFRIZZLES': '蜷曲', 'FX_MODE_2DFUNKYPLANK': '律动板', 'FX_MODE_2DGAMEOFLIFE': '生命游戏',
+    'FX_MODE_2DGEQ': '音频律动', 'FX_MODE_2DGHOSTRIDER': '恶灵骑士', 'FX_MODE_2DHIPHOTIC': '催眠',
+    'FX_MODE_2DJULIA': '朱莉娅集', 'FX_MODE_2DLISSAJOUS': '李萨如', 'FX_MODE_2DMATRIX': '数字雨',
+    'FX_MODE_2DMETABALLS': '融球', 'FX_MODE_2DNOISE': '二维噪声', 'FX_MODE_2DOCTOPUS': '章鱼',
+    'FX_MODE_2DPLASMABALL': '等离子球', 'FX_MODE_2DPLASMAROTOZOOM': '旋转缩放', 'FX_MODE_2DPOLARLIGHTS': '极地之光',
+    'FX_MODE_2DPULSER': '脉冲', 'FX_MODE_2DSCROLLTEXT': '动态字幕', 'FX_MODE_2DSINDOTS': '正弦点',
+    'FX_MODE_2DSOAP': '皂泡', 'FX_MODE_2DSPACESHIPS': '飞船', 'FX_MODE_2DSQUAREDSWIRL': '方块漩涡',
+    'FX_MODE_2DSUNRADIATION': '日冕', 'FX_MODE_2DSWIRL': '漩涡', 'FX_MODE_2DTARTAN': '格纹',
+    'FX_MODE_2DWAVERLY': '波涌', 'FX_MODE_2DWAVINGCELL': '波动细胞', 'FX_MODE_ANDROID': '安卓',
+    'FX_MODE_AURORA': '极光', 'FX_MODE_BLENDS': '混色', 'FX_MODE_BLINK': '明灭', 'FX_MODE_BLURZ': '模糊',
+    'FX_MODE_BOUNCINGBALLS': '弹跳球', 'FX_MODE_BPM': '节拍', 'FX_MODE_BREATH': '呼吸', 'FX_MODE_CANDLE': '烛光',
+    'FX_MODE_CANDLE_MULTI': '多簇烛光', 'FX_MODE_CHASE_COLOR': '追逐', 'FX_MODE_CHASE_FLASH': '追逐闪白',
+    'FX_MODE_CHASE_FLASH_RANDOM': '乱序追闪', 'FX_MODE_CHASE_RAINBOW_WHITE': '彩虹奔流', 'FX_MODE_CHUNCHUN': '啾啾',
+    'FX_MODE_COLORCLOUDS': '彩云', 'FX_MODE_COLORFUL': '缤纷', 'FX_MODE_COLORTWINKLE': '彩屑闪烁',
+    'FX_MODE_COLORWAVES': '色浪', 'FX_MODE_COLOR_SWEEP': '扫光', 'FX_MODE_COLOR_WIPE': '擦拭',
+    'FX_MODE_COMET': '灯塔', 'FX_MODE_COPY': '复制段落', 'FX_MODE_DANCING_SHADOWS': '舞影', 'FX_MODE_DISSOLVE': '溶解',
+    'FX_MODE_DJLIGHT': '打碟灯', 'FX_MODE_DRIP': '滴落', 'FX_MODE_DYNAMIC': '动感',
+    'FX_MODE_EXPLODING_FIREWORKS': '线型焰火', 'FX_MODE_FADE': '渐隐', 'FX_MODE_FAIRY': '仙子尘',
+    'FX_MODE_FAIRYTWINKLE': '仙尘闪烁', 'FX_MODE_FILLNOISE8': '噪声填充', 'FX_MODE_FIREWORKS': '焰火',
+    'FX_MODE_FIRE_2012': '壁炉篝火', 'FX_MODE_FIRE_FLICKER': '烛火摇曳', 'FX_MODE_FLASH_SPARKLE': '暗夜星屑',
+    'FX_MODE_FLOW': '流动', 'FX_MODE_FLOWSTRIPE': '流光条纹', 'FX_MODE_FREQMAP': '频谱映射',
+    'FX_MODE_FREQPIXELS': '频谱像素', 'FX_MODE_FREQWAVE': '频谱波', 'FX_MODE_GLITTER': '碎钻',
+    'FX_MODE_GRADIENT': '渐变', 'FX_MODE_GRAVCENTER': '重力中心', 'FX_MODE_GRAVIMETER': '重力表',
+    'FX_MODE_HALLOWEEN_EYES': '万圣之眼', 'FX_MODE_HEARTBEAT': '心跳', 'FX_MODE_ICU': '监护仪',
+    'FX_MODE_IMAGE': '自定义图片', 'FX_MODE_JUGGLE': '抛球', 'FX_MODE_JUGGLES': '流光飞舞', 'FX_MODE_LAKE': '湖光',
+    'FX_MODE_LARSON_SCANNER': '巡航', 'FX_MODE_LIGHTNING': '闪电', 'FX_MODE_LUMI_AURORA': '极光之舞',
+    'FX_MODE_MATRIPIX': '矩阵像素', 'FX_MODE_METEOR': '流星', 'FX_MODE_MIDNOISE': '中段噪声',
+    'FX_MODE_MULTI_COMET': '多重彗尾', 'FX_MODE_MULTI_STROBE': '疾速频闪', 'FX_MODE_NOISE16_1': '噪声 I',
+    'FX_MODE_NOISE16_4': '噪声 IV', 'FX_MODE_NOISEFIRE': '噪声之火', 'FX_MODE_NOISEMETER': '噪声电平',
+    'FX_MODE_NOISEMOVE': '噪声游移', 'FX_MODE_NOISEPAL': '噪声调色', 'FX_MODE_OSCILLATE': '振荡',
+    'FX_MODE_PACIFICA': '深海潮汐', 'FX_MODE_PACMAN': '吃豆人', 'FX_MODE_PALETTE': '调色板',
+    'FX_MODE_PARTICLEATTRACTOR': '吸引子', 'FX_MODE_PARTICLEBLOBS': '粒子团块', 'FX_MODE_PARTICLEBOX': '盒子',
+    'FX_MODE_PARTICLECENTERGEQ': '频谱新星', 'FX_MODE_PARTICLEFIRE': '火焰', 'FX_MODE_PARTICLEFIREWORKS': '粒子焰火',
+    'FX_MODE_PARTICLEGALAXY': '星海', 'FX_MODE_PARTICLEGHOSTRIDER': '粒子恶灵', 'FX_MODE_PARTICLEIMPACT': '冲击',
+    'FX_MODE_PARTICLEPERLIN': '朦胧噪声', 'FX_MODE_PARTICLEPIT': '球池', 'FX_MODE_PARTICLESGEQ': '二维频谱',
+    'FX_MODE_PARTICLESPRAY': '喷溅', 'FX_MODE_PARTICLEVOLCANO': '火山', 'FX_MODE_PARTICLEVORTEX': '涡旋',
+    'FX_MODE_PARTICLEWATERFALL': '粒子瀑布', 'FX_MODE_PERCENT': '百分比', 'FX_MODE_PERLINMOVE': '柏林游移',
+    'FX_MODE_PHASED': '相位', 'FX_MODE_PIXELS': '像素', 'FX_MODE_PIXELWAVE': '像素波', 'FX_MODE_PLASMA': '等离子',
+    'FX_MODE_PLASMOID': '等离子团', 'FX_MODE_POPCORN': '爆米花', 'FX_MODE_PS1DGEQ': '线型频谱',
+    'FX_MODE_PS1DSONICBOOM': '声爆', 'FX_MODE_PS1DSONICSTREAM': '声波激流', 'FX_MODE_PS1DSPRAY': '线型喷溅',
+    'FX_MODE_PS1DSPRINGY': '弹簧', 'FX_MODE_PSBALANCE': '线型平衡', 'FX_MODE_PSCHASE': '粒子追逐',
+    'FX_MODE_PSDANCINGSHADOWS': '粒子舞影', 'FX_MODE_PSDRIP': '滴答', 'FX_MODE_PSFIRE1D': '线型火焰',
+    'FX_MODE_PSFIREWORKS1D': '线型粒子焰火', 'FX_MODE_PSHOURGLASS': '沙漏', 'FX_MODE_PSPINBALL': '弹珠',
+    'FX_MODE_PSSPARKLER': '手持烟花', 'FX_MODE_PSSTARBURST': '星芒', 'FX_MODE_PUDDLES': '水洼',
+    'FX_MODE_RAILWAY': '铁道', 'FX_MODE_RAIN': '落雨', 'FX_MODE_RAINBOW': '循环彩', 'FX_MODE_RAINBOW_CYCLE': '七彩流光',
+    'FX_MODE_RANDOM_CHASE': '溪流 II', 'FX_MODE_RANDOM_COLOR': '随机彩', 'FX_MODE_RIPPLE': '涟漪',
+    'FX_MODE_RIPPLEPEAK': '峰值涟漪', 'FX_MODE_ROCKTAVES': '摇滚波', 'FX_MODE_ROLLINGBALLS': '滚球',
+    'FX_MODE_RUNNING_LIGHTS': '奔走', 'FX_MODE_RUNNING_RANDOM': '溪流', 'FX_MODE_SCAN': '扫描',
+    'FX_MODE_SHIMMER': '微光', 'FX_MODE_SINELON': '正弦彗星', 'FX_MODE_SINEWAVE': '正弦波',
+    'FX_MODE_SLOW_TRANSITION': '缓慢流转', 'FX_MODE_SOLID_GLITTER': '纯色碎钻', 'FX_MODE_SPARKLE': '闪耀',
+    'FX_MODE_SPOTS': '光斑', 'FX_MODE_STARBURST': '星爆焰火', 'FX_MODE_STATIC': '纯色',
+    'FX_MODE_STATIC_PATTERN': '纯色图案', 'FX_MODE_STROBE': '频闪', 'FX_MODE_SUNRISE': '日出',
+    'FX_MODE_TETRIX': '俄罗斯方块', 'FX_MODE_THEATER_CHASE': '剧院追光', 'FX_MODE_TRAFFIC_LIGHT': '红绿灯',
+    'FX_MODE_TRICOLOR_CHASE': '三重追逐', 'FX_MODE_TRICOLOR_FADE': '三色渐隐', 'FX_MODE_TRICOLOR_WIPE': '三色擦拭',
+    'FX_MODE_TRI_STATIC_PATTERN': '三色图案', 'FX_MODE_TV_SIMULATOR': '电视雪花', 'FX_MODE_TWINKLE': '星闪',
+    'FX_MODE_TWINKLEFOX': '萤火', 'FX_MODE_TWINKLEUP': '上升星点', 'FX_MODE_TWO_DOTS': '双点',
+    'FX_MODE_WASHING_MACHINE': '洗衣机', 'FX_MODE_WATERFALL': '瀑布', 'FX_MODE_WAVESINS': '波正弦',
 }
 
 CATEGORY_CONST = {
@@ -99,10 +140,10 @@ def categorize(entry: dict) -> str:
 
 
 def mood_of(entry: dict) -> str:
-    idx = entry["idx"]
-    if idx in TEXT_IDS:
+    fx = entry["fx"]
+    if fx in TEXT_IDS:
         return "TEXT"
-    if idx in MUSIC_IDS:
+    if fx in MUSIC_IDS:
         return "MUSIC"
     return "AURORA"
 
@@ -181,7 +222,7 @@ def main() -> int:
         # 预览图以效果 id 命名，与固件 fx 值一一对应，杜绝「名字对、图不对」
         # 预览图以效果 id 命名，与固件 fx 值一一对应，杜绝「名字对、图不对」
         preview_literal = kotlin_string(str(idx))
-        zh = NAME_ZH.get(idx, name)
+        zh = NAME_ZH.get(entry["fx"], name)
         lines.append(
             f"        EffectInfo({idx}, {kotlin_string(name)}, {kotlin_string(zh)}, "
             f"EffectCategory.{CATEGORY_CONST[category]}, EffectMood.{mood_of(entry)}, "
@@ -222,7 +263,7 @@ def main() -> int:
     for entry in effects:
         key = mood_of(entry)
         moods[key] = moods.get(key, 0) + 1
-    missing_zh = [e["name"] for e in effects if e["idx"] not in NAME_ZH]
+    missing_zh = [e["name"] for e in effects if e["fx"] not in NAME_ZH]
     print(f"共 {len(effects)} 个灯效: {counts}, 常用 {len(POPULAR_NAMES)}, 预览 {len(effects)}")
     print(f"律动模式: {moods}")
     if missing_zh:
