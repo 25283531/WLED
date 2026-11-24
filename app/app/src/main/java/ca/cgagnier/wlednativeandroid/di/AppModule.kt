@@ -29,6 +29,7 @@ import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
+import ca.cgagnier.wlednativeandroid.ui.settings.WifiSettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
@@ -182,4 +183,5 @@ val appModule: Module = module {
     viewModelOf(::DeviceHomeViewModel)
     viewModelOf(::LibraryViewModel)
     viewModelOf(::CreateViewModel)
+    viewModelOf(::WifiSettingsViewModel)
 }

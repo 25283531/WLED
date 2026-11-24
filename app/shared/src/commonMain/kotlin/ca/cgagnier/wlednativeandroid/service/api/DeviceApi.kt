@@ -3,7 +3,9 @@ package ca.cgagnier.wlednativeandroid.service.api
 import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.Info
 import ca.cgagnier.wlednativeandroid.model.wledapi.JsonPost
+import ca.cgagnier.wlednativeandroid.model.wledapi.NetworkScan
 import ca.cgagnier.wlednativeandroid.model.wledapi.State
+import ca.cgagnier.wlednativeandroid.model.wledapi.WledConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -52,6 +54,29 @@ interface DeviceApi {
 
     @Throws(Exception::class)
     suspend fun postJson(state: JsonPost): ApiResponse<State>
+
+    /**
+     * 读取设备配置（`GET /json/cfg`），返回 App 关心的片段。
+     */
+    @Throws(Exception::class)
+    suspend fun getConfig(): ApiResponse<WledConfig>
+
+    /**
+     * 写入设备配置（`POST /json/cfg`）。
+     *
+     * 固件把请求体合并进 cfg.json；`WledConfig.rb = true` 时保存后立即重启。
+     * 设备启用了设置 PIN 时固件返回 401，调用方需要按 [ApiResponse.code] 区分。
+     */
+    @Throws(Exception::class)
+    suspend fun postConfig(config: WledConfig): ApiResponse<String>
+
+    /**
+     * 触发一次 WiFi 扫描并返回当前可见网络（`GET /json/net`）。
+     *
+     * 固件扫描是异步的：扫描中返回空列表，调用方需要轮询。
+     */
+    @Throws(Exception::class)
+    suspend fun scanNetworks(): ApiResponse<NetworkScan>
 
     @Throws(Exception::class)
     suspend fun updateDevice(fileData: ByteArray, fileName: String): ApiResponse<String>
@@ -122,6 +147,40 @@ class KtorDeviceApi(private val baseUrl: String, private val httpClient: HttpCli
         }
         return if (response.status.isSuccess()) {
             ApiResponse(code = response.status.value, body = response.body<State>())
+        } else {
+            ApiResponse(code = response.status.value, errorBody = response.bodyAsText())
+        }
+    }
+
+    @Throws(Exception::class)
+    override suspend fun getConfig(): ApiResponse<WledConfig> {
+        val response = httpClient.get(normalizeUrl("json/cfg"))
+        return if (response.status.isSuccess()) {
+            ApiResponse(code = response.status.value, body = response.body<WledConfig>())
+        } else {
+            ApiResponse(code = response.status.value, errorBody = response.bodyAsText())
+        }
+    }
+
+    @Throws(Exception::class)
+    override suspend fun postConfig(config: WledConfig): ApiResponse<String> {
+        val response = httpClient.post(normalizeUrl("json/cfg")) {
+            contentType(ContentType.Application.Json)
+            setBody(config)
+        }
+        val text = response.bodyAsText()
+        return if (response.status.isSuccess()) {
+            ApiResponse(code = response.status.value, body = text)
+        } else {
+            ApiResponse(code = response.status.value, errorBody = text)
+        }
+    }
+
+    @Throws(Exception::class)
+    override suspend fun scanNetworks(): ApiResponse<NetworkScan> {
+        val response = httpClient.get(normalizeUrl("json/net"))
+        return if (response.status.isSuccess()) {
+            ApiResponse(code = response.status.value, body = response.body<NetworkScan>())
         } else {
             ApiResponse(code = response.status.value, errorBody = response.bodyAsText())
         }

@@ -138,6 +138,53 @@ STRINGS: dict[str, tuple[str, str, str, str]] = {
         "Les réglages matériels restent dans la page web de la lampe ; cette application pilote la lumière.",
         "Hardware-Einstellungen bleiben in der Weboberfläche der Lampe; diese App steuert nur das Licht.",
     ),
+    "isle_wifi_current_network": ("Current network", "当前网络", "Réseau actuel", "Aktuelles Netzwerk"),
+    "isle_wifi_unknown": ("Unknown", "未读取到", "Inconnu", "Unbekannt"),
+    "isle_wifi_nearby": ("Nearby networks", "附近网络", "Réseaux à proximité", "Netzwerke in der Nähe"),
+    "isle_wifi_scanning": ("Scanning", "正在扫描", "Analyse", "Suche läuft"),
+    "isle_wifi_rescan": ("Scan again", "重新扫描", "Rescanner", "Neu suchen"),
+    "isle_wifi_no_networks": (
+        "No networks found. Move closer to the router and try again.",
+        "没有发现网络，请靠近路由器后重试",
+        "Aucun réseau trouvé. Rapprochez-vous du routeur puis réessayez.",
+        "Keine Netzwerke gefunden. Geh näher an den Router und versuche es erneut.",
+    ),
+    "isle_wifi_connected": ("Connected", "已连接", "Connecté", "Verbunden"),
+    "isle_wifi_open_network": ("Open", "开放", "Ouvert", "Offen"),
+    "isle_wifi_secured": ("Secured", "加密", "Sécurisé", "Gesichert"),
+    "isle_wifi_channel": ("CH %1$d", "CH %1$d", "CH %1$d", "CH %1$d"),
+    "isle_wifi_signal": ("%1$d dBm", "%1$d dBm", "%1$d dBm", "%1$d dBm"),
+    "isle_wifi_connect_title": ("Connect to %1$s", "连接到 %1$s", "Se connecter à %1$s", "Mit %1$s verbinden"),
+    "isle_wifi_password": ("Wi-Fi password", "WiFi 密码", "Mot de passe Wi-Fi", "WLAN-Passwort"),
+    "isle_wifi_connect": ("Connect", "连接", "Connecter", "Verbinden"),
+    "isle_wifi_connect_submitted": (
+        "New network saved. The device is restarting.",
+        "已保存新网络，设备正在重启",
+        "Nouveau réseau enregistré, redémarrage en cours",
+        "Neues Netzwerk gespeichert, Gerät startet neu",
+    ),
+    "isle_wifi_reboot_hint": (
+        "If the IP address changes, search for the lamp again in the device list.",
+        "重启后若 IP 变化，请回到设备列表重新搜索",
+        "Si la nouvelle adresse IP est différente, recherchez la lampe dans la liste des appareils.",
+        "Ändert sich die IP-Adresse, suche die Lampe erneut in der Geräteliste.",
+    ),
+    "isle_wifi_scan_failed": ("Scan failed", "扫描失败", "Analyse impossible", "Suche fehlgeschlagen"),
+    "isle_wifi_scan_failed_hint": (
+        "Make sure the lamp is online and try again.",
+        "请确认设备在线后重试",
+        "Vérifiez que la lampe est en ligne puis réessayez.",
+        "Prüfe, ob die Lampe online ist, und versuche es erneut.",
+    ),
+    "isle_wifi_connect_failed": (
+        "Settings not applied", "配置未生效", "Réglages non appliqués", "Einstellungen nicht übernommen",
+    ),
+    "isle_wifi_connect_failed_hint": (
+        "Check the connection. A device PIN must be removed first.",
+        "请检查设备连接；设备若设置过 PIN 需先解除",
+        "Vérifiez la connexion. Un code PIN doit être retiré au préalable.",
+        "Prüfe die Verbindung. Ein Geräte-PIN muss vorher entfernt werden.",
+    ),
 }
 
 FOLDERS = ("values", "values-zh", "values-fr", "values-de")

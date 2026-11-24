@@ -78,6 +78,7 @@ fun SettingsScreen(
     val currentLanguage = remember(context) { AppLanguageManager.current(context) }
     val followingSystem = remember(context) { AppLanguageManager.isFollowingSystem(context) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var showWifiPage by remember { mutableStateOf(false) }
 
     fun openWeb(path: String = "") {
         val target = device ?: return
@@ -113,6 +114,17 @@ fun SettingsScreen(
         val name = bootFx?.let { EffectCatalog.find(it)?.nameZh }
             ?: return context.getString(R.string.isle_boot_state_factory)
         return context.getString(R.string.isle_boot_state_effect, name)
+    }
+
+    // WiFi 已原生化：直接读设备的扫描结果与配置，不再跳系统浏览器
+    val wifiTarget = device
+    if (showWifiPage && wifiTarget != null) {
+        WifiSettingsPage(
+            address = wifiTarget.device.address,
+            onBack = { showWifiPage = false },
+            modifier = modifier,
+        )
+        return
     }
 
     IsleBackdrop(modifier = modifier) {
@@ -155,7 +167,7 @@ fun SettingsScreen(
                     value = device?.stateInfo?.info?.wifi?.let { wifi ->
                         wifi.channel?.let { "CH $it" }
                     } ?: stringResource(R.string.isle_open_web),
-                    onClick = { openWeb() },
+                    onClick = { showWifiPage = true },
                 )
             }
 
