@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 圆形自适应图标，内容与方形版一致（由系统裁切）：深空蓝灰底 + 双股青→蓝→紫螺旋光带 + 三圈青色涟漪。 -->
+<!--
+    圆形自适应图标，内容与方形版一致（由系统裁切）：
+    深空夜色底 + 两股青→蓝→紫旋转交织的丝绸光带 + 底部三圈同心青色涟漪。
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />

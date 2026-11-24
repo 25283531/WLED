@@ -27,3 +27,6 @@ _ci/
 # 本地校验产物（预览拼图、模拟器截图、GIF 调参样张）
 /build/
 /tmp/
+
+# 本地临时安装的 Python 图像库（Pillow/numpy wheel），不入库
+.pylibs/

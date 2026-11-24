@@ -1,199 +1,45 @@
-"""生成 APP 图标 PNG（mipmap-* 各密度）与自适应图标矢量层。
+"""从用户提供的原图生成 APP 图标资源（Android 各密度 + iOS 1024）。
 
-构图对应用户提供的「光屿 LumiIsle」图标原图：
-    深空蓝灰底上，一条自下而上螺旋上升的双股光带，
-    颜色由底部亮青 (#00F5FF) 过渡到中部蔚蓝 (#1E78FF) 再到顶部紫罗兰 (#AF28FF)，
-    脚下是三圈同心青色椭圆涟漪。
+原图：docs/assets/lumi_aurora_icon_source.jpg（1920×1920）
+    深空蓝灰夜色底上，两股自下而上旋转交织的半透明丝绸光带，
+    颜色由底部亮青 (#00F5FF) -> 中部蔚蓝 (#1E78FF) -> 顶部紫罗兰 (#AF28FF)，
+    脚下三圈同心青色椭圆涟漪。
+    与固件招牌灯效 221「极光之舞」(mode_lumi_aurora) 同源同色 —— 图标与灯效互相呼应。
 
-与固件的招牌灯效「极光之舞」(mode_lumi_aurora) 同源同色 —— 图标与灯效互相呼应。
+产出：
+  - 自适应图标（API 26+）：前景层放原图位图，背景层放同色深空渐变矢量，
+    单色层放主体剪影。系统按圆形/方形 mask 裁切。
+  - legacy 位图（API 24–25 / 小组件预览）：原图方形与圆形两个版本。
+  - 启动闪屏图标：原图方形（windowSplashScreenAnimatedIcon 引用）。
+  - iOS AppIcon：1024×1024（iOS 不接受带 alpha 的图标）。
 
-    - 自适应图标（API 26+）走 res/drawable/ic_launcher_{background,foreground}.xml 矢量
-    - API 24–25 没有自适应图标，用 mipmap-*/ic_launcher_rgb*.png 位图兜底
-    - 前景层主体必须落在中央 72/108 安全区内，涟漪可以压到下缘
+主体在原图中的位置（实测掩膜）：x 24.4%–75.6%、y 15.6%–85.9%，
+正好落在自适应图标的中央 72/108 安全区内，因此原图可以整幅映射到 108dp 画布，
+圆形 mask 下丝带尖端与底部涟漪都不会被削掉 —— 无需缩放，100% 保真。
 
 用法:
-    python tools/gen_app_icon.py            # 写入 res/mipmap-*/
-    python tools/gen_app_icon.py --preview  # 额外输出预览到 build/icon-preview.png
+    python tools/gen_app_icon.py             # 写入 res/mipmap-*/ 与 iOS AppIcon
+    python tools/gen_app_icon.py --preview   # 额外输出预览到 build/icon-preview.png
 """
 
 from __future__ import annotations
 
 import argparse
-import math
+import json
 import os
 
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "app", "app", "src", "main", "res")
+SOURCE = os.path.join(ROOT, "docs", "assets", "lumi_aurora_icon_source.jpg")
+IOS_ICON_DIR = os.path.join(ROOT, "app", "iosApp", "wled", "Assets.xcassets", "AppIcon.appiconset")
 
-CANVAS = 108.0
+# 自适应图标画布：前景/背景/单色层各 108dp，系统 mask 保证中央 72dp 可见
+ADAPTIVE_CANVAS_DP = 108.0
 
-# ------------------------------------------------------------------ 构图参数
-RIBBON_CX = 54.0
-RIBBON_TOP = 13.0          # 光带顶端（画布坐标）
-RIBBON_BOTTOM = 70.0       # 光带底端
-RIBBON_AMP = 14.5          # 螺旋横向摆幅（半宽）
-RIBBON_TURNS = 1.15        # 上升过程中绕轴的圈数
-RIBBON_THICK = 1.9         # 丝带半厚
-RIBBON_SOFT = 1.5          # 边缘羽化半径（画布单位）
-
-# 底部涟漪：三圈同心椭圆
-RIPPLE_CY = 75.0
-RIPPLE_RX = [31.0, 21.5, 12.5]
-RIPPLE_RY = [8.6, 6.0, 3.5]
-RIPPLE_W = 1.0
-
-# 配色（与固件 mode_lumi_aurora 一致）
-CYAN = (0, 245, 255)
-BLUE = (30, 120, 255)
-VIOLET = (175, 40, 255)
-
-BG_STOPS = [
-    (0.00, (30, 38, 52)),
-    (0.55, (24, 31, 44)),
-    (1.00, (18, 24, 36)),
-]
-
-RING_COLOR = (0, 226, 245)
-
-
-def _diag_field(stops, size: int) -> np.ndarray:
-    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32) / max(1, size - 1)
-    t = (xx + yy) * 0.5
-    out = np.zeros((size, size, 3), dtype=np.float32)
-    for j in range(3):
-        out[..., j] = np.interp(t, [s[0] for s in stops], [s[1][j] for s in stops])
-    return out
-
-
-def _rot_ellipse(cx, cy, a, b, tx, ty, segments: int = 28):
-    """生成一个长轴沿 (tx,ty) 的椭圆多边形顶点。"""
-    px, py = -ty, tx
-    pts = []
-    for i in range(segments):
-        th = 2 * math.pi * i / segments
-        u = a * math.cos(th)
-        v = b * math.sin(th)
-        pts.append((cx + u * tx + v * px, cy + u * ty + v * py))
-    return pts
-
-
-def _ribbon_points(phase: float, k: float, steps: int = 420):
-    """螺旋光带上的采样点：(cx, cy, 切线tx, 切线ty, 高度比u)。"""
-    for i in range(steps):
-        u = i / (steps - 1)
-        ang = phase + u * RIBBON_TURNS * 2 * math.pi
-        cx = RIBBON_CX * k + math.sin(ang) * RIBBON_AMP * k
-        cy = (RIBBON_BOTTOM + (RIBBON_TOP - RIBBON_BOTTOM) * u) * k
-        dx = math.cos(ang) * RIBBON_AMP * k * RIBBON_TURNS * 2 * math.pi
-        dy = (RIBBON_TOP - RIBBON_BOTTOM) * k
-        norm = math.hypot(dx, dy) or 1.0
-        yield cx, cy, dx / norm, dy / norm, u
-
-
-def _ribbon_alpha(size: int, k: float, phase: float) -> np.ndarray:
-    """光带的 alpha 场（形状）。"""
-    S = size
-    shape = Image.new("L", (S, S), 0)
-    draw = ImageDraw.Draw(shape)
-    half_len = RIBBON_THICK * 1.25 * k
-    half_wid = RIBBON_THICK * k
-    for cx, cy, tx, ty, _u in _ribbon_points(phase, k):
-        draw.polygon(_rot_ellipse(cx, cy, half_len, half_wid, tx, ty), fill=255)
-    shape = shape.filter(ImageFilter.GaussianBlur(max(1, int(RIBBON_SOFT * k * 0.5))))
-    return np.asarray(shape, dtype=np.float32) / 255.0
-
-
-def _ribbon_rgb(size: int, k: float) -> np.ndarray:
-    """按高度着色的颜色场。"""
-    S = size
-    ys = np.arange(S, dtype=np.float32)[:, None]
-    span = max(1e-6, (RIBBON_BOTTOM - RIBBON_TOP) * k)
-    h = np.clip((RIBBON_BOTTOM * k - ys) / span, 0.0, 1.0)
-    out = np.zeros((S, S, 3), dtype=np.float32)
-    for j in range(3):
-        out[..., j] = np.interp(h, [0.0, 0.5, 1.0], [CYAN[j], BLUE[j], VIOLET[j]])
-    return out
-
-
-def _ripple_layer(size: int, k: float) -> np.ndarray:
-    """底部三圈青色涟漪的 alpha 场。"""
-    S = size
-    img = Image.new("L", (S, S), 0)
-    draw = ImageDraw.Draw(img)
-    for rx, ry in zip(RIPPLE_RX, RIPPLE_RY):
-        draw.ellipse(
-            [(RIBBON_CX - rx) * k, (RIPPLE_CY - ry) * k,
-             (RIBBON_CX + rx) * k, (RIPPLE_CY + ry) * k],
-            outline=255,
-            width=max(1, int(RIPPLE_W * k)),
-        )
-    img = img.filter(ImageFilter.GaussianBlur(max(1, int(0.7 * k))))
-    return np.asarray(img, dtype=np.float32) / 255.0
-
-
-def render(size: int, ss: int = 4, round_mask: bool = False) -> Image.Image:
-    """渲染一张 size×size 的全出血方形图标。"""
-    S = size * ss
-    k = S / CANVAS
-
-    canvas = np.zeros((S, S, 4), dtype=np.float32)
-    canvas[..., :3] = _diag_field(BG_STOPS, S)
-    canvas[..., 3] = 255.0
-
-    # 底部青色涟漪（在光带之下）
-    ra = _ripple_layer(S, k)
-    ring = np.broadcast_to(np.array(RING_COLOR, dtype=np.float32), (S, S, 3))
-    canvas[..., :3] = canvas[..., :3] * (1 - ra[..., None] * 0.92) + ring * (ra[..., None] * 0.92)
-
-    # 两束反向交织的螺旋光带
-    base_rgb = _ribbon_rgb(S, k)
-    total_rgb = np.zeros((S, S, 3), dtype=np.float32)
-    total_a = np.zeros((S, S), dtype=np.float32)
-    for phase, bright in ((0.0, 1.0), (math.pi, 0.62)):
-        a = _ribbon_alpha(S, k, phase)
-        total_rgb = total_rgb + base_rgb * bright * a[..., None]
-        total_a = np.clip(total_a + a, 0.0, 1.0)
-    total_rgb = np.clip(total_rgb, 0, 255)
-
-    # 柔光外晕
-    glow = Image.fromarray((np.clip(total_a, 0, 1) * 255).astype(np.uint8))
-    glow = glow.filter(ImageFilter.GaussianBlur(max(1, int(4.2 * k))))
-    ga = np.asarray(glow, dtype=np.float32) / 255.0
-    canvas[..., :3] = canvas[..., :3] + total_rgb * 0.09 + ring * ga[..., None] * 0.10
-
-    # 光带本体
-    canvas[..., :3] = canvas[..., :3] * (1 - total_a[..., None]) + total_rgb * total_a[..., None]
-
-    img = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8), "RGBA")
-    if round_mask:
-        mask = Image.new("L", (S, S), 0)
-        ImageDraw.Draw(mask).ellipse([0, 0, S - 1, S - 1], fill=255)
-        img.putalpha(ImageChops.multiply(img.getchannel("A"), mask))
-    return img.resize((size, size), Image.LANCZOS)
-
-
-def render_mono(size: int, ss: int = 4) -> Image.Image:
-    """Android 13 主题图标：纯白剪影，只有形状没有颜色。"""
-    S = size * ss
-    k = S / CANVAS
-
-    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    for phase in (0.0, math.pi):
-        a = _ribbon_alpha(S, k, phase)
-        layer = Image.new("RGBA", (S, S), (255, 255, 255, 0))
-        layer.putalpha(Image.fromarray((a * 255).astype(np.uint8)))
-        img = Image.alpha_composite(img, layer)
-
-    ra = _ripple_layer(S, k)
-    layer = Image.new("RGBA", (S, S), (255, 255, 255, 0))
-    layer.putalpha(Image.fromarray((ra * 255).astype(np.uint8)))
-    img = Image.alpha_composite(img, layer)
-    return img.resize((size, size), Image.LANCZOS)
-
-
+# legacy 图标各密度边长（dp == px）
 DENSITIES = {
     "mdpi": 48,
     "hdpi": 72,
@@ -202,6 +48,92 @@ DENSITIES = {
     "xxxhdpi": 192,
 }
 
+# 与原图背景一致的深空色（自适应图标的背景层矢量用；采样自原图四角 rgb≈(33,41,54)）
+BG_STOPS = [
+    (0.00, (31, 39, 53)),
+    (0.55, (28, 35, 48)),
+    (1.00, (23, 30, 42)),
+]
+
+
+def load_source() -> Image.Image:
+    """载入原图（RGB，去掉 JPEG 附带的 profile 与 EXIF 方向）。"""
+    img = Image.open(SOURCE)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    return img
+
+
+def _silhouette_alpha(src: Image.Image) -> np.ndarray:
+    """主体剪影 alpha：用大半径模糊估计背景场，取超出背景的部分并软化边缘。
+
+    丝带本体与底部涟漪的亮度都远高于背景，辉光则平滑衰减到背景色，
+    因此「与背景场的差」比固定亮度阈值更贴合这张图的实际结构。
+    """
+    a = np.asarray(src, dtype=np.float32)
+    bg = np.asarray(src.filter(ImageFilter.GaussianBlur(120)), dtype=np.float32)
+    d = np.abs(a - bg).max(axis=2)
+    return np.clip((d - 10.0) / 22.0, 0.0, 1.0)
+
+
+def render_legacy(src: Image.Image, size: int, round_mask: bool = False) -> Image.Image:
+    """legacy 图标：原图铺满 size×size。
+
+    圆形版保留 alpha（角透明），**不能**再 convert("RGB") —— 那会把 alpha 丢掉，
+    四角又变回方形原图（上一轮脚本就有这个 bug，圆标与方标字节数完全一样）。
+    """
+    img = src.resize((size, size), Image.LANCZOS)
+    if round_mask:
+        mask = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, size - 1, size - 1], fill=255)
+        img = img.convert("RGBA")
+        img.putalpha(mask)
+    return img
+
+
+def render_adaptive_foreground(src: Image.Image, size: int) -> Image.Image:
+    """自适应图标前景层：原图铺满 108dp 画布（size 已按密度换算）。"""
+    return src.resize((size, size), Image.LANCZOS).convert("RGBA")
+
+
+def render_monochrome(src: Image.Image, size: int) -> Image.Image:
+    """Android 13+ 主题图标：只取主体剪影，由系统上色。"""
+    alpha = _silhouette_alpha(src)
+    mask = Image.fromarray((alpha * 255).astype(np.uint8), "L").resize((size, size), Image.LANCZOS)
+    rgba = np.zeros((size, size, 4), dtype=np.uint8)
+    rgba[..., 0:3] = 255
+    rgba[..., 3] = np.asarray(mask, dtype=np.uint8)
+    return Image.fromarray(rgba, "RGBA")
+
+
+def render_splash(src: Image.Image, size: int) -> Image.Image:
+    """启动闪屏图标：去背景的彩色丝带与涟漪（透明底）。
+
+    闪屏会把图标居中画在圆形底上，若沿用带深空底的整图会露出一个方块。
+    这里保留主体颜色、把背景底色按 alpha 权重扣掉：
+    alpha=1 处颜色不变，alpha→0 处褪回背景色，与闪屏底色自然融合。
+    """
+    alpha = _silhouette_alpha(src)
+    a = np.asarray(src, dtype=np.float32)
+    bg = np.asarray(src.filter(ImageFilter.GaussianBlur(120)), dtype=np.float32)
+    # 物理反解：观测色 = 主体色×α + 背景色×(1-α)  ⇒  主体色 = (观测色 − 背景×(1−α)) / α
+    # 直接用「观测色 − 背景×(1−α)」会在半透明边缘留下一圈发暗的描边，
+    # 除以 α 把辉光提亮回它该有的亮度，闪屏底上才是柔光而不是暗边。
+    safe_a = np.maximum(alpha, 0.08)[..., None]
+    rgb = np.clip((a - bg * (1.0 - alpha[..., None])) / safe_a, 0, 255)
+
+    # 先缩到目标尺寸再拼 RGBA（numpy 不能广播不同尺寸）
+    rgb = np.asarray(Image.fromarray(rgb.astype(np.uint8), "RGB").resize((size, size), Image.LANCZOS), dtype=np.float32)
+    alpha = np.asarray(
+        Image.fromarray((alpha * 255).astype(np.uint8), "L").resize((size, size), Image.LANCZOS),
+        dtype=np.float32,
+    ) / 255.0
+
+    rgba = np.zeros((size, size, 4), dtype=np.float32)
+    rgba[..., 0:3] = rgb
+    rgba[..., 3] = alpha * 255.0
+    return Image.fromarray(rgba.astype(np.uint8), "RGBA")
+
 
 def write_png(img: Image.Image, folder: str, name: str) -> None:
     path = os.path.join(RES, folder, name)
@@ -209,30 +141,76 @@ def write_png(img: Image.Image, folder: str, name: str) -> None:
     img.save(path, "PNG", optimize=True)
 
 
+def write_ios_icon(src: Image.Image) -> None:
+    """iOS AppIcon：1024×1024，且不能带 alpha 通道。"""
+    os.makedirs(IOS_ICON_DIR, exist_ok=True)
+    out = os.path.join(IOS_ICON_DIR, "wled-icon.png")
+    src.resize((1024, 1024), Image.LANCZOS).convert("RGB").save(out, "PNG", optimize=True)
+    print(f"{'ios AppIcon':18s} 1024×1024 -> {os.path.relpath(out, ROOT)}")
+
+    # asset catalog 只按 Contents.json 里的 filename 取图，pbxproj 不引用具体文件名，
+    # 所以把旧的 wled-icon-gray.png 换成语义贴切的新名是安全的。
+    manifest = os.path.join(IOS_ICON_DIR, "Contents.json")
+    if os.path.exists(manifest):
+        data = json.load(open(manifest, encoding="utf-8"))
+        changed = False
+        for entry in data.get("images", []):
+            if entry.get("filename") == "wled-icon-gray.png":
+                entry["filename"] = "wled-icon.png"
+                changed = True
+        if changed:
+            with open(manifest, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+            print("  更新 Contents.json filename -> wled-icon.png")
+
+    stale = os.path.join(IOS_ICON_DIR, "wled-icon-gray.png")
+    if os.path.exists(stale):
+        os.remove(stale)
+        print("  删除旧图标 wled-icon-gray.png")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--preview", action="store_true")
     args = ap.parse_args()
 
-    for density, size in DENSITIES.items():
+    src = load_source()
+    print(f"原图: {os.path.relpath(SOURCE, ROOT)}  {src.size[0]}×{src.size[1]}")
+
+    for density, legacy_size in DENSITIES.items():
         folder = f"mipmap-{density}"
-        write_png(render(size), folder, "ic_launcher_rgb.png")
-        write_png(render(size, round_mask=True), folder, "ic_launcher_rgb_round.png")
-        write_png(render(size), folder, "ic_launcher_rgb_foreground.png")
-        write_png(render_mono(size), folder, "ic_launcher_monochrome.png")
-        print(f"{folder:18s} {size}×{size}")
+        # 自适应图标的层是 108dp 画布，按密度换算成像素
+        layer_size = int(round(legacy_size * ADAPTIVE_CANVAS_DP / 48.0))
+
+        write_png(render_legacy(src, legacy_size), folder, "ic_launcher_rgb.png")
+        write_png(render_legacy(src, legacy_size, round_mask=True), folder, "ic_launcher_rgb_round.png")
+        # 闪屏图标按 108dp 层出图：SplashScreen 会把它放大到图标槽位，
+        # 用 legacy 尺寸会放大 4 倍糊掉
+        write_png(render_splash(src, layer_size), folder, "ic_launcher_rgb_foreground.png")
+        write_png(render_adaptive_foreground(src, layer_size), folder, "ic_launcher_foreground_adaptive.png")
+        write_png(render_monochrome(src, layer_size), folder, "ic_launcher_monochrome.png")
+        print(f"{folder:18s} legacy {legacy_size}×{legacy_size}   adaptive/闪屏 层 {layer_size}×{layer_size}")
+
+    write_ios_icon(src)
 
     if args.preview:
-        sheet = Image.new("RGB", (192 * 4 + 60, 192 + 40), (18, 20, 26))
-        x = 10
+        sheet = Image.new("RGB", (192 * 5 + 80, 192 + 60), (16, 18, 24))
+        x = 12
         for size in (48, 72, 96):
-            sheet.paste(render(size).convert("RGB"), (x, 20))
-            x += size + 10
-        sheet.paste(render_mono(192).convert("RGB"), (x, 20))
+            sheet.paste(render_legacy(src, size), (x, 24))
+            x += size + 12
+        sheet.paste(render_legacy(src, 192, round_mask=True), (x, 24))
+        x += 204
+        splash = render_splash(src, 192)
+        sheet.paste(splash, (x, 24), splash)
+        x += 204
+        mono = render_monochrome(src, 192)
+        sheet.paste(mono, (x, 24), mono)  # 用 alpha 合成，否则 convert("RGB") 会丢掉剪影
         out = os.path.join(ROOT, "build", "icon-preview.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         sheet.save(out)
-        print("预览:", out)
+        print("预览:", os.path.relpath(out, ROOT))
 
 
 if __name__ == "__main__":
