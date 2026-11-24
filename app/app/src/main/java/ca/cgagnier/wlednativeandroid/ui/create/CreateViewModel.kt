@@ -33,11 +33,24 @@ enum class PixelTool { BRUSH, ERASER, PICKER }
 /** 一条操作结果，交给界面弹提示。 */
 data class CreateStatus(val message: String, val isError: Boolean)
 
-private const val SCROLLING_TEXT_EFFECT = 123
+/**
+ * 按固件英文名反查灯效 id，取不到直接崩。
+ *
+ * 创作工坊依赖两个灯效：Image（显示上传的 GIF）和 Scrolling Text（渲染滚动字幕）。
+ * 这两个 id 曾经被写死成数字，而固件调整效果槽位后，写死的数字会静默指向另一个效果 ——
+ * 38 一度是 Image，槽位对齐后变成 Aurora（极光）；123 一度是 Scrolling Text，现在是
+ * Drift Rose（玫瑰漂移）。表现是「上传的图案显示成极光」「投送的字幕变成玫瑰漂移」，
+ * 而且不报错、很难联想到是 id 漂移。改成按名反查，槽位变更自动跟随。
+ */
+private fun requireEffectId(name: String): Int =
+    EffectCatalog.byName(name)?.id
+        ?: error("固件灯效目录缺少「$name」，请重新运行 tools/gen_effect_catalog.py")
+
+private val IMAGE_EFFECT = requireEffectId("Image")
+private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
 
 /** `seg.c2` = 255 时固件映射到 font 4（5×12），并启用加粗笔画。 */
 private const val SCROLLING_TEXT_BIG_FONT = 255
-private const val IMAGE_EFFECT = 38
 private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
 private const val DEFAULT_GRID_ROWS = 10

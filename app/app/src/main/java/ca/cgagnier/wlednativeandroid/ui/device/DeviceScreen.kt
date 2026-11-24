@@ -51,6 +51,7 @@ import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
+import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
 import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
@@ -697,14 +698,19 @@ private fun QuickCard(
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 精选灯效用产品名（与灯效库卡片一致），点下去拿到的也是同一套推荐观感。
+    val curated = CuratedEffects.find(effect.id)
     Box(
         modifier = modifier
             .aspectRatio(1.55f)
             .background(Color(0xFF101218), RoundedCornerShape(20.dp))
             .border(
                 width = if (isActive) 1.6.dp else 1.dp,
-                brush = if (isActive) Brush.linearGradient(IsleColors.Accent)
-                else Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
+                brush = if (isActive) {
+                    Brush.linearGradient(curated?.gradient?.map { Color(it) } ?: IsleColors.Accent)
+                } else {
+                    Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke))
+                },
                 shape = RoundedCornerShape(20.dp),
             )
             .clickable(onClick = onClick),
@@ -726,16 +732,17 @@ private fun QuickCard(
                 .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
         ) {
             Text(
-                text = effect.nameZh,
+                text = curated?.title ?: effect.nameZh,
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (effect.hasChineseName) {
+            val subtitle = curated?.tagline ?: effect.name.takeIf { effect.hasChineseName }
+            if (subtitle != null) {
                 Text(
-                    text = effect.name,
+                    text = subtitle,
                     color = Color(0xFFB9C0CC),
                     fontSize = 10.sp,
                     maxLines = 1,

@@ -3,7 +3,6 @@ package ca.cgagnier.wlednativeandroid.ui.device
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ca.cgagnier.wlednativeandroid.model.FavoriteEffect
-import ca.cgagnier.wlednativeandroid.model.restoreFrom
 import ca.cgagnier.wlednativeandroid.model.wledapi.Nightlight
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.model.wledapi.State
@@ -13,6 +12,7 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.buildEffectSegment
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
@@ -66,8 +66,13 @@ class DeviceHomeViewModel(
     private val _mood = MutableStateFlow(EffectMood.AURORA)
     val mood: StateFlow<EffectMood> = _mood.asStateFlow()
 
-    private val _syncEnabled = MutableStateFlow(false)
-    val syncEnabled: StateFlow<Boolean> = _syncEnabled.asStateFlow()
+    /**
+     * 多灯同步开关。
+     *
+     * 存在 [SelectedDeviceStore] 里而不是本 ViewModel 的私有状态 —— 它是设备级偏好，
+     * 「灯效库」点灯效时也要跟随，否则开了同步却只有当前这台灯在变。
+     */
+    val syncEnabled: StateFlow<Boolean> = selectedDeviceStore.syncEnabled
 
     fun selectDevice(macAddress: String?) = selectedDeviceStore.select(macAddress)
 
@@ -76,7 +81,7 @@ class DeviceHomeViewModel(
     }
 
     fun setSyncEnabled(enabled: Boolean) {
-        _syncEnabled.value = enabled
+        selectedDeviceStore.setSyncEnabled(enabled)
     }
 
     fun setPower(device: DeviceWithState, isOn: Boolean) = broadcast(device) { mac ->
@@ -123,6 +128,7 @@ class DeviceHomeViewModel(
     /**
      * 应用灯效。
      *
+     * 参数来源的优先级由 [buildEffectSegment] 统一决定：收藏快照 > 精选配方 > 设备当前值。
      * [favorite] 非空时是这张卡片的收藏记录，会**连同收藏时存下的速度、强度、
      * 调色板与三色一起恢复** —— 否则收藏就只是个书签，调不出收藏当时的观感。
      */
@@ -132,7 +138,7 @@ class DeviceHomeViewModel(
         favorite: FavoriteEffect? = null,
     ) = broadcast(device) { mac ->
         deviceConnectionManager.sendSegmentPatch(mac) { segment ->
-            segment.copy(effect = effectId).restoreFrom(favorite)
+            buildEffectSegment(segment, effectId, favorite)
         }
     }
 
@@ -189,7 +195,7 @@ class DeviceHomeViewModel(
         }
     }
 
-    private fun targets(device: DeviceWithState): List<String> = if (_syncEnabled.value) {
+    private fun targets(device: DeviceWithState): List<String> = if (selectedDeviceStore.syncEnabled.value) {
         devices.value.filter { it.isOnline }.map { it.device.macAddress }
     } else {
         listOf(device.device.macAddress)

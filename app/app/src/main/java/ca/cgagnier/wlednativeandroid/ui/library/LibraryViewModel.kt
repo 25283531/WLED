@@ -3,7 +3,6 @@ package ca.cgagnier.wlednativeandroid.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ca.cgagnier.wlednativeandroid.model.FavoriteEffect
-import ca.cgagnier.wlednativeandroid.model.restoreFrom
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
@@ -11,6 +10,7 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectFilter
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
+import ca.cgagnier.wlednativeandroid.ui.effects.buildEffectSegment
 import ca.cgagnier.wlednativeandroid.ui.effects.filterEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
@@ -83,8 +83,10 @@ class LibraryViewModel(
     /**
      * 应用灯效。
      *
-     * 若该灯效已被收藏，则**连同收藏时存下的速度、强度、调色板与三色一起恢复**，
-     * 与首页快捷卡片的行为一致。
+     * 参数来源的优先级由 [buildEffectSegment] 统一决定：
+     * 收藏快照（用户自己调过并存下的那套）> 精选配方（该灯效的推荐观感）> 设备当前值。
+     *
+     * 与首页快捷卡片走同一套逻辑，所以两处点出来的观感一致。
      */
     fun applyEffect(
         device: DeviceWithState,
@@ -93,12 +95,29 @@ class LibraryViewModel(
     ) {
         viewModelScope.launch {
             val favorite = favoriteEffectDao.findByEffectId(effectId)
-            val success = deviceConnectionManager.sendSegmentPatch(device.device.macAddress) { segment ->
-                segment.copy(effect = effectId).restoreFrom(favorite)
+            val macs = targets(device)
+            var allSucceeded = true
+            for (mac in macs) {
+                val success = deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                    buildEffectSegment(segment, effectId, favorite)
+                }
+                if (!success) allSucceeded = false
             }
-            onResult(success)
+            onResult(allSucceeded)
         }
     }
+
+    /**
+     * 多灯同步开启时下发到所有在线设备，否则只下发当前设备。
+     *
+     * 同步开关存在 [SelectedDeviceStore] 里，是设备级偏好 —— 首页和灯效库读的是同一个值。
+     */
+    private fun targets(device: DeviceWithState): List<String> =
+        if (selectedDeviceStore.syncEnabled.value) {
+            devices.value.filter { it.isOnline }.map { it.device.macAddress }
+        } else {
+            listOf(device.device.macAddress)
+        }
 
     fun toggleFavorite(device: DeviceWithState, effect: EffectInfo) {
         viewModelScope.launch {

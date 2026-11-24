@@ -237,6 +237,16 @@ object EffectCatalog {
 
     fun nameOf(id: Int?): String? = find(id)?.name
 
+    /**
+     * 按固件英文名反查灯效 id。
+     *
+     * 业务代码**不应硬编码灯效 id** —— 固件调整效果槽位后 id 会整体漂移，
+     * 写死的数字会静默指向另一个效果。例如固件把 Image 从 38 挪到 53 之后，
+     * 写死 38 的代码会切到 Aurora（极光）；同理写死 123 会切到 Drift Rose（玫瑰漂移）。
+     * 英文名是稳定的（固件改了名字才需要改这里），按名反查可让槽位变更自动跟随。
+     */
+    fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name }
+
     val popular: List<EffectInfo> = all.filter { it.isPopular }
 
     fun byCategory(category: EffectCategory): List<EffectInfo> = all.filter { it.category == category }

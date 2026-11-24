@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
+import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectFilter
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
@@ -228,19 +229,37 @@ private fun LibraryCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
+    // 精选灯效有自己的产品名与推荐观感，卡片上用产品名而不是固件技术名 ——
+    // 「流光溢彩」比「Aurora / 极光」好认得多，而点下去拿到的也正是那套推荐观感。
+    val curated = CuratedEffects.find(effect.id)
+    val shape = RoundedCornerShape(18.dp)
+    val accent = curated?.gradient?.map { Color(it) } ?: IsleColors.Accent
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1.32f)
-            .background(Color(0xFF101218), RoundedCornerShape(18.dp))
+            .background(Color(0xFF101218), shape)
             .border(
                 width = if (isActive) 1.6.dp else 1.dp,
-                brush = if (isActive) Brush.linearGradient(IsleColors.Accent)
+                brush = if (isActive) Brush.linearGradient(accent)
                 else Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
-                shape = RoundedCornerShape(18.dp),
+                shape = shape,
             )
             .clickable(onClick = onClick),
     ) {
+        // 精选灯效的渐变底衬：GIF 解码完成前不会闪出灰底，
+        // 同时让每张精选卡片有独立的色彩标识。
+        if (curated != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            curated.gradient.map { Color(it).copy(alpha = 0.38f) },
+                        ),
+                    ),
+            )
+        }
         EffectArtwork(effect = effect, modifier = Modifier.fillMaxSize())
         Box(
             modifier = Modifier
@@ -257,16 +276,17 @@ private fun LibraryCard(
                 .padding(start = 12.dp, end = 12.dp, bottom = 9.dp),
         ) {
             Text(
-                text = effect.nameZh,
+                text = curated?.title ?: effect.nameZh,
                 color = Color.White,
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (effect.hasChineseName) {
+            val subtitle = curated?.tagline ?: effect.name.takeIf { effect.hasChineseName }
+            if (subtitle != null) {
                 Text(
-                    text = effect.name,
+                    text = subtitle,
                     color = Color(0xFFB4BCC9),
                     fontSize = 10.sp,
                     maxLines = 1,
