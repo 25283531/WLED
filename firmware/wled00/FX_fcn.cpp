@@ -708,46 +708,7 @@ Segment &Segment::setOption(uint8_t n, bool val) {
   return *this;
 }
 
-#ifndef WLED_KEEP_ALL_FX
-// color-lamp: 相似度>80%的灯效已合并, 旧ID映射到保留的灯效 (兼容旧预设/API)
-static const uint8_t fxDedupAlias[][2] PROGMEM = {
-  {FX_MODE_COLOR_WIPE_RANDOM, FX_MODE_COLOR_WIPE},
-  {FX_MODE_COLOR_SWEEP_RANDOM, FX_MODE_COLOR_SWEEP},
-  {FX_MODE_CHASE_RANDOM, FX_MODE_CHASE_COLOR},
-  {FX_MODE_CHASE_RAINBOW, FX_MODE_CHASE_COLOR},
-  {FX_MODE_THEATER_CHASE_RAINBOW, FX_MODE_THEATER_CHASE},
-  {FX_MODE_RUNNING_COLOR, FX_MODE_THEATER_CHASE},
-  {FX_MODE_SAW, FX_MODE_RUNNING_LIGHTS},
-  {FX_MODE_RUNNING_DUAL, FX_MODE_RUNNING_LIGHTS},
-  {FX_MODE_DUAL_SCAN, FX_MODE_SCAN},
-  {FX_MODE_DUAL_LARSON_SCANNER, FX_MODE_LARSON_SCANNER},
-  {FX_MODE_BLINK_RAINBOW, FX_MODE_BLINK},
-  {FX_MODE_STROBE_RAINBOW, FX_MODE_STROBE},
-  {FX_MODE_SINELON_DUAL, FX_MODE_SINELON},
-  {FX_MODE_SINELON_RAINBOW, FX_MODE_SINELON},
-  {FX_MODE_TWINKLECAT, FX_MODE_TWINKLEFOX},
-  {FX_MODE_PRIDE_2015, FX_MODE_COLORWAVES},
-  {FX_MODE_PHASEDNOISE, FX_MODE_PHASED},
-  {FX_MODE_LOADING, FX_MODE_GRADIENT},
-  {FX_MODE_DISSOLVE_RANDOM, FX_MODE_DISSOLVE},
-  {FX_MODE_DYNAMIC_SMOOTH, FX_MODE_DYNAMIC},
-  {FX_MODE_RIPPLE_RAINBOW, FX_MODE_RIPPLE},
-  {FX_MODE_SPOTS_FADE, FX_MODE_SPOTS},
-  {FX_MODE_NOISE16_2, FX_MODE_NOISE16_1},
-  {FX_MODE_NOISE16_3, FX_MODE_NOISE16_1},
-  {FX_MODE_HYPER_SPARKLE, FX_MODE_FLASH_SPARKLE},
-  {FX_MODE_GRAVCENTRIC, FX_MODE_GRAVCENTER},
-  {FX_MODE_GRAVFREQ, FX_MODE_GRAVIMETER},
-  {FX_MODE_PUDDLEPEAK, FX_MODE_PUDDLES},
-  {FX_MODE_FREQMATRIX, FX_MODE_FREQWAVE},
-};
-#endif
-
 Segment &Segment::setMode(uint8_t fx, bool loadDefaults) {
-#ifndef WLED_KEEP_ALL_FX
-  for (size_t a = 0; a < sizeof(fxDedupAlias)/sizeof(fxDedupAlias[0]); a++)
-    if (fx == pgm_read_byte(&fxDedupAlias[a][0])) { fx = pgm_read_byte(&fxDedupAlias[a][1]); break; }
-#endif
   // skip reserved
   while (fx < strip.getModeCount() && strncmp_P("RSVD", strip.getModeData(fx), 4) == 0) fx++;
   if (fx >= strip.getModeCount()) fx = 0; // set solid mode

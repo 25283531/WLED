@@ -896,15 +896,6 @@ static void chase(uint32_t color1, uint32_t color2, uint32_t color3, bool do_pal
   uint16_t counter = strip.now * ((SEGMENT.speed >> 2) + 1);
   uint16_t a = (counter * SEGLEN) >> 16;
 
-  bool chase_random = (SEGMENT.mode == FX_MODE_CHASE_RANDOM);
-  if (chase_random) {
-    if (a < SEGENV.step) //we hit the start again, choose new color for Chase random
-    {
-      SEGENV.aux1 = SEGENV.aux0; //store previous random color
-      SEGENV.aux0 = get_random_wheel_index(SEGENV.aux0);
-    }
-    color1 = SEGMENT.color_wheel(SEGENV.aux0);
-  }
   SEGENV.step = a;
 
   // Use intensity setting to vary chase up to 1/2 string length
@@ -5211,6 +5202,8 @@ static const char _data_FX_MODE_2DANALOGCLOCK[] PROGMEM = "Analog Clock 2D@,,,,,
 // 2. 两条反向交织螺旋上升的半透明极光丝带，交叉处自动产生高亮丝绸叠加质感
 // 3. 色彩自下而上由 亮青 (#00F5FF) -> 蔚蓝 (#1E78FF) -> 紫罗兰 (#AF28FF) 平滑过渡
 // 4. 开机前 2.2 秒自带"由底向上点亮升腾"的迎宾动画
+// 5. 2D 逻辑 y 轴口径：y=0 在物理顶部、y=rows-1 在物理底部（实测 ledmap.json：
+//    map[0]=22、map[198]=0，物理 0 号灯在柱底）。底部涟漪、自下而上渐变与升腾遮罩均按此翻转。
 //
 // 相对上游写法的适配（本仓库 WLED 版本）：
 //   - 效果函数签名必须是 void（mode_ptr = void (*)(void)），不是 uint16_t
@@ -5241,8 +5234,10 @@ void mode_lumi_aurora(void) {
   uint8_t rippleBreath = beatsin8_t(18, 90, 210);
 
   for (uint16_t y = 0; y < rows; y++) {
-    // 归一化高度比例 posY: 0 (最底部) -> 255 (最顶部)
-    uint8_t posY = (y * 255) / (rows - 1);
+    // 本机 2D 逻辑坐标的 y 方向：y=0 在物理顶部，y=rows-1 在物理底部
+    // （实测 ledmap.json：map[0]=22、map[198]=0，物理 0 号灯在柱底 ⇒ 逻辑 y 向下递增）
+    // 归一化高度比例 posY: 0 (最底部) -> 255 (最顶部)，因此需要翻转 y。
+    uint8_t posY = ((rows - 1 - y) * 255) / (rows - 1);
 
     // 开机升腾遮罩：未升腾到的高处保持暗场
     uint8_t heightMask = 255;
@@ -5300,9 +5295,9 @@ void mode_lumi_aurora(void) {
       pixel.g = qadd8(pixel.g, secondRibbon.g);
       pixel.b = qadd8(pixel.b, secondRibbon.b);
 
-      // 叠加底部第 0~1 行的青色声波涟漪底座
-      if (y <= 1) {
-        uint8_t ringStrength = (y == 0) ? rippleBreath : (rippleBreath >> 2);
+      // 叠加柱底第 rows-1~rows-2 行的青色声波涟漪底座（y 越大越靠下）
+      if (y >= rows - 2) {
+        uint8_t ringStrength = (y == rows - 1) ? rippleBreath : (rippleBreath >> 2);
         CRGB baseRing = CRGB(0, scale8(220, ringStrength), scale8(255, ringStrength));
         pixel.r = qadd8(pixel.r, baseRing.r);
         pixel.g = qadd8(pixel.g, baseRing.g);
@@ -11200,85 +11195,40 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_BLINK, &mode_blink, _data_FX_MODE_BLINK);
   addEffect(FX_MODE_BREATH, &mode_breath, _data_FX_MODE_BREATH);
   addEffect(FX_MODE_COLOR_WIPE, &mode_color_wipe, _data_FX_MODE_COLOR_WIPE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_COLOR_WIPE_RANDOM, &mode_color_wipe_random, _data_FX_MODE_COLOR_WIPE_RANDOM);
-  #endif // dedup: ~ FX_MODE_COLOR_WIPE
   addEffect(FX_MODE_RANDOM_COLOR, &mode_random_color, _data_FX_MODE_RANDOM_COLOR);
   addEffect(FX_MODE_COLOR_SWEEP, &mode_color_sweep, _data_FX_MODE_COLOR_SWEEP);
   addEffect(FX_MODE_DYNAMIC, &mode_dynamic, _data_FX_MODE_DYNAMIC);
   addEffect(FX_MODE_RAINBOW, &mode_rainbow, _data_FX_MODE_RAINBOW);
   addEffect(FX_MODE_RAINBOW_CYCLE, &mode_rainbow_cycle, _data_FX_MODE_RAINBOW_CYCLE);
   addEffect(FX_MODE_SCAN, &mode_scan, _data_FX_MODE_SCAN);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_DUAL_SCAN, &mode_dual_scan, _data_FX_MODE_DUAL_SCAN);
-  #endif // dedup: ~ FX_MODE_SCAN
   addEffect(FX_MODE_FADE, &mode_fade, _data_FX_MODE_FADE);
   addEffect(FX_MODE_THEATER_CHASE, &mode_theater_chase, _data_FX_MODE_THEATER_CHASE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_THEATER_CHASE_RAINBOW, &mode_theater_chase_rainbow, _data_FX_MODE_THEATER_CHASE_RAINBOW);
-  #endif // dedup: ~ FX_MODE_THEATER_CHASE
   addEffect(FX_MODE_RUNNING_LIGHTS, &mode_running_lights, _data_FX_MODE_RUNNING_LIGHTS);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_SAW, &mode_saw, _data_FX_MODE_SAW);
-  #endif // dedup: ~ FX_MODE_RUNNING_LIGHTS
   addEffect(FX_MODE_TWINKLE, &mode_twinkle, _data_FX_MODE_TWINKLE);
   addEffect(FX_MODE_DISSOLVE, &mode_dissolve, _data_FX_MODE_DISSOLVE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_DISSOLVE_RANDOM, &mode_dissolve_random, _data_FX_MODE_DISSOLVE_RANDOM);
-  #endif // dedup: ~ FX_MODE_DISSOLVE
   addEffect(FX_MODE_FLASH_SPARKLE, &mode_flash_sparkle, _data_FX_MODE_FLASH_SPARKLE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_HYPER_SPARKLE, &mode_hyper_sparkle, _data_FX_MODE_HYPER_SPARKLE);
-  #endif // dedup: ~ FX_MODE_FLASH_SPARKLE
   addEffect(FX_MODE_STROBE, &mode_strobe, _data_FX_MODE_STROBE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_STROBE_RAINBOW, &mode_strobe_rainbow, _data_FX_MODE_STROBE_RAINBOW);
-  #endif // dedup: ~ FX_MODE_STROBE
   addEffect(FX_MODE_MULTI_STROBE, &mode_multi_strobe, _data_FX_MODE_MULTI_STROBE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_BLINK_RAINBOW, &mode_blink_rainbow, _data_FX_MODE_BLINK_RAINBOW);
-  #endif // dedup: ~ FX_MODE_BLINK
   addEffect(FX_MODE_ANDROID, &mode_android, _data_FX_MODE_ANDROID);
   addEffect(FX_MODE_CHASE_COLOR, &mode_chase_color, _data_FX_MODE_CHASE_COLOR);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_CHASE_RANDOM, &mode_chase_random, _data_FX_MODE_CHASE_RANDOM);
-  #endif // dedup: ~ FX_MODE_CHASE_COLOR
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_CHASE_RAINBOW, &mode_chase_rainbow, _data_FX_MODE_CHASE_RAINBOW);
-  #endif // dedup: ~ FX_MODE_CHASE_COLOR
   addEffect(FX_MODE_CHASE_FLASH, &mode_chase_flash, _data_FX_MODE_CHASE_FLASH);
   addEffect(FX_MODE_CHASE_FLASH_RANDOM, &mode_chase_flash_random, _data_FX_MODE_CHASE_FLASH_RANDOM);
   addEffect(FX_MODE_CHASE_RAINBOW_WHITE, &mode_chase_rainbow_white, _data_FX_MODE_CHASE_RAINBOW_WHITE);
   addEffect(FX_MODE_COLORFUL, &mode_colorful, _data_FX_MODE_COLORFUL);
   addEffect(FX_MODE_TRAFFIC_LIGHT, &mode_traffic_light, _data_FX_MODE_TRAFFIC_LIGHT);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_COLOR_SWEEP_RANDOM, &mode_color_sweep_random, _data_FX_MODE_COLOR_SWEEP_RANDOM);
-  #endif // dedup: ~ FX_MODE_COLOR_SWEEP
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_RUNNING_COLOR, &mode_running_color, _data_FX_MODE_RUNNING_COLOR);
-  #endif // dedup: ~ FX_MODE_THEATER_CHASE
   addEffect(FX_MODE_AURORA, &mode_aurora, _data_FX_MODE_AURORA);
   addEffect(FX_MODE_COLORCLOUDS, &mode_ColorClouds, _data_FX_MODE_COLORCLOUDS);
   addEffect(FX_MODE_RUNNING_RANDOM, &mode_running_random, _data_FX_MODE_RUNNING_RANDOM);
   addEffect(FX_MODE_LARSON_SCANNER, &mode_larson_scanner, _data_FX_MODE_LARSON_SCANNER);
   addEffect(FX_MODE_RAIN, &mode_rain, _data_FX_MODE_RAIN);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_PRIDE_2015, &mode_pride_2015, _data_FX_MODE_PRIDE_2015);
-  #endif // dedup: ~ FX_MODE_COLORWAVES
   addEffect(FX_MODE_COLORWAVES, &mode_colorwaves, _data_FX_MODE_COLORWAVES);
   addEffect(FX_MODE_FIREWORKS, &mode_fireworks, _data_FX_MODE_FIREWORKS);
   addEffect(FX_MODE_TETRIX, &mode_tetrix, _data_FX_MODE_TETRIX);
   addEffect(FX_MODE_FIRE_FLICKER, &mode_fire_flicker, _data_FX_MODE_FIRE_FLICKER);
   addEffect(FX_MODE_GRADIENT, &mode_gradient, _data_FX_MODE_GRADIENT);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_LOADING, &mode_loading, _data_FX_MODE_LOADING);
-  #endif // dedup: ~ FX_MODE_GRADIENT
   addEffect(FX_MODE_FAIRY, &mode_fairy, _data_FX_MODE_FAIRY);
   addEffect(FX_MODE_TWO_DOTS, &mode_two_dots, _data_FX_MODE_TWO_DOTS);
   addEffect(FX_MODE_FAIRYTWINKLE, &mode_fairytwinkle, _data_FX_MODE_FAIRYTWINKLE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_RUNNING_DUAL, &mode_running_dual, _data_FX_MODE_RUNNING_DUAL);
-  #endif // dedup: ~ FX_MODE_RUNNING_LIGHTS
   #ifdef WLED_ENABLE_GIF
   addEffect(FX_MODE_IMAGE, &mode_image, _data_FX_MODE_IMAGE);
   #endif
@@ -11287,9 +11237,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_TRICOLOR_FADE, &mode_tricolor_fade, _data_FX_MODE_TRICOLOR_FADE);
   addEffect(FX_MODE_LIGHTNING, &mode_lightning, _data_FX_MODE_LIGHTNING);
   addEffect(FX_MODE_ICU, &mode_icu, _data_FX_MODE_ICU);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_DUAL_LARSON_SCANNER, &mode_dual_larson_scanner, _data_FX_MODE_DUAL_LARSON_SCANNER);
-  #endif // dedup: ~ FX_MODE_LARSON_SCANNER
   addEffect(FX_MODE_RANDOM_CHASE, &mode_random_chase, _data_FX_MODE_RANDOM_CHASE);
   addEffect(FX_MODE_OSCILLATE, &mode_oscillate, _data_FX_MODE_OSCILLATE);
   addEffect(FX_MODE_JUGGLE, &mode_juggle, _data_FX_MODE_JUGGLE);
@@ -11297,12 +11244,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_BPM, &mode_bpm, _data_FX_MODE_BPM);
   addEffect(FX_MODE_FILLNOISE8, &mode_fillnoise8, _data_FX_MODE_FILLNOISE8);
   addEffect(FX_MODE_NOISE16_1, &mode_noise16_1, _data_FX_MODE_NOISE16_1);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_NOISE16_2, &mode_noise16_2, _data_FX_MODE_NOISE16_2);
-  #endif // dedup: ~ FX_MODE_NOISE16_1
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_NOISE16_3, &mode_noise16_3, _data_FX_MODE_NOISE16_3);
-  #endif // dedup: ~ FX_MODE_NOISE16_1
   addEffect(FX_MODE_NOISE16_4, &mode_noise16_4, _data_FX_MODE_NOISE16_4);
   addEffect(FX_MODE_COLORTWINKLE, &mode_colortwinkle, _data_FX_MODE_COLORTWINKLE);
   addEffect(FX_MODE_LAKE, &mode_lake, _data_FX_MODE_LAKE);
@@ -11311,16 +11252,10 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_RAILWAY, &mode_railway, _data_FX_MODE_RAILWAY);
   addEffect(FX_MODE_RIPPLE, &mode_ripple, _data_FX_MODE_RIPPLE);
   addEffect(FX_MODE_TWINKLEFOX, &mode_twinklefox, _data_FX_MODE_TWINKLEFOX);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_TWINKLECAT, &mode_twinklecat, _data_FX_MODE_TWINKLECAT);
-  #endif // dedup: ~ FX_MODE_TWINKLEFOX
   addEffect(FX_MODE_HALLOWEEN_EYES, &mode_halloween_eyes, _data_FX_MODE_HALLOWEEN_EYES);
   addEffect(FX_MODE_STATIC_PATTERN, &mode_static_pattern, _data_FX_MODE_STATIC_PATTERN);
   addEffect(FX_MODE_TRI_STATIC_PATTERN, &mode_tri_static_pattern, _data_FX_MODE_TRI_STATIC_PATTERN);
   addEffect(FX_MODE_SPOTS, &mode_spots, _data_FX_MODE_SPOTS);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_SPOTS_FADE, &mode_spots_fade, _data_FX_MODE_SPOTS_FADE);
-  #endif // dedup: ~ FX_MODE_SPOTS
   addEffect(FX_MODE_COMET, &mode_comet, _data_FX_MODE_COMET);
   #if defined(WLED_PS_DONT_REPLACE_1D_FX) || defined(WLED_PS_DONT_REPLACE_2D_FX)
   addEffect(FX_MODE_FIRE_2012, &mode_fire_2012, _data_FX_MODE_FIRE_2012);
@@ -11340,17 +11275,8 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_POPCORN, &mode_popcorn, _data_FX_MODE_POPCORN);
   addEffect(FX_MODE_DRIP, &mode_drip, _data_FX_MODE_DRIP);
   addEffect(FX_MODE_SINELON, &mode_sinelon, _data_FX_MODE_SINELON);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_SINELON_DUAL, &mode_sinelon_dual, _data_FX_MODE_SINELON_DUAL);
-  #endif // dedup: ~ FX_MODE_SINELON
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_SINELON_RAINBOW, &mode_sinelon_rainbow, _data_FX_MODE_SINELON_RAINBOW);
-  #endif // dedup: ~ FX_MODE_SINELON
   addEffect(FX_MODE_PLASMA, &mode_plasma, _data_FX_MODE_PLASMA);
   addEffect(FX_MODE_PERCENT, &mode_percent, _data_FX_MODE_PERCENT);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_RIPPLE_RAINBOW, &mode_ripple_rainbow, _data_FX_MODE_RIPPLE_RAINBOW);
-  #endif // dedup: ~ FX_MODE_RIPPLE
   addEffect(FX_MODE_HEARTBEAT, &mode_heartbeat, _data_FX_MODE_HEARTBEAT);
   addEffect(FX_MODE_PACIFICA, &mode_pacifica, _data_FX_MODE_PACIFICA);
   addEffect(FX_MODE_CANDLE_MULTI, &mode_candle_multi, _data_FX_MODE_CANDLE_MULTI);
@@ -11359,17 +11285,11 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_TWINKLEUP, &mode_twinkleup, _data_FX_MODE_TWINKLEUP);
   addEffect(FX_MODE_NOISEPAL, &mode_noisepal, _data_FX_MODE_NOISEPAL);
   addEffect(FX_MODE_SINEWAVE, &mode_sinewave, _data_FX_MODE_SINEWAVE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_PHASEDNOISE, &mode_phased_noise, _data_FX_MODE_PHASEDNOISE);
-  #endif // dedup: ~ FX_MODE_PHASED
   addEffect(FX_MODE_FLOW, &mode_flow, _data_FX_MODE_FLOW);
   addEffect(FX_MODE_CHUNCHUN, &mode_chunchun, _data_FX_MODE_CHUNCHUN);  
   addEffect(FX_MODE_WASHING_MACHINE, &mode_washing_machine, _data_FX_MODE_WASHING_MACHINE);
   addEffect(FX_MODE_BLENDS, &mode_blends, _data_FX_MODE_BLENDS);
   addEffect(FX_MODE_TV_SIMULATOR, &mode_tv_simulator, _data_FX_MODE_TV_SIMULATOR);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_DYNAMIC_SMOOTH, &mode_dynamic_smooth, _data_FX_MODE_DYNAMIC_SMOOTH);
-  #endif // dedup: ~ FX_MODE_DYNAMIC
   addEffect(FX_MODE_PACMAN, &mode_pacman, _data_FX_MODE_PACMAN);
   addEffect(FX_MODE_SLOW_TRANSITION, &mode_slow_transition, _data_FX_MODE_SLOW_TRANSITION);
 
@@ -11384,26 +11304,14 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_MIDNOISE, &mode_midnoise, _data_FX_MODE_MIDNOISE);
   addEffect(FX_MODE_NOISEMETER, &mode_noisemeter, _data_FX_MODE_NOISEMETER);
   addEffect(FX_MODE_FREQWAVE, &mode_freqwave, _data_FX_MODE_FREQWAVE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_FREQMATRIX, &mode_freqmatrix, _data_FX_MODE_FREQMATRIX);
-  #endif // dedup: ~ FX_MODE_FREQWAVE
   addEffect(FX_MODE_WATERFALL, &mode_waterfall, _data_FX_MODE_WATERFALL);
   addEffect(FX_MODE_FREQPIXELS, &mode_freqpixels, _data_FX_MODE_FREQPIXELS);
   addEffect(FX_MODE_NOISEFIRE, &mode_noisefire, _data_FX_MODE_NOISEFIRE);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_PUDDLEPEAK, &mode_puddlepeak, _data_FX_MODE_PUDDLEPEAK);
-  #endif // dedup: ~ FX_MODE_PUDDLES
   addEffect(FX_MODE_NOISEMOVE, &mode_noisemove, _data_FX_MODE_NOISEMOVE);
   addEffect(FX_MODE_PERLINMOVE, &mode_perlinmove, _data_FX_MODE_PERLINMOVE);
   addEffect(FX_MODE_RIPPLEPEAK, &mode_ripplepeak, _data_FX_MODE_RIPPLEPEAK);
   addEffect(FX_MODE_FREQMAP, &mode_freqmap, _data_FX_MODE_FREQMAP);
   addEffect(FX_MODE_GRAVCENTER, &mode_gravcenter, _data_FX_MODE_GRAVCENTER);
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_GRAVCENTRIC, &mode_gravcentric, _data_FX_MODE_GRAVCENTRIC);
-  #endif // dedup: ~ FX_MODE_GRAVCENTER
-  #ifdef WLED_KEEP_ALL_FX
-  addEffect(FX_MODE_GRAVFREQ, &mode_gravfreq, _data_FX_MODE_GRAVFREQ);
-  #endif // dedup: ~ FX_MODE_GRAVIMETER
   addEffect(FX_MODE_DJLIGHT, &mode_DJLight, _data_FX_MODE_DJLIGHT);
   addEffect(FX_MODE_BLURZ, &mode_blurz, _data_FX_MODE_BLURZ);
   addEffect(FX_MODE_FLOWSTRIPE, &mode_FlowStripe, _data_FX_MODE_FLOWSTRIPE);
