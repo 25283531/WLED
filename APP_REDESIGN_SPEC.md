@@ -1054,7 +1054,7 @@ v8.1.0-test7 已经全部落地**，且编号必须用 **221**：
 
 视觉特征与需求描述逐条对应：底部 0~1 行的青色声波涟漪（`beatsin8_t(18, 90, 210)` 呼吸）、
 两条反向交织螺旋丝带（交叉处用 `qadd8` 饱和加法还原高亮叠加）、
-自下而上 亮青 → 蔚蓝 → 紫罗兰 三段渐变、开���前 2.2 秒「由底向上点亮升腾」迎宾动画。
+自下而上 亮青 → 蔚蓝 → 紫罗兰 三段渐变、开机前 2.2 秒「由底向上点亮升腾」迎宾动画。
 
 ### 17.2 App 图标：从「程序化绘制」改为「原图位图」
 
@@ -1160,3 +1160,172 @@ App 端**只读**展示这两个字段（`json.cpp:731` 上报 `leds.bootps`、
 4. iOS 仍搁置（本轮只换了 AppIcon 位图，iOS CI 的既有 failure 未处理）。
 5. 设备端「Save to ID 1 + Apply preset at boot = 1」需在真机上执行，
    仓库侧只保证两条路径都可用（见 17.6）。
+
+---
+
+## 18. 实现记录（v8.1.0-test9，Flutter 原型对照 + 创作页 id 漂移修复 + 精选配方）
+
+用户提供了一份 Flutter 版「光屿 LumiIsle」原型（`LampCategory` / `LightEffectItem` /
+`FrostedCard` / 四栏主页）。本轮先把它与现有 Kotlin Compose 实现逐项对照，
+再落地其中真正有增量价值的部分。
+
+### 18.1 对照结论：原型是「设计语言参考」，不是功能蓝本
+
+| 原型能力 | 现有 Compose 实现 | 结论 |
+|---|---|---|
+| `FrostedCard` 磨砂玻璃 | `IsleComponents.GlassCard`：渐变底 + 1dp 描边 + 24dp 圆角 | **已有且更克制**。原型用 `BackdropFilter` 真模糊，Compose 版没有 —— 但深色主题下两者观感接近，且真模糊对低端机有性能代价 |
+| 四栏（设备/灯效库/创作/设置） | 同 | **已有**，信息架构完全一致 |
+| 灯效分类 `aurora/rhythm/caption/nightLight` | `EffectMood { AURORA, MUSIC, TEXT, SLEEP }` | **已有**，中文名一字不差 |
+| 16×8 像素画板 | `CreateScreen` 像素画板：**动态跟随设备矩阵**（`leds.width/height`，钳在 4..40）+ 画笔/橡皮/吸管/清空工具 | **已有且更强**（原型是固定 16×8 且无工具） |
+| 滚动字幕投屏 | `CreateViewModel.sendText`：写 `seg.n` + `seg.c2=255`（固件加粗点阵大字） | **已有且更强**（原型只发纯文本） |
+| 灯效卡片渐变预览 `gradientColors` | 卡片主视觉是 **189 个 GIF 动图**（按效果 id 命名，`assets/effect_previews/<id>.gif`） | **已有且更强**，但原型的产品化命名（见 18.5）值得吸收 |
+| `LightEffectItem` 的 `speed`/`intensity`/`palId` | `EffectInfo` **完全没有**这三个字段；点灯效只切 `fx`，其余沿用设备当前值 | ❌ **真缺口** —— 本轮补上（18.3） |
+| 收藏 `isFavorite` + 参数 | Room 持久化 `FavoriteEffect`，收藏即存 `sx/ix/pal/col[3]`，点收藏项连参数一起恢复 | **已有且更强** |
+| Matter / 米家 / HomeKit 开关 | `SettingsScreen` 一行，值「固件未开放」，点击仅 Toast | **故意不做** —— 固件没开放这个能力，App 假装能开关是撒谎 |
+| I2S 麦克风灵敏度 | `DisabledSliderRow`，灰色静态条 + 「N/A」徽章，不可拖 | **故意不做** —— 固件没开放参数写入 |
+| 顶部四键触摸映射 | 一行占位，值「固件未开放」 | **故意不做** —— 同上 |
+| 灯效库多灯同步 | 原型是单设备 `_wled.applyEffect`；**现有实现原本也是单设备** | ❌ **不一致**，本轮修掉（18.4） |
+
+> 结论：原型里 **90% 的能力现有 App 已经实现且更强**，真正值得吸收的只有两件 ——
+> **per-effect 推荐参数**（原型唯一的架构性增量）与**产品化命名**。
+> 另有三处是原型暴露出来的**现有缺陷**，本轮一并修掉。
+
+### 18.2 修 Bug：创作页两个灯效 id 已漂移到别的效果
+
+`CreateViewModel` 把两个灯效 id 写死成数字，而固件在 commit `1f5308c` 把效果表
+从「紧凑编号」改成「槽位对齐」后，这两个数字已经指向别的效果：
+
+| 常量 | 原值 | 原值现在是什么 | 正确值 | 用户看到的现象 |
+|---|---|---|---|---|
+| `IMAGE_EFFECT` | 38 | **Aurora（极光）** | **53** | 上传的 GIF 图案显示成极光 |
+| `SCROLLING_TEXT_EFFECT` | 123 | **Drift Rose（玫瑰漂移）** | **122** | 投送的滚动字幕变成玫瑰漂移 |
+
+两个问题都**不报错** —— 下发成功、灯也亮了，只是画面悄悄变了，
+排查时几乎不可能第一时间联想到是 id 漂移（固件的 `FX_MODE_IMAGE` 宏明明是 53）。
+
+**修法不是把数字改对**（下次固件再调槽位又会错），而是**消除硬编码**：
+
+```kotlin
+private fun requireEffectId(name: String): Int =
+    EffectCatalog.byName(name)?.id
+        ?: error("固件灯效目录缺少「$name」，请重新运行 tools/gen_effect_catalog.py")
+
+private val IMAGE_EFFECT = requireEffectId("Image")
+private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
+```
+
+`EffectCatalog.byName()` 本轮新增（`EffectCatalog.kt:240-248`）——
+按固件英文名反查 id。英文名是稳定的（只有固件主动改名才需要改），
+槽位怎么漂移都不用动业务代码。
+
+### 18.3 新能力：精选灯效配方（点一下就是一整套观感）
+
+原型 `LightEffectItem` 每条都带 `speed` / `intensity` / `palId`，
+`applyEffect(fxId:, palId:, speed:, intensity:)` 一次把整套餐具端出去。
+这正是现有 App 缺的东西：**点灯效只切 `fx`，速度/强度/调色板全沿用设备当前值**，
+用户想看到「流光溢彩」得自己先切灯效、再调调色板、再调速度。
+
+新增三件：
+
+**① 调色板目录**（`tools/gen_palette_catalog.py` → `PaletteCatalog.kt`，73 项）
+
+从固件 `FX_fcn.cpp` 的 `JSON_palette_names` 解析，**同样不硬编码 id** ——
+固件在调色板数组中间插一项，后面所有 id 都会前移。`PaletteCatalog.byName()`
+先试原名再试去掉 `*` 前缀的规范名（`* Color 1` = 界面上的 "Primary Color"）。
+
+**② 精选配方表**（`CuratedEffects.kt`，8 条）
+
+只收录**少数几个**灯效，而不是给全部 189 个都编参数 —— 参数编多了没有依据，
+反倒误导（用户点「壁炉篝火」不该担心它跑成什么颜色）。覆盖四个 mood：
+
+| 标题 | 固件英文名 | 调色板 | sx | ix |
+|---|---|---|---|---|
+| 流光溢彩 | Aurora | Party | 110 | 140 |
+| 深海探秘 | Pacifica | Ocean | 85 | 120 |
+| 极地漫游 | Polar Lights | Aurora | 95 | 150 |
+| 星河微光 | Twinklefox | Random Cycle | 70 | 100 |
+| **极光之舞** | **极光之舞（221）** | Aurora | **115** | **140** |
+| 赛博脉冲 | Bpm | Magenta | 180 | 200 |
+| 极客弹幕 | Scrolling Text | Default | 120 | 128 |
+| 暖阳呼吸 | Breathe | Color 1 | 45 | 60 |
+
+「极光之舞」的 115/140 与固件出厂默认（`platformio_override.ini` 的
+`DEFAULT_BOOT_FX=221` 及第 17 节定的设备端预设值）一致。
+
+配方表用**固件英文名**声明、运行时反查 id。反查失败（固件改了名）会跳过该条并打日志，
+不会让整个 App 崩掉。
+
+**③ 统一的参数优先级**（`EffectRecipe.buildEffectSegment`）
+
+```
+收藏快照  >  精选配方  >  设备当前值
+```
+
+- 收藏快照优先：用户自己调过并存下来的那套参数最权威
+- 精选配方其次：没收藏过的精选灯效，按推荐观感下发
+- 都没有：原样保留设备当前值，不动用户已经调好的参数
+
+顺序不能反：先套精选、再让收藏快照覆盖，这样「收藏过但当时没记下速度」的灯效
+既保住收藏时的观感，又不会把精选的速度顶掉。
+
+### 18.4 修不一致：多灯同步开关跨页共享
+
+`DeviceHomeViewModel._syncEnabled` 原先是**该 ViewModel 的私有内存状态**，
+`LibraryViewModel` 根本读不到 —— 于是「设备页开了同步 → 灯效库点灯效 → 只有当前这台灯变」，
+开关和实际行为对不上。
+
+修法：把开关移到 `SelectedDeviceStore`（Koin `single`，本来就承载「跨页签共享的设备级状态」），
+`DeviceHomeViewModel` 与 `LibraryViewModel` 读同一个 `StateFlow`；
+`LibraryViewModel.applyEffect` 改成按 `targets()` 广播到所有在线设备。
+
+### 18.5 UI：卡片改用产品名 + 灯效自己的渐变
+
+精选灯效在灯效库卡片与首页快捷卡片上显示**产品名**而不是固件技术名 ——
+「流光溢彩 / Flowing Colors」比「Aurora / 极光」好认，而点下去拿到的
+正是同一套推荐观感，名字和结果对得上。
+
+同时：精选卡片底部垫该灯效自己的渐变色（GIF 解码完成前不闪灰底），
+选中态描边也用这条渐变而不是全局统一的青紫。
+
+### 18.6 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `ui/effects/EffectCatalog.kt` | 新增 `byName()` 按固件英文名反查 id |
+| `ui/effects/PaletteCatalog.kt` | **新增**，73 个调色板（自动生成） |
+| `ui/effects/CuratedEffects.kt` | **新增**，8 条精选配方 |
+| `ui/effects/EffectRecipe.kt` | **新增**，`buildEffectSegment()` 统一参数优先级 |
+| `ui/create/CreateViewModel.kt` | 修 id 漂移：改为按名反查 |
+| `ui/isle/SelectedDeviceStore.kt` | 新增跨页签共享的 `syncEnabled` |
+| `ui/device/DeviceHomeViewModel.kt` | 同步开关改走 store；应用灯效走 `buildEffectSegment` |
+| `ui/library/LibraryViewModel.kt` | 应用灯效走 `buildEffectSegment`；多灯同步广播 |
+| `ui/library/LibraryScreen.kt` / `ui/device/DeviceScreen.kt` | 卡片显示产品名 + 渐变底衬/描边 |
+| `tools/gen_palette_catalog.py` | **新增**，从固件解析调色板表 |
+| `app/app/src/test/.../EffectRecipeTest.kt` | **新增**，11 个用例 |
+
+### 18.7 验收结果
+
+- Android CI run 45312167913（见 18.9）
+- `EffectRecipeTest` 11 个用例覆盖：灯效 id 反查（含锁定 38→Aurora、123→Drift Rose
+  两个漂移）、调色板 id 反查、`*` 前缀处理、精选配方全部可解析、
+  配方组装的三层优先级
+
+### 18.8 顺带确认的事实（供后续参考）
+
+- **参考代码里的 id 有一半对本 fork 不成立**：原型写 `fxId: 67 // Aurora`（本 fork 67 是
+  Colorwaves 色浪，Aurora 是 38）、`fxId: 74 // Twinklefox`（本 fork 74 是 Colortwinkles
+  彩屑闪烁，Twinklefox 是 80）、`palId: 11 // Party`（11 是 Rainbow，Party 是 6）、
+  `palId: 46 // Magenta`（46 是 April Night，Magenta 是 40）。
+  原型是按上游 WLED 编号写的，与本 fork 的槽位对齐表不一致 —— **这正是本轮要消除的那类硬编码**。
+- 本机**没有可用的 JDK / Android SDK**（`JAVA_HOME` 指向的 `jdk-17.0.17.10-hotspot` 不存在），
+  本地无法编译，编译验证只能靠 CI。
+
+### 18.9 未做
+
+1. 旧 `homeScreen/` 列表链清理（见 15.8）。
+2. 配方导入导出与配方预览（P1）。
+3. per-fx 参数 schema（P2 前置）。
+4. iOS 仍搁置。
+5. 同步开关仍未持久化（App 重启即失效）—— 本轮只把它从「单页私有」提到「跨页共享」。
+6. 调色板**选择器 UI** 仍未做：现在只有精选配方在内部用 `pal`，
+   用户仍无法手动挑调色板。
