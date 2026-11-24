@@ -7,6 +7,7 @@
     GET  /json/effects  灯效名列表（取自 firmware/effects_enabled.json）
     GET  /json          info + state + effects
     POST /json/state    应用状态（合并 seg 补丁，并广播给所有 WS 客户端）
+    POST /upload        接收创作工坊上传的 GIF 图案（multipart）
     WS   /ws            连上推一次全量状态，之后双向同步
 
 用法:
@@ -110,6 +111,9 @@ STATE: dict = {
 
 CLIENTS: set[web.WebSocketResponse] = set()
 
+# 上传的文件：文件名 -> 内容。固件按段落名（seg.n）找文件，所以这里存下名字即可。
+UPLOADS: dict[str, bytes] = {}
+
 
 def snapshot() -> dict:
     return {"state": copy.deepcopy(STATE), "info": INFO}
@@ -166,6 +170,23 @@ async def post_state(request: web.Request) -> web.Response:
     return web.json_response({"success": True})
 
 
+async def upload(request: web.Request) -> web.Response:
+    """固件的文件上传接口。
+
+    创作工坊的「上传图案」走这里：把画板编码成 GIF 上传，再把段落切到
+    Image 效果。不实现它的话，上传链路在本地假设备上必然失败。
+    """
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None:
+        return web.json_response({"status": 1, "error": "no file"}, status=400)
+    data = await field.read()
+    filename = field.filename or "upload.bin"
+    UPLOADS[filename] = data
+    print(f"[mock] POST /upload <- {filename} ({len(data)} bytes)")
+    return web.json_response({"status": 0})
+
+
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
@@ -205,6 +226,7 @@ def main() -> None:
     app.router.add_get("/json", json_all)
     app.router.add_post("/json/state", post_state)
     app.router.add_post("/json", post_state)
+    app.router.add_post("/upload", upload)
     app.router.add_get("/ws", ws_handler)
 
     print(f"假 WLED 已启动：http://127.0.0.1:{args.port}")

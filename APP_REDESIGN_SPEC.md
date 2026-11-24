@@ -1305,12 +1305,43 @@ private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
 
 ### 18.7 验收结果
 
-- Android CI run 45312167913（见 18.9）
-- `EffectRecipeTest` 11 个用例覆盖：灯效 id 反查（含锁定 38→Aurora、123→Drift Rose
-  两个漂移）、调色板 id 反查、`*` 前缀处理、精选配方全部可解析、
-  配方组装的三层优先级
+**CI**：Android run 45312167913 success、45312832313 success（编译 + `Unit tests` 全绿）。
 
-### 18.8 顺带确认的事实（供后续参考）
+**模拟器端到端**（模拟器 `emulator-5554` + 本地假设备 `tools/mock_wled_server.py`，
+假设备初始状态故意设成 `fx=0 sx=200 ix=180 pal=0`，以便区分「配方下发」与「沿用当前值」）：
+
+| 场景 | 期望 | 实测 | 结论 |
+|---|---|---|---|
+| 灯效库点「暖阳呼吸」（精选） | `fx=2 sx=45 ix=60 pal=2` | `fx=2 sx=45 ix=60 pal=2` | ✅ 整套餐具下发 |
+| 灯效库点「明灭」（非精选） | 只切 `fx`，参数沿用 | `fx=1 sx=45 ix=60 pal=2`（未变） | ✅ 不动用户已调好的参数 |
+| 灯效库点「极光之舞」（招牌） | `fx=221 sx=115 ix=140 pal=50` | `fx=221 sx=115 ix=140 pal=50` | ✅ 与固件出厂默认一致 |
+| 创作页「投送字幕」 | `fx=122`（Scrolling Text） | `fx=122 n=LumiIsle c2=255` | ✅ **修复前是 123 = Drift Rose 玫瑰漂移** |
+| 创作页「上传图案」 | `fx=53`（Image） | `fx=53 n=isle` | ✅ **修复前是 38 = Aurora 极光** |
+| 卡片标题 | 显示产品名 | 「暖阳呼吸 / Warm Breath」「极光之舞 / Aurora Dance」 | ✅ 不再是固件技术名 |
+| 像素画板尺寸 | 跟随设备矩阵 | 显示 `9 × 23`，与假设备的矩阵一致 | ✅ |
+
+**为跑通上传链路补的测试设施**：`tools/mock_wled_server.py` 原先没有 `/upload` 端点，
+创作工坊上传必然失败（App 正确提示「上传失败：设备可能关闭了文件上传」）。
+本轮补上 multipart 接收，返回 `{"status":0}`（与固件一致），上传链路才得以端到端验证。
+
+### 18.8 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `ui/effects/EffectCatalog.kt` | 新增 `byName()` 按固件英文名反查 id |
+| `ui/effects/PaletteCatalog.kt` | **新增**，73 个调色板（自动生成） |
+| `ui/effects/CuratedEffects.kt` | **新增**，8 条精选配方 |
+| `ui/effects/EffectRecipe.kt` | **新增**，`buildEffectSegment()` 统一参数优先级 |
+| `ui/create/CreateViewModel.kt` | 修 id 漂移：改为按名反查 |
+| `ui/isle/SelectedDeviceStore.kt` | 新增跨页签共享的 `syncEnabled` |
+| `ui/device/DeviceHomeViewModel.kt` | 同步开关改走 store；应用灯效走 `buildEffectSegment` |
+| `ui/library/LibraryViewModel.kt` | 应用灯效走 `buildEffectSegment`；多灯同步广播 |
+| `ui/library/LibraryScreen.kt` / `ui/device/DeviceScreen.kt` | 卡片显示产品名 + 渐变底衬/描边 |
+| `tools/gen_palette_catalog.py` | **新增**，从固件解析调色板表 |
+| `tools/mock_wled_server.py` | 补 `/upload` 端点，跑通上传链路 |
+| `app/app/src/test/.../EffectRecipeTest.kt` | **新增**，11 个用例 |
+
+### 18.9 顺带确认的事实（供后续参考）
 
 - **参考代码里的 id 有一半对本 fork 不成立**：原型写 `fxId: 67 // Aurora`（本 fork 67 是
   Colorwaves 色浪，Aurora 是 38）、`fxId: 74 // Twinklefox`（本 fork 74 是 Colortwinkles
@@ -1320,7 +1351,7 @@ private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
 - 本机**没有可用的 JDK / Android SDK**（`JAVA_HOME` 指向的 `jdk-17.0.17.10-hotspot` 不存在），
   本地无法编译，编译验证只能靠 CI。
 
-### 18.9 未做
+### 18.10 未做
 
 1. 旧 `homeScreen/` 列表链清理（见 15.8）。
 2. 配方导入导出与配方预览（P1）。

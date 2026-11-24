@@ -20,6 +20,7 @@ Thumbs.db
 
 # CI 构建产物（APK 等），不入库
 dist/
+dist-apk/
 
 # CI 日志抓取缓存（tools/fetch_ci_log.py）
 _ci/
