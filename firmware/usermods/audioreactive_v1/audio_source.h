@@ -342,7 +342,7 @@ class I2SSource : public AudioSource {
 #endif
       } else {
         i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(_sampleRate);
-        clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;   // ES8388 is configured for MCLK/LRCK ratio = 256
+        clk_cfg.mclk_multiple = _mclkMultiple;   // ES8388 uses 256, ES7210 uses 512
 #if defined(SOC_I2S_SUPPORTS_APLL)
         if (wantAPLL) clk_cfg.clk_src = I2S_CLK_SRC_APLL;
 #endif
@@ -628,6 +628,7 @@ class I2SSource : public AudioSource {
     i2s_std_slot_mask_t _slotMask = AR_MIC_SLOT_MASK;
     uint8_t _bytesPerSample = 4;
     bool _useMSBFormat = false;          // set by SPH0645 - selects MSB slot format instead of Philips
+    i2s_mclk_multiple_t _mclkMultiple = I2S_MCLK_MULTIPLE_256;   // overridden by codecs that need another MCLK/LRCK ratio
     int8_t _wsPin = I2S_PIN_NO_CHANGE;
     int8_t _sdPin = I2S_PIN_NO_CHANGE;
     int8_t _ckPin = I2S_PIN_NO_CHANGE;
@@ -814,6 +815,116 @@ class ES8388Source : public I2SSource {
       I2SSource::deinitialize();
     }
 
+};
+
+/* ES7210 four-channel audio ADC
+   Requires I2C initialization before I2S data is available. Used on the
+   Lichuang ESP32-S3 practice board (two ZTS6216 analog microphones).
+   MCLK/LRCK ratio is 512 (11.2896 MHz at 22.05 kHz), not 256 like ES8388.
+*/
+#ifndef ES7210_ADDR
+  #define ES7210_ADDR 0x41
+#endif
+#ifndef ES7210_SDA
+  #define ES7210_SDA 1
+#endif
+#ifndef ES7210_SCL
+  #define ES7210_SCL 2
+#endif
+
+class ES7210Source : public I2SSource {
+  private:
+    void _es7210I2cWrite(uint8_t reg, uint8_t val) {
+      Wire.beginTransmission(ES7210_ADDR);
+      Wire.write(reg);
+      Wire.write(val);
+      uint8_t i2cErr = Wire.endTransmission();
+      if (i2cErr != 0) {
+        DEBUGSR_PRINTF("AR: ES7210 I2C write failed with error=%d  (addr=0x%X, reg 0x%X, val 0x%X).\n", i2cErr, ES7210_ADDR, reg, val);
+      }
+    }
+
+    uint8_t _es7210I2cRead(uint8_t reg) {
+      Wire.beginTransmission(ES7210_ADDR);
+      Wire.write(reg);
+      if (Wire.endTransmission(false) != 0) return 0;
+      if (Wire.requestFrom((uint8_t)ES7210_ADDR, (uint8_t)1) != 1) return 0;
+      return Wire.read();
+    }
+
+    void _es7210UpdateBits(uint8_t reg, uint8_t mask, uint8_t data) {
+      uint8_t regv = _es7210I2cRead(reg);
+      _es7210I2cWrite(reg, (regv & ~mask) | (mask & data));
+    }
+
+    void _es7210InitAdc() {
+      // Clock coefficient for 22.05 kHz with MCLK = 11.2896 MHz (see ES7210 datasheet):
+      // adc_div = 1, dll = 1, doubler = 0, osr = 0x20, lrck divider = 0x0200
+      _es7210I2cWrite(0x00, 0xFF);      // software reset
+      _es7210I2cWrite(0x00, 0x32);
+      _es7210I2cWrite(0x01, 0x3F);      // turn ADC clocks off during setup
+      _es7210I2cWrite(0x09, 0x30);      // chip power-up time
+      _es7210I2cWrite(0x0A, 0x30);      // power-up state time
+      _es7210I2cWrite(0x23, 0x2A);      // high-pass filters (ADC1/2 + ADC3/4)
+      _es7210I2cWrite(0x22, 0x0A);
+      _es7210I2cWrite(0x20, 0x0A);
+      _es7210I2cWrite(0x21, 0x2A);
+      _es7210UpdateBits(0x08, 0x01, 0x00);  // secondary (slave) I2S mode
+      _es7210I2cWrite(0x40, 0xC3);      // analog power
+      _es7210I2cWrite(0x41, 0x70);      // mic 1/2 bias
+      _es7210I2cWrite(0x42, 0x70);      // mic 3/4 bias
+      _es7210I2cWrite(0x11, 0x00);      // 24-bit samples
+      _es7210I2cWrite(0x12, 0x00);      // mic1/2 on SDOUT1, mic3/4 on SDOUT2
+      _es7210I2cWrite(0x02, 0x81);      // adc_div = 1 plus DLL
+      _es7210I2cWrite(0x07, 0x20);      // OSR
+      _es7210I2cWrite(0x04, 0x02);      // LRCK divider high
+      _es7210I2cWrite(0x05, 0x00);      // LRCK divider low
+      // PGA gain 24 dB on all four channels (register value 8)
+      for (uint8_t i = 0; i < 4; i++) _es7210UpdateBits(0x43 + i, 0x10, 0x00);
+      _es7210I2cWrite(0x4B, 0xFF);
+      _es7210I2cWrite(0x4C, 0xFF);
+      for (uint8_t i = 0; i < 4; i++) {
+        _es7210UpdateBits(0x01, 0x0B, 0x00);
+        _es7210I2cWrite((i < 2) ? 0x4B : 0x4C, 0x00);
+        _es7210UpdateBits(0x43 + i, 0x10, 0x10);
+        _es7210UpdateBits(0x43 + i, 0x0F, 0x08);
+      }
+      for (uint8_t i = 0; i < 4; i++) _es7210I2cWrite(0x47 + i, 0x08);  // power on mics 1..4
+      _es7210I2cWrite(0x06, 0x04);      // power down DLL
+      _es7210I2cWrite(0x4B, 0x0F);      // mic bias + ADC + PGA power
+      _es7210I2cWrite(0x4C, 0x0F);
+      _es7210I2cWrite(0x00, 0x71);      // enable device
+      _es7210I2cWrite(0x00, 0x41);
+    }
+
+  public:
+    ES7210Source(SRate_t sampleRate, int blockSize, float sampleScale = 1.0f) :
+      I2SSource(sampleRate, blockSize, sampleScale) {
+      _mclkMultiple = I2S_MCLK_MULTIPLE_512;   // ES7210 @22.05 kHz needs 11.2896 MHz MCLK
+#if ESP_IDF_VERSION_MAJOR >= 5
+      _slotMask = I2S_STD_SLOT_LEFT;
+#else
+      _config.channel_format = I2S_CHANNEL_FMT_ONLY_LEFT;
+#endif
+    };
+
+    void initialize(int8_t i2swsPin, int8_t i2ssdPin, int8_t i2sckPin, int8_t mclkPin) {
+      DEBUGSR_PRINTLN(F("ES7210Source:: initialize();"));
+      if ((i2sckPin < 0) || (mclkPin < 0)) {
+        DEBUGSR_PRINTF("\nAR: invalid I2S pin: SCK=%d, MCLK=%d\n", i2sckPin, mclkPin);
+        return;
+      }
+
+      // ES7210 is on the board I2C bus; make sure the bus uses the board pins
+      Wire.begin(ES7210_SDA, ES7210_SCL);
+      delay(10);
+      _es7210InitAdc();
+      I2SSource::initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+    }
+
+    void deinitialize() {
+      I2SSource::deinitialize();
+    }
 };
 
 /* Analog input using ADC continuous sampling  (IDF V5 and up only)

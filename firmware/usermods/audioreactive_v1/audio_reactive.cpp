@@ -1423,11 +1423,19 @@ class AudioReactive : public Usermod {
           audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin);
           break;
         case 4:
+          #if defined(AR_ES7210)
+          DEBUGSR_PRINTLN(F("AR: ES7210 audio ADC (MCLK/LRCK = 512)."));
+          audioSource = new ES7210Source(SAMPLE_RATE, BLOCK_SIZE, 1.0f/24.0f);
+          useMicFilter = false; // ADC front-end, skip sample filtering
+          delay(100);
+          if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          #else
           DEBUGSR_PRINT(F("AR: Generic I2S Microphone with Master Clock - ")); DEBUGSR_PRINTLN(F(I2S_MIC_CHANNEL_TEXT));
           audioSource = new I2SSource(SAMPLE_RATE, BLOCK_SIZE, 1.0f/24.0f);
           useMicFilter = false; // I2S with Master Clock is mostly used for line-in, skip sample filtering
           delay(100);
           if (audioSource) audioSource->initialize(i2swsPin, i2ssdPin, i2sckPin, mclkPin);
+          #endif
           break;
         #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)  // PDM is only supported on S3 and classic esp32
         case 5:
