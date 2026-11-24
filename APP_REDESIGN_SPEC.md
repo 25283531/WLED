@@ -746,3 +746,163 @@ artifact `android-apk`（44,665,308 字节）下载后安装到 `emulator-5554` 
    而不是让 App 去拼 `psave` + `bootps`（会占用设备预设槽位）或调 `POST /settings`（有副作用）。
 2. 旧 `homeScreen/` 列表链清理（见 13.5）。
 3. iOS 仍搁置。
+
+## 15. 实现记录（v8.1.0-test8，灯效库维度筛选 + 收藏参数闭环 + 重复度审计）
+
+本节处理任务清单里剩下的四项（收藏选项卡、字画分类、多灯同步与定时关灯、灯效重复审核），
+并顺带修掉一个此前没人注意到的**收藏功能半成品**问题。
+
+### 15.1 灯效库：四 mood Tab → 扁平维度筛选（收藏 / 字画 / 常用）
+
+第 13 节的灯效库顶部是四个律动模式 Tab（幻彩极光 / 音乐律动 / 动态字幕 / 睡眠夜灯）。
+本轮把它换成一行可横向滚动的筛选胶囊：
+
+```
+全部 | 幻彩极光 | 音乐律动 | 动态字幕 | 睡眠夜灯 | 字画 | 收藏 | 常用
+```
+
+**为什么不做「模式 × 维度」的两维交叉**：两个维度会大量落空
+（「幻彩极光」里没有「字画」，交叉后是空列表）。与其在界面上解释这条规则，
+不如让用户一次只选一个意图 —— 所以做成**扁平的一维筛选**。
+
+顺带复活了两处**定义了却从未被引用**的代码：`EffectCategory.ART`（字画）与
+`filterEffects()` 纯函数。它们本来就在 `ui/effects/EffectFilters.kt` 里等着，
+只是灯效库 UI 一直走的是 `EffectMood` 那条路。
+
+| 筛选 | 判定 |
+|---|---|
+| 字画 | `EffectCategory.ART` —— 即 Image(53) + Scrolling Text(122)，固件里唯一直接消费用户内容的两个效果 |
+| 收藏 | `EffectCatalog` 中 `id ∈ favoriteIds` |
+| 常用 | `isPopular` 标记的 29 个 |
+| 1D / 2D | `EffectCategory.ONE_D` / `TWO_D`（118 / 69 个，枚举保留但 UI 未露出） |
+
+搜索此前只匹配英文名，现在**同时匹配中文名** —— 中文用户搜「极光」能命中
+id 221「极光之舞」，此前搜不到。
+
+### 15.2 收藏：从书签升级为可复现的配方
+
+**发现的问题**：`FavoriteEffect` 表存了 `speed` / `intensity` / `palette` / 三个颜色，
+但这四个字段**从未被任何代码读取用于下发**。收藏实际退化成了书签 ——
+点收藏灯效只会切 `seg.fx`，收藏当时的观感（速度、调色）丢失。
+
+修复：新增 shared 层的扩展函数
+
+```kotlin
+// app/shared/.../model/FavoriteEffect.kt
+fun Segment.restoreFrom(favorite: FavoriteEffect?): Segment
+```
+
+它**只覆盖收藏时确实存下来的字段**：没存过的（比如当时设备就没上色）保持现状，
+避免用默认值盖掉用户当前的调色。首页快捷卡片与灯效库页两条入口都改为连参数一起恢复。
+
+为此把 `quickCards()` 的返回类型从 `List<EffectInfo>` 改成 `List<QuickCardItem>`
+（携带对应的收藏记录）。注意数据类不能叫 `QuickCard` —— 同包已有私有的
+`QuickCard` composable，同名会冲突。
+
+**收藏从此有了独立入口**：灯效库的「收藏」筛选列出全部收藏，不再受
+首页 2×2 快捷卡片（上限 4 张）截断。此前收藏超过 4 个就等于消失。
+
+### 15.3 设备页：灯效参数调节（速度 / 强度 / 颜色）
+
+第 5 节设计的是「控制选项卡」，第 13 节改成了四栏架构，
+多灯同步与定时关灯最终落在**设备页顶部的两枚微缩胶囊 → 底部弹层**。
+
+核查时发现真正的缺口不在同步/定时（那两块功能完整），而在**参数调节**：
+旧链的 `ui/control/ControlScreen.kt` 独有「速度 / 强度 / 颜色」三项能力，
+而四栏架构下的设备页**完全没有**。结果就是：收藏存下来的参数，
+用户在界面上既看不到也改不了。
+
+本轮把参数调节补进设备页，形态是**一行可展开的「灯效参数」**：
+
+- 折叠时只占一行，显示「速度 60% · 强度 80%」摘要，不抢主控台的视觉重心
+- 展开后露出速度滑块、强度滑块与一排预设色
+- 预设色前三位刻意取产品招牌色（亮青 / 蔚蓝 / 紫罗兰），与灯效 221 和 App 图标同源
+
+滑块提交时读自己的 state 而不是参数快照 —— 拖拽结束到重组之间快照可能是旧值，
+直接用快照会提交偏小的数值（`BrightnessRow` 原本就是对的，这里照抄了它的写法）。
+
+### 15.4 灯效重复度审计：真冗余 0 个，不动固件
+
+新增 `tools/audit_effect_duplicates.py`。关键在于**不能只比 token 相似度**：
+
+WLED 里大量灯效是「薄封装」，函数体只有一行，转调共享的核心实现并改一两个参数：
+
+```cpp
+void mode_blink(void)  { blink(SEGCOLOR(0), SEGCOLOR(1), false, true); }
+void mode_strobe(void) { blink(SEGCOLOR(0), SEGCOLOR(1), true,  true); }
+```
+
+直接比 token 会把这两者判成 Jaccard = 1.000。所以脚本先把薄封装**下沉到核心实现**，
+再比对实参：
+
+| 判定 | 条件 | 处置 | 本轮结果 |
+|---|---|---|---|
+| `redundant` | 核心实现相同 **且 实参完全相同** | 可删 | **0 个** |
+| `variant` | 核心实现相同，实参不同 | 保留（视觉可区分） | 4 对 |
+| `similar` | 核心不同，token Jaccard ≥ 0.70 且行数比 ≥ 0.70 | 保留，人工抽查 | 4 对 |
+
+**结论：189 个灯效里没有一个是「删掉无功能损失」的。** 同族关系全部来自两条：
+
+1. **三条渲染路径**：同一视觉概念有 1D 灯带 / 2D 矩阵 / PS 粒子系统三个实现
+   （焰火、追逐、舞影、团块、瀑布共 5 组），视觉差异明显
+2. **参数化变体**：同一核心实现换参数（明灭/频闪、擦拭/扫光、烛光/多簇烛光、重力表/重力中心）
+
+同时查明固件源头**已有人工去重**：`FX_MODE_METEOR_SMOOTH` 被注释合并进
+`mode_meteor`，`FX_MODE_NOISE16_1` 有 `#endif // dedup:` 标记；
+另有 30 个灯效位于 `#ifdef WLED_KEEP_ALL_FX` 块内，而该宏在本产品**编译时未定义**，
+故不参与编译 —— 结论是 App 清单的 189 个与固件实际可用集合**完全一致，无遗漏**。
+
+**处置：不动固件。** 从固件删灯效是破坏性的 —— 用户已保存的预设与 `seg.fx`
+会指向被删 id，删除后这些引用回落到 id 0（Solid），表现为「设好的效果突然变纯色」。
+189 个灯效在固件里各占一个数组项，成本可忽略。需要精简时应在
+App 侧做展示层收敛，报告第四节的分组直接可用。
+
+报告见 `docs/EFFECT_DUPLICATE_AUDIT.md`，机读结果见 `docs/effects_duplicate_candidates.json`。
+
+### 15.5 AI 灯效生成与收藏：架构方案
+
+见 `docs/AI_EFFECT_ARCHITECTURE.md`。要点：
+
+- **固件没有运行时注册灯效的机制**（`addEffect` 只在构造期调用，`MODE_COUNT = 222`），
+  所以「AI 生成新算法」必须改固件
+- App 能编程的表达面只有 `fx / sx / ix / pal / col[3] / c1-c3 / o1-o3`
+- **`c1..c3` 的语义因效果而异**（122 用 c1 做输入旋转、120 用 c3 做推进强度、
+  部分效果用 c2 做模糊量），这是 AI 生成配方最大的坑，
+  需要一张 per-fx 参数 schema —— 且该 schema 只能从固件源码自动提取
+- AI 真正能「创造」的是 **L2 调色板**（固件有 `customPalettes` 槽位）与 **L1 参数配方**
+- 分 5 阶段：P0 收藏即手工配方（已落地）→ P1 导入导出与预览 → P2 AI 生成配方 →
+  P3 AI 生成调色板 → P4 固件加参数化解释器（独立立项）
+
+### 15.6 关键代码位置
+
+| 位置 | 内容 |
+|---|---|
+| `ui/effects/EffectFilters.kt` | `EffectFilter` 扩为扁平一维筛选；`filterEffects` 加 `favoriteIds` 参数并支持中文名搜索 |
+| `ui/library/LibraryViewModel.kt` | `_filter` 状态；`visibleEffects` 改走 `filterEffects` |
+| `ui/library/LibraryScreen.kt` | 四 mood Tab 换成筛选胶囊行；收藏为空时给专门文案 |
+| `shared/.../model/FavoriteEffect.kt` | `Segment.restoreFrom()` 与 `unpackedColors` |
+| `ui/device/DeviceHomeViewModel.kt` | `applyEffect` 带收藏参数；`setSpeed/setIntensity/setPrimaryColor`；`QuickCardItem` |
+| `ui/device/DeviceScreen.kt` | 「灯效参数」可展开区（速度/强度/颜色） |
+| `tools/audit_effect_duplicates.py` | 灯效重复度审计（薄封装下沉 + 实参比对） |
+| `app/src/test/.../EffectFiltersTest.kt` | 筛选逻辑单测（用真实 `EffectCatalog`） |
+
+### 15.7 与第 5 节的偏离
+
+第 5 节设计的四栏是「控制 / 灯效 / 收藏 / 设置」，本轮**没有**照做，
+原因与取舍：
+
+| 第 5 节 | 实际 | 原因 |
+|---|---|---|
+| 独立「控制」选项卡 | 未加，能力并入设备页 | 第 13 节的 Gemini 设计稿把底部导航定为四栏（设备/灯效库/创作/设置），加第五栏会破坏已定稿的信息架构；参数调节做成设备页内可展开的一行，比独立页更贴近「一屏一目的」 |
+| 独立「收藏」选项卡 | 未加，改为灯效库内的「收藏」筛选 | 同上。但收藏此前只能经首页 4 张快捷卡片消费，超出即消失；筛选式入口能列出全部收藏，且不增加底部栏负担 |
+| 灯效分类「字画」 | 灯效库筛选行新增「字画」 | 落地为筛选维度而非独立 Tab，与「全部/收藏/常用」并列 |
+
+### 15.8 未做
+
+1. **旧 `homeScreen/` 列表链清理**（`DeviceListDetail` / `DeviceDetail` / `ControlScreen`）。
+   `ui/control/ControlScreen.kt` 与 `ControlViewModel.kt` 现已是死代码 ——
+   其独有能力（速度/强度/颜色）已迁入设备页。本轮未删，删除牵动
+   `DeviceListDetailViewModel` 与 widget 引用，风险需单独评估。
+2. **配方导入导出与配方预览**（P1）。
+3. **per-fx 参数 schema**（P2 的前置）。
+4. iOS 仍搁置。

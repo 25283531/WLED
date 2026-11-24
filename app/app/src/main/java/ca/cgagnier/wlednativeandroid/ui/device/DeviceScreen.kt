@@ -73,6 +73,30 @@ private const val MAX_CHANNEL_VALUE = 255
 private val NIGHTLIGHT_OPTIONS = listOf(5, 10, 15, 30, 60, 120)
 
 /**
+ * 参数调节区的预设色。
+ *
+ * 前三位刻意取产品自己的招牌色（亮青 / 蔚蓝 / 紫罗兰），与灯效 221「极光之舞」
+ * 和 App 图标同源；后几位补足暖色与绿，避免只能用冷色。
+ */
+private val PRESET_COLORS = listOf(
+    0xFFFFFF,         // 白
+    0x00F5FF,         // 亮青
+    0x1E78FF,         // 蔚蓝
+    0xAF28FF,         // 紫罗兰
+    0xFF4FA8,         // 洋红
+    0xFF8A3C,         // 橙
+    0x3CFF8A,         // 翠绿
+    0xFFE9D7,         // 暖白
+)
+
+/** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
+private fun packedToColor(packed: Int): Color = Color(
+    red = (packed shr 16) and 0xFF,
+    green = (packed shr 8) and 0xFF,
+    blue = packed and 0xFF,
+)
+
+/**
  * 首页（设备）：高频日常主控台。
  *
  * 电源、亮度、四个律动模式、2×2 快捷卡片都在一屏内；多灯同步和定时收进顶部的两个微缩胶囊，
@@ -99,6 +123,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     var showTimerSheet by remember { mutableStateOf(false) }
     var showDeviceSheet by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var tuningExpanded by remember { mutableStateOf(false) }
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
@@ -146,6 +171,25 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     value = brightness,
                     onCommit = { percent ->
                         device?.let { viewModel.setBrightness(it, percent * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    },
+                )
+            }
+
+            item {
+                EffectTuning(
+                    expanded = tuningExpanded,
+                    speed = segment?.effectSpeed ?: 0,
+                    intensity = segment?.effectIntensity ?: 0,
+                    colors = remember(segment) { segment?.tubeColors().orEmpty() },
+                    onToggle = { tuningExpanded = !tuningExpanded },
+                    onSpeed = { value ->
+                        device?.let { viewModel.setSpeed(it, value * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    },
+                    onIntensity = { value ->
+                        device?.let { viewModel.setIntensity(it, value * MAX_CHANNEL_VALUE / PERCENT_MAX) }
+                    },
+                    onColor = { packed ->
+                        device?.let { viewModel.setPrimaryColor(it, packed) }
                     },
                 )
             }
@@ -413,9 +457,147 @@ private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
     }
 }
 
+/**
+ * 灯效参数：速度、强度、颜色。
+ *
+ * 折叠时只占一行（标题 + 当前速度/强度摘要），展开后才露出滑块与配色 ——
+ * 设备页要保持「一屏一目的」，参数调节是低频微调，不该抢走主控台的视觉重心。
+ */
 @Composable
-private fun MoodRow(selected: EffectMood, onSelect: (EffectMood) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+private fun EffectTuning(
+    expanded: Boolean,
+    speed: Int,
+    intensity: Int,
+    colors: List<Color>,
+    onToggle: () -> Unit,
+    onSpeed: (Int) -> Unit,
+    onIntensity: (Int) -> Unit,
+    onColor: (Int) -> Unit,
+) {
+    var localSpeed by remember(speed) { mutableFloatStateOf(speed / MAX_CHANNEL_VALUE.toFloat()) }
+    var localIntensity by remember(intensity) {
+        mutableFloatStateOf(intensity / MAX_CHANNEL_VALUE.toFloat())
+    }
+
+    Column(modifier = Modifier.padding(top = 14.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+        ) {
+            Text(
+                text = stringResource(R.string.isle_effect_tuning),
+                color = IsleColors.TextSecondary,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = if (expanded) {
+                    stringResource(R.string.isle_effect_tuning_collapse)
+                } else {
+                    stringResource(
+                        R.string.isle_effect_tuning_summary,
+                        (localSpeed * PERCENT_MAX).roundToInt(),
+                        (localIntensity * PERCENT_MAX).roundToInt(),
+                    )
+                },
+                color = IsleColors.TextMuted,
+                fontSize = 11.5.sp,
+            )
+        }
+
+        if (expanded) {
+            GlassCard(modifier = Modifier.padding(top = 10.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    TuningSlider(
+                        label = stringResource(R.string.isle_effect_speed),
+                        value = localSpeed,
+                        onValueChange = { localSpeed = it },
+                        onCommit = {
+                            onSpeed((localSpeed * MAX_CHANNEL_VALUE / PERCENT_MAX).roundToInt())
+                        },
+                    )
+                    TuningSlider(
+                        label = stringResource(R.string.isle_effect_intensity),
+                        value = localIntensity,
+                        onValueChange = { localIntensity = it },
+                        onCommit = {
+                            onIntensity((localIntensity * MAX_CHANNEL_VALUE / PERCENT_MAX).roundToInt())
+                        },
+                    )
+
+                    Text(
+                        text = stringResource(R.string.isle_effect_color),
+                        color = IsleColors.TextSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        colors.take(3).forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(color, CircleShape)
+                                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        PRESET_COLORS.forEach { packed ->
+                            val rgb = packedToColor(packed)
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .background(rgb, CircleShape)
+                                    .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                                    .clickable { onColor(packed) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TuningSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(bottom = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                color = IsleColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${(value * PERCENT_MAX).roundToInt()}%",
+                color = IsleColors.TextPrimary,
+                fontSize = 12.sp,
+                modifier = Modifier.width(40.dp),
+            )
+        }
+        IsleSlider(
+            value = value,
+            onValueChange = onValueChange,
+            // 提交时不传数值，由调用方读自己的 state —— 拖拽结束到重组之间
+            // 参数快照可能是旧值，直接用快照会提交偏小的数值。
+            onValueChangeFinished = onCommit,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun MoodRow(selected: EffectMood, onSelect: (EffectMood) -> Unit) {    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         EffectMood.entries.forEach { mood ->
             MoodItem(
                 mood = mood,

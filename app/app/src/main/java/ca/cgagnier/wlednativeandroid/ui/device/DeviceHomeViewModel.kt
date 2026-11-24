@@ -14,6 +14,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
+import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +26,9 @@ import kotlinx.coroutines.launch
 private const val FAVORITES_SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val NIGHTLIGHT_MODE_FADE = 1
 private const val NIGHTLIGHT_TARGET_BRIGHTNESS_OFF = 0
+
+/** WLED 颜色槽位数量（主色 / 次色 / 第三色）。 */
+private const val COLOR_SLOT_COUNT = 3
 
 /**
  * 首页快捷卡片的一项。
@@ -81,6 +85,39 @@ class DeviceHomeViewModel(
 
     fun setBrightness(device: DeviceWithState, brightness: Int) = broadcast(device) { mac ->
         deviceConnectionManager.setBrightness(mac, brightness.coerceIn(0, 255))
+    }
+
+    /** 灯效速度（`seg.sx`）。 */
+    fun setSpeed(device: DeviceWithState, speed: Int) = broadcast(device) { mac ->
+        deviceConnectionManager.sendSegmentPatch(mac) {
+            it.copy(effectSpeed = speed.coerceIn(0, 255))
+        }
+    }
+
+    /** 灯效强度（`seg.ix`）。 */
+    fun setIntensity(device: DeviceWithState, intensity: Int) = broadcast(device) { mac ->
+        deviceConnectionManager.sendSegmentPatch(mac) {
+            it.copy(effectIntensity = intensity.coerceIn(0, 255))
+        }
+    }
+
+    /**
+     * 设置主色，保留次色与第三色。
+     *
+     * WLED 的颜色是 `[[r,g,b], ...]`，这里始终补齐成三个槽位，
+     * 避免设备端沿用上一次的旧值。
+     */
+    fun setPrimaryColor(device: DeviceWithState, packedRgb: Int) {
+        val current = currentSegment(device)?.colors.orEmpty()
+        val rebuilt = buildList {
+            add(packedRgb.unpackRgb())
+            for (slot in 1 until COLOR_SLOT_COUNT) {
+                add(current.getOrNull(slot) ?: listOf(0, 0, 0))
+            }
+        }
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { it.copy(colors = rebuilt) }
+        }
     }
 
     /**

@@ -223,6 +223,12 @@
     <string name="isle_devices">Lampen</string>
     <string name="isle_add_device">Lampe hinzufügen</string>
     <string name="isle_brightness">Helligkeit</string>
+    <string name="isle_effect_tuning">Effekt-Parameter</string>
+    <string name="isle_effect_tuning_collapse">Ausblenden</string>
+    <string name="isle_effect_tuning_summary">Tempo %1$d%% · Intensität %2$d%%</string>
+    <string name="isle_effect_speed">Tempo</string>
+    <string name="isle_effect_intensity">Intensität</string>
+    <string name="isle_effect_color">Farbe</string>
     <string name="isle_rhythm_mode">Rhythmusmodus</string>
     <string name="isle_quick_effects">Schnelleffekte</string>
     <string name="isle_mood_aurora">Aurora</string>

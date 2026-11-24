@@ -221,6 +221,12 @@
     <string name="isle_devices">设备管理</string>
     <string name="isle_add_device">添加设备</string>
     <string name="isle_brightness">亮度</string>
+    <string name="isle_effect_tuning">灯效参数</string>
+    <string name="isle_effect_tuning_collapse">收起</string>
+    <string name="isle_effect_tuning_summary">速度 %1$d%% · 强度 %2$d%%</string>
+    <string name="isle_effect_speed">速度</string>
+    <string name="isle_effect_intensity">强度</string>
+    <string name="isle_effect_color">颜色</string>
     <string name="isle_rhythm_mode">律动模式</string>
     <string name="isle_quick_effects">快捷灯效</string>
     <string name="isle_mood_aurora">幻彩极光</string>
