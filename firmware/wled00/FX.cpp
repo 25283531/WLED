@@ -5849,42 +5849,46 @@ void mode_stagelight(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct StageData { uint8_t bandS, strobe; uint32_t lastPeak; };
+  struct StageData { uint8_t bandS, strobe, colIdx; uint32_t lastPeak; };
   if (!SEGENV.allocateData(sizeof(StageData))) FX_FALLBACK_STATIC;
   StageData *d = (StageData*)SEGENV.data;
+  if (SEGENV.call == 0) d->colIdx = 0;
+  SEGMENT.fill(BLACK);
   um_data_t *um_data = getAudioData();
-  uint8_t band = 0;
-  if (um_data){
-    uint8_t *fft = (uint8_t*)um_data->u_data[2];
-    uint8_t peak = *(uint8_t*)um_data->u_data[3];
-    if (fft){
-      if (SEGMENT.custom1 < 128){ // 重低音
-        band = fft[0]; for (int i=1;i<3;i++) if (fft[i]>band) band=fft[i];
-      } else { // 高音
-        band = fft[8]; for (int i=9;i<16;i++) if (fft[i]>band) band=fft[i];
-      }
-    }
-    int16_t dv=(int16_t)band-d->bandS; d->bandS+=(uint8_t)((dv*(dv>0?4:1))/8);
-    uint8_t thr = SEGMENT.custom2; // 阈值，越大越不敏感
-    bool hit = (d->bandS > thr) && (d->bandS > d->strobe);
-    if (hit || (peak && (strip.now - d->lastPeak) > 90)){
-      // 声量分级 -> 亮度等级
-      uint8_t tier = 0;
-      if (d->bandS > (uint8_t)(thr+30)) tier = 1;
-      if (d->bandS > (uint8_t)(thr+60)) tier = 2;
-      if (d->bandS > (uint8_t)(thr+100)) tier = 3;
-      static const uint8_t kTierBri[4] = {120, 160, 205, 255};
-      uint8_t target = kTierBri[tier];
-      if (target > d->strobe) d->strobe = target;
-      d->lastPeak = strip.now;
-    }
+  if (!um_data) { d->strobe = scale8(d->strobe, 200); return; }
+  uint8_t *fft = (uint8_t*)um_data->u_data[2];
+  uint8_t peak = *(uint8_t*)um_data->u_data[3];
+  uint8_t b=0,m=0,h=0;
+  if (fft){
+    b=fft[0]; for(int i=1;i<3;i++) if(fft[i]>b) b=fft[i];
+    m=fft[3]; for(int i=4;i<8;i++) if(fft[i]>m) m=fft[i];
+    h=fft[8]; for(int i=9;i<16;i++) if(fft[i]>h) h=fft[i];
   }
-  // 快衰减
+  uint8_t band = (SEGMENT.custom1 < 128) ? b : h;
+  int16_t dv=(int16_t)band-d->bandS; d->bandS+=(uint8_t)((dv*(dv>0?4:1))/8);
+  uint8_t dominant = (b>=m && b>=h) ? 0 : (m>=h ? 1 : 2); // 主频段，多色时选色
+  uint8_t thr = SEGMENT.custom2; // 阈值，越大越不敏感
+  bool hit = (d->bandS > thr) && (d->bandS > d->strobe);
+  if (hit || (peak && (strip.now - d->lastPeak) > 90)){
+    uint8_t tier = 0;
+    if (d->bandS > (uint8_t)(thr+30)) tier = 1;
+    if (d->bandS > (uint8_t)(thr+60)) tier = 2;
+    if (d->bandS > (uint8_t)(thr+100)) tier = 3;
+    static const uint8_t kTierBri[4] = {120, 160, 205, 255};
+    uint8_t target = kTierBri[tier];
+    if (target > d->strobe) d->strobe = target;
+    d->colIdx = dominant;
+    d->lastPeak = strip.now;
+  }
   d->strobe = scale8(d->strobe, 200);
-  uint32_t base = SEGCOLOR(0);
-  CRGB c(base);
-  c.nscale8(d->strobe ? d->strobe : (uint8_t)18); // 无爆闪时极暗底
-  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,c);
+  if (d->strobe < 8) return; // 全黑，无常亮底
+  uint32_t c1 = SEGCOLOR(0), c2 = SEGCOLOR(1), c3 = SEGCOLOR(2);
+  uint32_t flash;
+  if (c2 || c3) flash = (d->colIdx==0)? c1 : (d->colIdx==1? c2 : c3); // 多色按主频段选
+  else flash = c1;                                                            // 单色
+  if (!flash) flash = 0xFFFFFF;
+  CRGB fc(flash); fc.nscale8(d->strobe);
+  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,fc);
 }
 static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@速度,强度,响应频段,爆闪阈值;;!;2f;sx=128,ix=192,c1=0,c2=96";
 void mode_tribreath(void) {
@@ -5911,30 +5915,21 @@ void mode_tribreath(void) {
   bool transient = (peak && (strip.now - d->lastPeak) > 120);
   if ((uint8_t)vol > d->prevVol + 25) transient = true;
   d->prevVol = (uint8_t)vol; if (transient) d->lastPeak = strip.now;
-  // 低频顶起：底部上边界 = bass 映射 + 瞬态增量
-  uint8_t bassTop = scale8(d->bassS, 96);          // 0..96 (底部约 38%)
-  if (transient) { uint16_t bt = (uint16_t)bassTop + 24; bassTop = bt > 255 ? 255 : (uint8_t)bt; }
+  uint8_t bassBoost = transient ? 80 : 0;
   for (uint16_t y=0;y<rows;y++){
-    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
-    // 三段：0..85 底(低) 85..170 中 170..255 顶(高)，边界柔和
-    if (posY <= bassTop){
-      uint8_t t = (uint8_t)(((uint32_t)posY*255)/(bassTop+1));
-      CRGB c(lumiRamp4(0x2A0E00, 0x7A2E00, 0xB05000, 0xFF9030, t));
-      c.nscale8((uint8_t)(150 + (d->bassS>>2)));
-      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
-    } else if (posY < 172){
-      uint8_t t = (uint8_t)(((uint32_t)(posY-86)*255)/86);
-      CRGB c(color_blend(0x604020, 0xC8A060, t));
-      c.nscale8((uint8_t)(90 + (d->midS>>1)));
-      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
-    } else {
-      // 顶部：香槟气泡，按 high 概率闪烁
-      if (d->highS > 24 && prng.random8(255) < (uint8_t)(d->highS + 30)){
-        uint16_t x = prng.random8()*cols>>8;
-        CRGB c(0xFFF0B0); c.nscale8((uint8_t)(140 + (d->highS>>1)));
-        SEGMENT.addPixelColorXY(x,y,c);
-      }
+    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
+    uint8_t level, col;
+    if (posY < 86){            // 整个底部三分之一：随低频呼吸
+      level = d->bassS; col = 0xFF7020;
+    } else if (posY < 171){    // 中部三分之一：随中频呼吸
+      level = d->midS;  col = 0x30FF90;
+    } else {                    // 顶部三分之一：随高频呼吸（非随机乱闪）
+      level = d->highS; col = 0x5080FF;
     }
+    uint16_t bri = (uint16_t)10 + level + (posY < 86 ? bassBoost : 0);
+    if (bri > 255) bri = 255;
+    CRGB c(col); c.nscale8((uint8_t)bri);
+    for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
   }
 }
 static const char _data_FX_MODE_TRIBREATH[] PROGMEM = "Tri-band Breath@速度,强度;;!;;";
@@ -5943,47 +5938,85 @@ void mode_audiospiral(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct SpirData { uint16_t angle; uint8_t bassS, midS, highS; int16_t vel; uint8_t prevVol; uint32_t lastPeak; };
+  struct SpirData { float spinPhase, bassEnv, mhEnv; uint32_t lastMs; };
   if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
   SpirData *d = (SpirData*)SEGENV.data;
-  um_data_t *um_data = getAudioData();
-  SEGMENT.fill(BLACK);
-  if (!um_data) { d->angle += 1; } // 无声慢转
-  else {
+  const float PI = 3.14159265f, TWO_PI = 6.2831853f;
+  if (d->lastMs == 0){ d->spinPhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = 1; }
+  // 取色：主/副色覆盖默认螺旋色（用户色卡）
+  uint8_t hueA = 135, hueB = 235;
+  uint32_t cA = SEGCOLOR(0), cB = SEGCOLOR(1);
+  if (cA) hueA = rgb2hsv(CRGB(cA)).hue;
+  if (cB) hueB = rgb2hsv(CRGB(cB)).hue;
+  // 双频段音频输入
+  float bassInput = 0.0f, mhInput = 0.0f;
+  if (um_data_t *um_data = getAudioData()){
     uint8_t *fft = (uint8_t*)um_data->u_data[2];
-    float vol = *(float*)um_data->u_data[0];
-    uint8_t peak = *(uint8_t*)um_data->u_data[3];
     if (fft){
-      uint8_t bass=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bass) bass=fft[i];
-      uint8_t mid=fft[3];  for(int i=4;i<8;i++) if(fft[i]>mid)  mid=fft[i];
-      uint8_t high=fft[8]; for(int i=9;i<16;i++) if(fft[i]>high) high=fft[i];
-      int16_t dv;
-      dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
-      dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
-      dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
-      bool transient = (peak && (strip.now-d->lastPeak)>100) || ((uint8_t)vol > d->prevVol+28);
-      d->prevVol=(uint8_t)vol; if(transient) d->lastPeak=strip.now;
-      // 角速度：基础慢速 + bass；peak 时给个加速脉冲
-      int16_t target = 2 + (d->bassS>>5);
-      if (transient) target += 10;
-      d->vel += (target - d->vel) / 4; // 平滑
+      uint8_t b = fft[0]; for (int i=1;i<3;i++) if (fft[i]>b) b=fft[i];
+      bassInput = (float)b / 255.0f;
+      uint16_t sum = 0; for (int i=4;i<=12;i++) sum += fft[i];
+      mhInput = ((float)sum / 9.0f) / 255.0f;
     }
   }
-  d->angle += (uint16_t)(d->vel > 0 ? d->vel : 1);
-  uint8_t thick = 1 + (d->midS>>6);   // 1..5 像素宽
-  uint8_t sat   = 60 + (d->highS>>1); // 饱和度/亮度
+  uint32_t now = strip.now;
+  float dt = (float)(now - d->lastMs) * 0.001f;
+  d->lastMs = now;
+  if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
+  // 低频包络：快攻慢放（一踩鼓点就加速甩动）
+  float bassClean = (bassInput > 0.14f) ? ((bassInput - 0.14f) / 0.86f) : 0.0f;
+  bassClean = (bassClean < 0.0f) ? 0.0f : (bassClean > 1.0f ? 1.0f : bassClean);
+  bassClean = powf(bassClean, 1.4f);
+  if (bassClean > d->bassEnv) d->bassEnv += (bassClean - d->bassEnv) * 0.70f;
+  else d->bassEnv += (bassClean - d->bassEnv) * 0.14f;
+  // 中高频包络：控制光带粗细与饱和度
+  float mhClean = (mhInput > 0.10f) ? ((mhInput - 0.10f) / 0.90f) : 0.0f;
+  mhClean = (mhClean < 0.0f) ? 0.0f : (mhClean > 1.0f ? 1.0f : mhClean);
+  if (mhClean > d->mhEnv) d->mhEnv += (mhClean - d->mhEnv) * 0.45f;
+  else d->mhEnv += (mhClean - d->mhEnv) * 0.16f;
+  // 旋转相位：低频控制角速度（单向积分，绝不倒转）
+  float angVel = 0.85f + d->bassEnv * 6.50f;
+  d->spinPhase += angVel * dt;
+  if (d->spinPhase > 628.3185f) d->spinPhase -= 628.3185f;
+  float activeW = 0.14f + d->mhEnv * 0.22f;                 // 中高频控制粗细
+  uint8_t sat = (uint8_t)(165.0f + d->mhEnv * 90.0f);       // 中高频控制饱和度
+  uint8_t val = (uint8_t)(195.0f + d->mhEnv * 60.0f);
+  SEGMENT.fill(BLACK);
   for (uint16_t y=0;y<rows;y++){
-    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
-    uint16_t a = d->angle + (uint16_t)((uint32_t)posY*3); // 绕柱圈数
-    uint8_t angA = (uint8_t)(a & 0xFF);
-    uint8_t angB = (uint8_t)((a + 128) & 0xFF);
-    uint16_t xA = (uint16_t)(((uint32_t)angA * cols) >> 8) % cols;
-    uint16_t xB = (uint16_t)(((uint32_t)angB * cols) >> 8) % cols;
-    CRGB cA(0x40E0FF); cA.nscale8(sat);
-    CRGB cB(0xFF50C0); cB.nscale8(sat);
-    for (uint8_t t=0;t<thick;t++){
-      SEGMENT.setPixelColorXY((xA+t)%cols, y, cA);
-      SEGMENT.setPixelColorXY((xB+t)%cols, y, cB);
+    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;
+    float edgeFade = 1.0f;
+    if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
+    else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
+    for (uint16_t x=0;x<cols;x++){
+      float theta = ((float)x / (float)cols) * TWO_PI;
+      float twist = ny * 1.35f * TWO_PI + d->spinPhase + d->bassEnv * 0.45f * ny;
+      float phaseA = theta - twist;
+      float phaseB = phaseA + PI; // 双链相差 180°
+      // 归一化角距离 [0,1]：折叠到 [-PI,PI] 再取绝对值/PI（不调用 atan2/sin）
+      float kA = (float)(int)(phaseA * 0.15915494f + (phaseA >= 0 ? 0.5f : -0.5f));
+      float wA = phaseA - kA * TWO_PI;
+      float distA = (wA < 0 ? -wA : wA) / PI;
+      float kB = (float)(int)(phaseB * 0.15915494f + (phaseB >= 0 ? 0.5f : -0.5f));
+      float wB = phaseB - kB * TWO_PI;
+      float distB = (wB < 0 ? -wB : wB) / PI;
+      float nA = distA / activeW;
+      float iA = (nA < 1.5f) ? expf(-2.2f * nA * nA) : 0.0f;
+      float nB = distB / activeW;
+      float iB = (nB < 1.5f) ? expf(-2.2f * nB * nB) : 0.0f;
+      CRGB fc(6, 8, 16); // 极暗通透底色
+      if (iA > 0.01f){
+        uint8_t coreA = (uint8_t)(iA * iA * 55.0f); // 中心高光去饱和
+        uint8_t sA = (sat > coreA) ? (sat - coreA) : 0;
+        uint8_t vA = (uint8_t)(iA * val * edgeFade);
+        fc += CRGB(CHSV(hueA, sA, vA));
+      }
+      if (iB > 0.01f){
+        uint8_t coreB = (uint8_t)(iB * iB * 55.0f);
+        uint8_t sB = (sat > coreB) ? (sat - coreB) : 0;
+        uint8_t vB = (uint8_t)(iB * val * edgeFade);
+        fc += CRGB(CHSV(hueB, sB, vB));
+      }
+      SEGMENT.setPixelColorXY(x, y, fc);
     }
   }
 }
@@ -6031,40 +6064,104 @@ void mode_sonicpulse(void) {
   }
 }
 static const char _data_FX_MODE_SONICPULSE[] PROGMEM = "Sonic Pulse@速度,强度;;!;;";
+static CRGB sampleLavaColor(float energy) {
+  struct LS { float p; uint32_t c; };
+  static const LS LAVA[5] = {
+    { 0.00f, 0x12041C }, // 深邃暗紫底色
+    { 0.35f, 0x8C0F37 }, // 熔岩外晕：酒红
+    { 0.68f, 0xFF4B14 }, // 熔岩主体：珊瑚橙
+    { 0.90f, 0xFFC32D }, // 高能内核：琥珀金
+    { 1.00f, 0xFFFADC }  // 重低音爆点：暖白高光
+  };
+  if (energy < 0.0f) energy = 0.0f;
+  if (energy > 1.0f) energy = 1.0f;
+  for (uint8_t i = 0; i < 4; i++) {
+    if (energy >= LAVA[i].p && energy <= LAVA[i+1].p) {
+      float span = LAVA[i+1].p - LAVA[i].p;
+      float t = (span > 0.0001f) ? ((energy - LAVA[i].p) / span) : 0.0f;
+      float st = t * t * (3.0f - 2.0f * t); // smoothstep，奶油混光
+      return CRGB(color_blend(LAVA[i].c, LAVA[i+1].c, (uint8_t)(st * 255.0f)));
+    }
+  }
+  return CRGB(LAVA[4].c);
+}
+
+
 void mode_basslava(void) {
 
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct Blob { uint8_t baseY, phase, rad, bri; };
-  struct LVData { Blob b[4]; uint8_t bassS; };
+  struct LavaBlob { float x, y, vx, vy, baseRadius, phase; };
+  struct LVData { LavaBlob b[4]; float pumpPos, pumpVel, smoothBass; uint32_t lastMs; bool inited; };
   if (!SEGENV.allocateData(sizeof(LVData))) FX_FALLBACK_STATIC;
   LVData *d = (LVData*)SEGENV.data;
+  const float aspectRatio = 0.90f;
+  if (!d->inited){
+    d->b[0] = { 0.15f, 0.25f,  0.025f,  0.055f, 0.16f, 0.0f };
+    d->b[1] = { 0.55f, 0.72f, -0.020f, -0.048f, 0.15f, 1.6f };
+    d->b[2] = { 0.80f, 0.40f,  0.018f,  0.062f, 0.13f, 3.1f };
+    d->b[3] = { 0.35f, 0.82f, -0.028f, -0.040f, 0.14f, 4.7f };
+    d->pumpPos = 0.0f; d->pumpVel = 0.0f; d->smoothBass = 0.0f;
+    d->lastMs = strip.now; d->inited = true;
+  }
   um_data_t *um_data = getAudioData();
-  SEGMENT.fill(BLACK);
-  uint8_t bass=0;
-  if (um_data){ uint8_t *fft=(uint8_t*)um_data->u_data[2]; if (fft){ bass=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bass) bass=fft[i]; } }
-  int16_t dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?5:1))/8);
-  if (SEGENV.call==0) for(int i=0;i<4;i++){ d->b[i].baseY=(uint8_t)(30+i*50); d->b[i].phase=(uint8_t)(i*60); d->b[i].rad=0; d->b[i].bri=0; }
-  for (int i=0;i<4;i++){
-    // 缓慢上下漂浮
-    uint8_t posY = (uint8_t)(((uint16_t)d->b[i].baseY + sin8_t((uint8_t)(strip.now/40 + d->b[i].phase))/3) % 256);
-    // 半径：快攻慢放 -> 弹性
-    uint8_t target = 20 + scale8(d->bassS, 80);
-    int16_t dr=(int16_t)target-d->b[i].rad; d->b[i].rad+=(uint8_t)((dr*(dr>0?5:1))/8);
-    uint8_t targetBri = 90 + (d->bassS>>1);
-    int16_t db=(int16_t)targetBri-d->b[i].bri; d->b[i].bri+=(uint8_t)((db*(db>0?5:1))/8);
-    int16_t radR = (int16_t)((uint32_t)d->b[i].rad*rows/255); if (radR<1) radR=1;
-    uint16_t cy = lumiRow(posY, rows);
-    for (int16_t dy=-radR; dy<=radR; dy++){
-      int16_t yy=(int16_t)cy+dy; if(yy<0||yy>=(int16_t)rows) continue;
-      uint8_t dist=(uint8_t)((dy<0?-dy:dy)*255/radR);
-      uint8_t fall = scale8(dist, 255-dist);
-      uint8_t br = scale8(d->b[i].bri, fall);
-      uint8_t t = (uint8_t)(((uint32_t)(dy+radR)*255)/(2*radR+1));
-      CRGB c(lumiRamp4(0x802000, 0xD05000, 0xFF9030, 0xFFE080, t));
-      c.nscale8(br);
-      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,(uint16_t)yy,c);
+  float bassInput = 0.0f;
+  if (um_data){
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    if (fft){ uint8_t bv=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bv) bv=fft[i]; bassInput=(float)bv/255.0f; }
+  }
+  if (bassInput < 0.0f) bassInput = 0.0f; if (bassInput > 1.0f) bassInput = 1.0f;
+  uint32_t now = strip.now;
+  float dt = (float)(now - d->lastMs) * 0.001f;
+  d->lastMs = now;
+  if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
+  float timeSec = (float)now * 0.001f;
+  // A. 重低音包络 + 弹簧阻尼物理（瞬间膨胀 + 弹性收缩）
+  if (bassInput > d->smoothBass) d->smoothBass += (bassInput - d->smoothBass) * 0.65f;
+  else d->smoothBass += (bassInput - d->smoothBass) * 0.12f;
+  float targetPump = (d->smoothBass > 0.15f) ? ((d->smoothBass - 0.15f) / 0.85f) : 0.0f;
+  targetPump = powf(targetPump, 1.3f);
+  const float stiffness = 180.0f, damping = 14.0f;
+  float force = (targetPump - d->pumpPos) * stiffness - d->pumpVel * damping;
+  d->pumpVel += force * dt;
+  d->pumpPos += d->pumpVel * dt;
+  if (d->pumpPos < -0.15f) d->pumpPos = -0.15f; // 收缩时轻微内缩过冲
+  // B. 熔岩球缓慢漂浮（音乐越强对流稍快）
+  float flowBoost = 1.0f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.8f;
+  for (uint8_t i=0;i<4;i++){
+    d->b[i].x += d->b[i].vx * dt * flowBoost;
+    d->b[i].y += d->b[i].vy * dt * flowBoost;
+    if (d->b[i].x >= 1.0f) d->b[i].x -= 1.0f;
+    if (d->b[i].x < 0.0f) d->b[i].x += 1.0f;
+    if (d->b[i].y > 0.88f){ d->b[i].y = 0.88f; float v=d->b[i].vy; d->b[i].vy = (v<0? -v : v); }
+    else if (d->b[i].y < 0.12f){ d->b[i].y = 0.12f; float v=d->b[i].vy; d->b[i].vy = (v<0? -v : v); }
+  }
+  // 预计算每团色块的动态半径（不依赖 x/y，每帧一次 sin_approx）
+  float audioScale = 1.0f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.55f;
+  float rad[4];
+  for (uint8_t i=0;i<4;i++){
+    float idleBreath = 1.0f + 0.06f * sin_approx(timeSec * 1.5f + d->b[i].phase);
+    rad[i] = d->b[i].baseRadius * idleBreath * audioScale;
+  }
+  float brightnessBoost = 0.72f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.35f;
+  // C. Metaball 等势面渲染
+  for (uint16_t y=0;y<rows;y++){
+    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;
+    for (uint16_t x=0;x<cols;x++){
+      float nx = (float)x / (float)cols;
+      float fieldSum = 0.0f;
+      for (uint8_t i=0;i<4;i++){
+        float dx = nx - d->b[i].x; if (dx < 0) dx = -dx;
+        if (dx > 0.5f) dx = 1.0f - dx;       // 柱面最短环绕距离，消除拼缝
+        dx *= aspectRatio;
+        float dy = ny - d->b[i].y;
+        float distSq = dx*dx + dy*dy + 0.0025f;
+        fieldSum += (rad[i]*rad[i]) / distSq; // 势能叠加，靠近时自动粘连融合
+      }
+      float energy = (fieldSum - 0.35f) * 0.52f * brightnessBoost;
+      if (energy < 0.0f) energy = 0.0f; if (energy > 1.0f) energy = 1.0f;
+      SEGMENT.setPixelColorXY(x, y, sampleLavaColor(energy));
     }
   }
 }
@@ -6098,9 +6195,9 @@ void mode_spectrumlamp(void) {
     int16_t dist = (int16_t)x - cx; if (dist<0) dist=-dist;
     int16_t maxD = cx; if (maxD<1) maxD=1;
     uint8_t band; uint8_t level;
-    if (dist < maxD/3){ band=2; level=d->highS; }
-    else if (dist < 2*maxD/3){ band=1; level=d->midS; }
-    else { band=0; level=d->lowS; }
+    if (dist <= maxD/3)        { band=2; level=d->highS; }   // 中心 ~33%
+    else if (dist <= (maxD*3)/4){ band=1; level=d->midS; }    // 中部 ~42%
+    else                        { band=0; level=d->lowS; }    // 外缘 ~25%
     uint8_t fillH = level; // 0..255 posY
     uint32_t col = (band==0)?0xFF4020:(band==1?0x20FF80:0x4060FF);
     for (uint16_t y=0;y<rows;y++){
@@ -8204,7 +8301,7 @@ void mode_freqpixels(void) {                // Freqpixel. By Andrew Tuline.
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
   struct FPx { uint8_t x, y; };
-  struct FPData { uint8_t bassS, midS, highS; FPx blob[4]; FPx midPix[24]; FPx highPix[24]; };
+  struct FPData { uint8_t bassS, midS, highS; FPx blob[2]; FPx midPix[12]; };
   if (!SEGENV.allocateData(sizeof(FPData))) FX_FALLBACK_STATIC;
   FPData *d = (FPData*)SEGENV.data;
   um_data_t *um_data = getAudioData();
@@ -8220,52 +8317,51 @@ void mode_freqpixels(void) {                // Freqpixel. By Andrew Tuline.
   dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
   dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
   dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
-  if (vol < 6 && d->bassS < 10 && d->midS < 10 && d->highS < 10) return; // 无声全灭
+  if (vol < 6 && d->bassS < 10 && d->midS < 10 && d->highS < 10) return; // 静音全灭
   if (SEGENV.call == 0) {
-    for (int i=0;i<4;i++){d->blob[i].x=prng.random8();d->blob[i].y=prng.random8();}
-    for (int i=0;i<24;i++){d->midPix[i].x=prng.random8();d->midPix[i].y=prng.random8();d->highPix[i].x=prng.random8();d->highPix[i].y=prng.random8();}
+    for (int i=0;i<2;i++){d->blob[i].x=prng.random8();d->blob[i].y=prng.random8();}
+    for (int i=0;i<12;i++){d->midPix[i].x=prng.random8();d->midPix[i].y=prng.random8();}
   }
-  // 低频光团：随机游走，半径随 bass
-  uint8_t bRad = scale8(d->bassS, 64);          // posY 半径 0..64
-  for (int i=0;i<4;i++){
-    d->blob[i].x += (int8_t)(prng.random8(5)-2);
-    d->blob[i].y += (int8_t)(prng.random8(5)-2);
+  // 低频：2 团暖琥珀光斑，匀速环绕 + 正弦上下漂浮（平滑，无抖动）
+  uint8_t bRad = scale8(d->bassS, 72);
+  for (int i=0;i<2;i++){
+    d->blob[i].x = (uint8_t)(d->blob[i].x + 1);
+    int8_t dy = (int8_t)(sin8_t((uint8_t)(strip.now/50 + i*80)) >> 6) - 1; // -1..2
+    d->blob[i].y = (uint8_t)(d->blob[i].y + dy);
     uint16_t cx = (uint16_t)(((uint32_t)d->blob[i].x*cols)>>8) % cols;
     uint16_t cy = lumiRow(d->blob[i].y, rows);
     int16_t rad = (int16_t)((uint32_t)bRad*rows/255); if (rad<1) rad=1;
-    for (int16_t dy=-rad; dy<=rad; dy++){
-      int16_t yy = (int16_t)cy+dy; if (yy<0||yy>=(int16_t)rows) continue;
-      int16_t xr = rad - (dy<0?-dy:dy); if (xr<0) xr=0;
-      uint8_t br = (uint8_t)(200 - ((dy<0?-dy:dy)*180)/rad);
-      CRGB c(0xFFE080); c.nscale8(br);
+    for (int16_t yy=-rad; yy<=rad; yy++){
+      int16_t y2 = (int16_t)cy+yy; if (y2<0||y2>=(int16_t)rows) continue;
+      int16_t xr = rad - (yy<0?-yy:yy); if (xr<0) xr=0;
+      uint8_t br = (uint8_t)(210 - ((yy<0?-yy:yy)*190)/rad);
+      CRGB c(0xFFE090); c.nscale8(br);
       for (int16_t dx=-xr; dx<=xr; dx++){
         int32_t sx = (int32_t)cx + dx;
-        sx = ((sx % (int32_t)cols) + cols) % cols; // 柱面环绕，防负值越界
-        SEGMENT.addPixelColorXY((uint16_t)sx, (uint16_t)yy, c);
+        sx = ((sx % (int32_t)cols) + cols) % cols; // 柱面环绕
+        SEGMENT.addPixelColorXY((uint16_t)sx, (uint16_t)y2, c);
       }
     }
   }
-  // 中频：一族青色灯珠，数量随 mid
-  uint8_t midN = (uint8_t)(((uint16_t)d->midS*24)>>8);
-  for (int i=0;i<24;i++){
-    d->midPix[i].x += (int8_t)(prng.random8(7)-3);
-    d->midPix[i].y += (int8_t)(prng.random8(7)-3);
+  // 中频：一族青色灯珠，数量随 mid，平滑漂移
+  uint8_t midN = (uint8_t)(((uint16_t)d->midS*12)>>8);
+  for (int i=0;i<12;i++){
+    d->midPix[i].x = (uint8_t)(d->midPix[i].x + 2 + (sin8_t((uint8_t)(strip.now/30 + i*20))>>6));
+    d->midPix[i].y = (uint8_t)(d->midPix[i].y + 1);
     if (i < midN){
       uint16_t xx=(uint16_t)(((uint32_t)d->midPix[i].x*cols)>>8)%cols;
       uint16_t yy=lumiRow(d->midPix[i].y,rows);
-      CRGB c(0x40FFC0); c.nscale8((uint8_t)(120+(d->midS>>1)));
+      CRGB c(0x40FFD0); c.nscale8((uint8_t)(130+(d->midS>>1)));
       SEGMENT.addPixelColorXY(xx,yy,c);
     }
   }
-  // 高频：另一族品红灯珠，数量随 high
-  uint8_t highN = (uint8_t)(((uint16_t)d->highS*24)>>8);
-  for (int i=0;i<24;i++){
-    d->highPix[i].x += (int8_t)(prng.random8(7)-3);
-    d->highPix[i].y += (int8_t)(prng.random8(7)-3);
-    if (i < highN){
-      uint16_t xx=(uint16_t)(((uint32_t)d->highPix[i].x*cols)>>8)%cols;
-      uint16_t yy=lumiRow(d->highPix[i].y,rows);
-      CRGB c(0xFF50D0); c.nscale8((uint8_t)(120+(d->highS>>1)));
+  // 高频：仅在 high 较强时稀疏品红闪点，位置随机但数量稳定
+  if (d->highS > 30){
+    uint8_t highN = (uint8_t)(1 + (((uint16_t)d->highS*5)>>8));
+    for (uint8_t i=0;i<highN;i++){
+      uint16_t xx = (uint16_t)prng.random8()*cols>>8;
+      uint16_t yy = lumiRow(prng.random8(), rows);
+      CRGB c(0xFF70E0); c.nscale8((uint8_t)(180+(d->highS>>2)));
       SEGMENT.addPixelColorXY(xx,yy,c);
     }
   }
@@ -10981,19 +11077,19 @@ void mode_particle1DGEQ(void) {
   if (um_data) vol = *(float*)um_data->u_data[0];
   int16_t dv = (int16_t)vol - d->volS; d->volS += (uint8_t)((dv*(dv>0?4:1))/8); // 快攻慢放
   uint32_t base = SEGCOLOR(0);
-  // 填充高度 posY 0..255
-  uint8_t fillH = d->volS;
-  // 先铺满底色
-  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,base);
-  if (fillH < 4) return; // 无声保持常亮底色
+  uint8_t fillH = d->volS; // 0..255 posY
+  // 常亮底色：压暗约两个量级（nscale8(2) ≈ 0.8%）
+  CRGB dim(base); dim.nscale8(2);
+  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,dim);
+  if (fillH < 6) return; // 极安静时只留暗底
+  // 顶部暗色：底色向黑混合，越往上越深
+  uint32_t deep = color_blend(base, 0, 55);
   for (uint16_t y=0;y<rows;y++){
     uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
     if (posY > fillH) continue;
-    // 越往上颜色越深：与底色混合 t=posY/fillH
-    uint8_t t = (uint8_t)(((uint32_t)posY*255)/fillH);
-    // 深色 = 底色压暗到 ~35%，再混合
-    uint32_t deep = color_blend(base, 0, 30); // 越往上越深的暗色（底色压暗）
+    uint8_t t = (uint8_t)(((uint32_t)posY*255)/fillH); // 0 底 -> 255 顶
     CRGB c(color_blend(base, deep, t));
+    c.nscale8((uint8_t)(235 - (t>>2))); // 高亮，顶部略暗
     for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,c);
   }
 }
