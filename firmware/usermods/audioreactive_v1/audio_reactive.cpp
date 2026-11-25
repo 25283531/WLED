@@ -18,6 +18,13 @@
 #include <esp_timer.h>
 #endif
 
+#if defined(UM_AUDIOREACTIVE_BLE_SYNC) && defined(ARDUINO_ARCH_ESP32)
+#define AR_BLE_SYNC_SUPPORTED   // BLE sound sync is only built for the C01 (ESP32-S3) environment
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#endif
+
 /*
  * Usermods allow you to add own functionality to WLED more easily
  * See: https://github.com/wled-dev/WLED/wiki/Add-own-functionality
@@ -753,6 +760,51 @@ static void autoResetPeak(void) {
 }
 
 
+//////////////////////////////
+// BLE sound sync (C01)     //
+//////////////////////////////
+#if defined(AR_BLE_SYNC_SUPPORTED)
+
+// The phone sends the same 44-byte "v2" analysis packet that UDP sound sync uses.
+// GATT writes arrive in the BT task, so only a copy is taken there; decoding happens
+// in the usermod loop, where all audio state is owned.
+#define BLE_AUDIO_SERVICE_UUID  "6b1d0001-3c2a-4f5e-9d8b-0a1b2c3d4e5f"
+#define BLE_AUDIO_RX_UUID       "6b1d0002-3c2a-4f5e-9d8b-0a1b2c3d4e5f"
+#define BLE_AUDIO_PACKET_SIZE   44
+
+static portMUX_TYPE bleAudioMux = portMUX_INITIALIZER_UNLOCKED;
+static uint8_t      bleAudioPacket[BLE_AUDIO_PACKET_SIZE];
+static volatile bool     bleAudioPacketReady = false;
+static volatile bool     bleAudioClientConnected = false;
+static volatile uint32_t bleAudioLastPacketMs = 0;
+
+class BleAudioServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* server) override {
+    bleAudioClientConnected = true;
+  }
+  void onDisconnect(BLEServer* server) override {
+    bleAudioClientConnected = false;
+    BLEDevice::startAdvertising();   // stay discoverable so the phone can reconnect
+  }
+};
+
+class BleAudioRxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* characteristic) override {
+    const size_t len = characteristic->getLength();
+    if (len != BLE_AUDIO_PACKET_SIZE) return;   // drop anything that is not a complete v2 packet
+    uint8_t* data = characteristic->getData();
+    if (data == nullptr) return;
+    portENTER_CRITICAL(&bleAudioMux);
+    memcpy(bleAudioPacket, data, BLE_AUDIO_PACKET_SIZE);
+    bleAudioPacketReady = true;
+    bleAudioLastPacketMs = millis();
+    portEXIT_CRITICAL(&bleAudioMux);
+  }
+};
+
+#endif
+
+
 ////////////////////
 // usermod class  //
 ////////////////////
@@ -845,6 +897,11 @@ class AudioReactive : public Usermod {
     uint16_t audioSyncPort= 11988;// default port for UDP sound sync
 
     bool updateIsRunning = false; // true during OTA.
+
+#ifdef AR_BLE_SYNC_SUPPORTED
+    bool          bleStarted = false;
+    unsigned long last_BLETime = 0;   // time of the last decoded BLE packet
+#endif
 
 #ifdef ARDUINO_ARCH_ESP32
     // used for AGC
@@ -1336,6 +1393,66 @@ class AudioReactive : public Usermod {
       return haveFreshData;
     }
 
+#ifdef AR_BLE_SYNC_SUPPORTED
+
+    // Starts the BLE GATT peripheral that receives phone analysis packets.
+    // Device name is derived from the STA MAC so multiple lamps stay distinguishable.
+    void startBleAudioSync() {
+      if (bleStarted) return;
+      bleStarted = true;   // guard against re-entry from loop()
+
+      uint8_t mac[6] = { 0, 0, 0, 0, 0, 0 };
+      WiFi.macAddress(mac);
+      if ((mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5]) == 0) {
+        uint64_t efuseMac = ESP.getEfuseMac();
+        mac[4] = (uint8_t)(efuseMac >> 8);
+        mac[5] = (uint8_t)(efuseMac);
+      }
+      char deviceName[16];
+      snprintf_P(deviceName, sizeof(deviceName), PSTR("C01-%02X%02X"), mac[4], mac[5]);
+
+      BLEDevice::init(deviceName);
+      BLEServer* server = BLEDevice::createServer();
+      server->setCallbacks(new BleAudioServerCallbacks());
+      BLEService* service = server->createService(BLE_AUDIO_SERVICE_UUID);
+      BLECharacteristic* rxChar = service->createCharacteristic(
+          BLE_AUDIO_RX_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+      rxChar->setCallbacks(new BleAudioRxCallbacks());
+      service->start();
+
+      BLEAdvertising* advertising = BLEDevice::getAdvertising();
+      advertising->addServiceUUID(BLE_AUDIO_SERVICE_UUID);
+      advertising->setScanResponse(true);   // device name travels in the scan response
+      advertising->start();
+      DEBUGSR_PRINT(F("AR: BLE sound sync ready as "));
+      DEBUGSR_PRINTLN(deviceName);
+    }
+
+    bool bleAudioReceiving() const {
+      unsigned long last = bleAudioLastPacketMs;
+      return (last != 0) && ((millis() - last) < 2000);
+    }
+
+    // Picks up a packet queued by the GATT callback and decodes it in loop context.
+    bool receiveAudioDataBLE() {
+      uint8_t packet[BLE_AUDIO_PACKET_SIZE];
+      bool ready = false;
+      portENTER_CRITICAL(&bleAudioMux);
+      if (bleAudioPacketReady) {
+        memcpy(packet, bleAudioPacket, BLE_AUDIO_PACKET_SIZE);
+        bleAudioPacketReady = false;
+        ready = true;
+      }
+      portEXIT_CRITICAL(&bleAudioMux);
+      if (!ready) return false;
+      if (!isValidUdpSyncVersion((const char *)packet)) return false;
+      decodeAudioData(BLE_AUDIO_PACKET_SIZE, packet);
+      receivedFormat = 2;
+      return true;
+    }
+
+#endif
+
 
     //////////////////////
     // usermod functions//
@@ -1511,6 +1628,9 @@ class AudioReactive : public Usermod {
       if (enabled) disableSoundProcessing = false;       // all good - enable audio processing
       if (enabled) connectUDPSoundSync();
       if (enabled && addPalettes) createAudioPalettes();
+#ifdef AR_BLE_SYNC_SUPPORTED
+      if (enabled) startBleAudioSync();                  // BLE sound sync follows "audio reactive enabled"
+#endif
       initDone = true;
     }
 
@@ -1558,6 +1678,10 @@ class AudioReactive : public Usermod {
       // We cannot wait indefinitely before processing audio data
       if (strip.isUpdating() && (millis() - lastUMRun < 2)) return;   // be nice, but not too nice
 
+#ifdef AR_BLE_SYNC_SUPPORTED
+      if (!bleStarted) startBleAudioSync();   // audio reactive switched on at runtime -> bring BLE up
+#endif
+
       // suspend local sound processing when "real time mode" is active (E131, UDP, ADALIGHT, ARTNET, DDP, DMX)
       //  exception: sound input is still needed when useMainSegmentOnly - other segments are still running with local input.
       if (realtimeMode && !realtimeOverride && !useMainSegmentOnly) {
@@ -1583,6 +1707,10 @@ class AudioReactive : public Usermod {
       if (audioSyncEnabled & 0x01) disableSoundProcessing = false;  // keep running audio IF we're in audio Transmit mode
 #ifdef ARDUINO_ARCH_ESP32
       if (!audioSource || !audioSource->isInitialized()) disableSoundProcessing = true;  // no audio source
+
+#ifdef AR_BLE_SYNC_SUPPORTED
+      if (bleAudioReceiving()) disableSoundProcessing = true;   // BLE stream has priority over the local microphone
+#endif
 
 
       // Only run the sampling code IF we're not in Receive mode or realtime mode
@@ -1649,6 +1777,15 @@ class AudioReactive : public Usermod {
           else volumeSmth = syncVolumeSmth;                   // restore originally received sample for next run of dynamics limiter
           limitSampleDynamics();                              // run dynamics limiter on received volumeSmth, to hide jumps and hickups
       }
+
+#ifdef AR_BLE_SYNC_SUPPORTED
+      // BLE Microphone Sync - receive mode. Independent of the UDP socket state, so the phone can
+      // feed analysis data over BLE even when UDP multicast is unavailable.
+      if (receiveAudioDataBLE()) {
+        last_BLETime = millis();
+        limitSampleDynamics();
+      }
+#endif
 
       #if defined(MIC_LOGGER) || defined(MIC_SAMPLING_LOG) || defined(FFT_SAMPLING_LOG)
       static unsigned long lastMicLoggerTime = 0;
@@ -1845,15 +1982,27 @@ class AudioReactive : public Usermod {
         // current Audio input
         infoArr = user.createNestedArray(F("Audio Source"));
         if (audioSyncEnabled & 0x02) {
-          // UDP sound sync - receive mode
-          infoArr.add(F("UDP sound sync"));
-          if (udpSyncConnected) {
-            if (millis() - last_UDPTime < 2500)
+#if defined(AR_BLE_SYNC_SUPPORTED)
+          if (bleAudioClientConnected) {
+            // BLE sound sync - receive mode (phone analysis packets over GATT)
+            infoArr.add(F("BLE sound sync"));
+            if (millis() - last_BLETime < 2500)
               infoArr.add(F(" - receiving"));
             else
               infoArr.add(F(" - idle"));
-          } else {
-            infoArr.add(F(" - no connection"));
+          } else
+#endif
+          {
+            // UDP sound sync - receive mode
+            infoArr.add(F("UDP sound sync"));
+            if (udpSyncConnected) {
+              if (millis() - last_UDPTime < 2500)
+                infoArr.add(F(" - receiving"));
+              else
+                infoArr.add(F(" - idle"));
+            } else {
+              infoArr.add(F(" - no connection"));
+            }
           }
 #ifndef ARDUINO_ARCH_ESP32  // substitute for 8266
         } else {
