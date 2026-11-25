@@ -411,7 +411,6 @@ class AudioStreamService : Service() {
             .setContentTitle(getString(R.string.isle_audio_ask_title))
             .setContentText(getString(R.string.isle_audio_ask_body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(Notification.CATEGORY_QUESTION)
             .setAutoCancel(true)
             .setContentIntent(openAppIntent())
             .addAction(0, getString(R.string.isle_audio_notification_yes), yesIntent)
