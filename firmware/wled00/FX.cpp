@@ -2195,15 +2195,6 @@ void mode_fire_2012() {
 static const char _data_FX_MODE_FIRE_2012[] PROGMEM = "Fire 2012@Cooling,Spark rate,,2D Blur,Boost;;!;1;pal=35,sx=64,ix=160,m12=1,c2=128"; // bars
 #endif // WLED_PS_DONT_REPLACE_x_FX
 
-// colored stripes pulsing at a defined Beats-Per-Minute (BPM)
-void mode_bpm() {
-  uint32_t stp = (strip.now / 20) & 0xFF;
-  uint8_t beat = beatsin8_t(SEGMENT.speed, 64, 255);
-  for (unsigned i = 0; i < SEGLEN; i++) {
-    SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(stp + (i * 2), false, PALETTE_SOLID_WRAP, 0, beat - stp + (i * 10)));
-  }
-}
-static const char _data_FX_MODE_BPM[] PROGMEM = "Bpm@!;!;!;;sx=64";
 
 
 void mode_fillnoise8() {
@@ -5853,248 +5844,283 @@ void mode_lumi_fountain(void) {
     SEGMENT.addPixelColorXY(fx, fy, c);
   }
 } // mode_lumi_fountain()
+void mode_stagelight(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct StageData { uint8_t bandS, strobe; uint32_t lastPeak; };
+  if (!SEGENV.allocateData(sizeof(StageData))) FX_FALLBACK_STATIC;
+  StageData *d = (StageData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  uint8_t band = 0;
+  if (um_data){
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    uint8_t peak = *(uint8_t*)um_data->u_data[3];
+    if (fft){
+      if (SEGMENT.custom1 < 128){ // 重低音
+        band = fft[0]; for (int i=1;i<3;i++) if (fft[i]>band) band=fft[i];
+      } else { // 高音
+        band = fft[8]; for (int i=9;i<16;i++) if (fft[i]>band) band=fft[i];
+      }
+    }
+    int16_t dv=(int16_t)band-d->bandS; d->bandS+=(uint8_t)((dv*(dv>0?4:1))/8);
+    uint8_t thr = SEGMENT.custom2; // 阈值，越大越不敏感
+    bool hit = (d->bandS > thr) && (d->bandS > d->strobe);
+    if (hit || (peak && (strip.now - d->lastPeak) > 90)){
+      // 声量分级 -> 亮度等级
+      uint8_t tier = 0;
+      if (d->bandS > (uint8_t)(thr+30)) tier = 1;
+      if (d->bandS > (uint8_t)(thr+60)) tier = 2;
+      if (d->bandS > (uint8_t)(thr+100)) tier = 3;
+      static const uint8_t kTierBri[4] = {120, 160, 205, 255};
+      uint8_t target = kTierBri[tier];
+      if (target > d->strobe) d->strobe = target;
+      d->lastPeak = strip.now;
+    }
+  }
+  // 快衰减
+  d->strobe = scale8(d->strobe, 200);
+  uint32_t base = SEGCOLOR(0);
+  CRGB c(base);
+  c.nscale8(d->strobe ? d->strobe : (uint8_t)18); // 无爆闪时极暗底
+  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,c);
+}
+static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@速度,强度,响应频段,爆闪阈值;;!;2f;sx=128,ix=192,c1=0,c2=96";
+void mode_tribreath(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct TriData { uint8_t bassS, midS, highS, prevVol; uint32_t lastPeak; };
+  if (!SEGENV.allocateData(sizeof(TriData))) FX_FALLBACK_STATIC;
+  TriData *d = (TriData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  SEGMENT.fill(BLACK);
+  if (!um_data) return;
+  uint8_t *fft = (uint8_t*)um_data->u_data[2]; if (!fft) return;
+  float vol = *(float*)um_data->u_data[0];
+  uint8_t peak = *(uint8_t*)um_data->u_data[3];
+  uint8_t bass = fft[0]; for (int i=1;i<3;i++) if (fft[i]>bass) bass=fft[i];
+  uint8_t mid  = fft[3]; for (int i=4;i<8;i++) if (fft[i]>mid)  mid=fft[i];
+  uint8_t high = fft[8]; for (int i=9;i<16;i++) if (fft[i]>high) high=fft[i];
+  int16_t dv;
+  dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
+  dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
+  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
+  bool transient = (peak && (strip.now - d->lastPeak) > 120);
+  if ((uint8_t)vol > d->prevVol + 25) transient = true;
+  d->prevVol = (uint8_t)vol; if (transient) d->lastPeak = strip.now;
+  // 低频顶起：底部上边界 = bass 映射 + 瞬态增量
+  uint8_t bassTop = scale8(d->bassS, 96);          // 0..96 (底部约 38%)
+  if (transient) { uint16_t bt = (uint16_t)bassTop + 24; bassTop = bt > 255 ? 255 : (uint8_t)bt; }
+  for (uint16_t y=0;y<rows;y++){
+    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
+    // 三段：0..85 底(低) 85..170 中 170..255 顶(高)，边界柔和
+    if (posY <= bassTop){
+      uint8_t t = (uint8_t)(((uint32_t)posY*255)/(bassTop+1));
+      CRGB c(lumiRamp4(0x2A0E00, 0x7A2E00, 0xB05000, 0xFF9030, t));
+      c.nscale8((uint8_t)(150 + (d->bassS>>2)));
+      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
+    } else if (posY < 172){
+      uint8_t t = (uint8_t)(((uint32_t)(posY-86)*255)/86);
+      CRGB c(color_blend(0x604020, 0xC8A060, t));
+      c.nscale8((uint8_t)(90 + (d->midS>>1)));
+      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
+    } else {
+      // 顶部：香槟气泡，按 high 概率闪烁
+      if (d->highS > 24 && prng.random8(255) < (uint8_t)(d->highS + 30)){
+        uint16_t x = prng.random8()*cols>>8;
+        CRGB c(0xFFF0B0); c.nscale8((uint8_t)(140 + (d->highS>>1)));
+        SEGMENT.addPixelColorXY(x,y,c);
+      }
+    }
+  }
+}
+static const char _data_FX_MODE_TRIBREATH[] PROGMEM = "Tri-band Breath@速度,强度;;!;;";
+void mode_audiospiral(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct SpirData { uint16_t angle; uint8_t bassS, midS, highS; int16_t vel; uint8_t prevVol; uint32_t lastPeak; };
+  if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
+  SpirData *d = (SpirData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  SEGMENT.fill(BLACK);
+  if (!um_data) { d->angle += 1; } // 无声慢转
+  else {
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    float vol = *(float*)um_data->u_data[0];
+    uint8_t peak = *(uint8_t*)um_data->u_data[3];
+    if (fft){
+      uint8_t bass=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bass) bass=fft[i];
+      uint8_t mid=fft[3];  for(int i=4;i<8;i++) if(fft[i]>mid)  mid=fft[i];
+      uint8_t high=fft[8]; for(int i=9;i<16;i++) if(fft[i]>high) high=fft[i];
+      int16_t dv;
+      dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
+      dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
+      dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
+      bool transient = (peak && (strip.now-d->lastPeak)>100) || ((uint8_t)vol > d->prevVol+28);
+      d->prevVol=(uint8_t)vol; if(transient) d->lastPeak=strip.now;
+      // 角速度：基础慢速 + bass；peak 时给个加速脉冲
+      int16_t target = 2 + (d->bassS>>5);
+      if (transient) target += 10;
+      d->vel += (target - d->vel) / 4; // 平滑
+    }
+  }
+  d->angle += (uint16_t)(d->vel > 0 ? d->vel : 1);
+  uint8_t thick = 1 + (d->midS>>6);   // 1..5 像素宽
+  uint8_t sat   = 60 + (d->highS>>1); // 饱和度/亮度
+  for (uint16_t y=0;y<rows;y++){
+    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
+    uint16_t a = d->angle + (uint16_t)((uint32_t)posY*3); // 绕柱圈数
+    uint8_t angA = (uint8_t)(a & 0xFF);
+    uint8_t angB = (uint8_t)((a + 128) & 0xFF);
+    uint16_t xA = (uint16_t)(((uint32_t)angA * cols) >> 8) % cols;
+    uint16_t xB = (uint16_t)(((uint32_t)angB * cols) >> 8) % cols;
+    CRGB cA(0x40E0FF); cA.nscale8(sat);
+    CRGB cB(0xFF50C0); cB.nscale8(sat);
+    for (uint8_t t=0;t<thick;t++){
+      SEGMENT.setPixelColorXY((xA+t)%cols, y, cA);
+      SEGMENT.setPixelColorXY((xB+t)%cols, y, cB);
+    }
+  }
+}
+static const char _data_FX_MODE_AUDIOSPIRAL[] PROGMEM = "Audio Spiral@速度,强度;;!;;";
+void mode_sonicpulse(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct Pulse { uint8_t h; int8_t dir; uint8_t life; };
+  struct SPData { Pulse p[6]; uint8_t bassS; uint32_t lastPeak; uint8_t lastPeak8; };
+  if (!SEGENV.allocateData(sizeof(SPData))) FX_FALLBACK_STATIC;
+  SPData *d = (SPData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  SEGMENT.fill(BLACK);
+  uint8_t bassS = d->bassS;
+  if (um_data){
+    uint8_t *fft=(uint8_t*)um_data->u_data[2];
+    uint8_t peak=*(uint8_t*)um_data->u_data[3];
+    if (fft){ uint8_t b=fft[0]; for(int i=1;i<3;i++) if(fft[i]>b) b=fft[i]; bassS=b; }
+    int16_t dv=(int16_t)bassS-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?4:1))/8);
+    bool hit = peak && (strip.now - d->lastPeak) > 110;
+    if (hit){
+      d->lastPeak = strip.now;
+      for (int i=0;i<6;i+=2){
+        if (d->p[i].life==0){ d->p[i].h=128; d->p[i].dir=+1; d->p[i].life=255; d->p[i+1].h=128; d->p[i+1].dir=-1; d->p[i+1].life=255; break; }
+      }
+    }
+  }
+  // 中心常驻微光
+  uint16_t cy = lumiRow(128, rows);
+  CRGB core(0x6090FF); core.nscale8((uint8_t)(30 + (d->bassS>>3)));
+  for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,cy,core);
+  // 双环推进
+  uint8_t speed = 5 + (SEGMENT.speed>>6);
+  for (int i=0;i<6;i++){
+    if (d->p[i].life==0) continue;
+    d->p[i].h = (uint8_t)((int)d->p[i].h + d->p[i].dir*speed);
+    d->p[i].life = scale8(d->p[i].life, 222);
+    if (d->p[i].life < 14 || d->p[i].h < 6 || d->p[i].h > 249){ d->p[i].life=0; continue; }
+    uint16_t yy = lumiRow(d->p[i].h, rows);
+    uint16_t br16 = (uint16_t)d->p[i].life + (d->bassS>>2); uint8_t br = br16 > 255 ? 255 : (uint8_t)br16;
+    CRGB c(0x80C0FF); c.nscale8(br);
+    for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,yy,c);
+  }
+}
+static const char _data_FX_MODE_SONICPULSE[] PROGMEM = "Sonic Pulse@速度,强度;;!;;";
+void mode_basslava(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct Blob { uint8_t baseY, phase, rad, bri; };
+  struct LVData { Blob b[4]; uint8_t bassS; };
+  if (!SEGENV.allocateData(sizeof(LVData))) FX_FALLBACK_STATIC;
+  LVData *d = (LVData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  SEGMENT.fill(BLACK);
+  uint8_t bass=0;
+  if (um_data){ uint8_t *fft=(uint8_t*)um_data->u_data[2]; if (fft){ bass=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bass) bass=fft[i]; } }
+  int16_t dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?5:1))/8);
+  if (SEGENV.call==0) for(int i=0;i<4;i++){ d->b[i].baseY=(uint8_t)(30+i*50); d->b[i].phase=(uint8_t)(i*60); d->b[i].rad=0; d->b[i].bri=0; }
+  for (int i=0;i<4;i++){
+    // 缓慢上下漂浮
+    uint8_t posY = (uint8_t)(((uint16_t)d->b[i].baseY + sin8_t((uint8_t)(strip.now/40 + d->b[i].phase))/3) % 256);
+    // 半径：快攻慢放 -> 弹性
+    uint8_t target = 20 + scale8(d->bassS, 80);
+    int16_t dr=(int16_t)target-d->b[i].rad; d->b[i].rad+=(uint8_t)((dr*(dr>0?5:1))/8);
+    uint8_t targetBri = 90 + (d->bassS>>1);
+    int16_t db=(int16_t)targetBri-d->b[i].bri; d->b[i].bri+=(uint8_t)((db*(db>0?5:1))/8);
+    int16_t radR = (int16_t)((uint32_t)d->b[i].rad*rows/255); if (radR<1) radR=1;
+    uint16_t cy = lumiRow(posY, rows);
+    for (int16_t dy=-radR; dy<=radR; dy++){
+      int16_t yy=(int16_t)cy+dy; if(yy<0||yy>=(int16_t)rows) continue;
+      uint8_t dist=(uint8_t)((dy<0?-dy:dy)*255/radR);
+      uint8_t fall = scale8(dist, 255-dist);
+      uint8_t br = scale8(d->b[i].bri, fall);
+      uint8_t t = (uint8_t)(((uint32_t)(dy+radR)*255)/(2*radR+1));
+      CRGB c(lumiRamp4(0x802000, 0xD05000, 0xFF9030, 0xFFE080, t));
+      c.nscale8(br);
+      for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,(uint16_t)yy,c);
+    }
+  }
+}
+static const char _data_FX_MODE_BASSLAVA[] PROGMEM = "Bass Lava@速度,强度;;!;;";
+void mode_spectrumlamp(void) {
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct SLData { uint8_t lowS, midS, highS; };
+  if (!SEGENV.allocateData(sizeof(SLData))) FX_FALLBACK_STATIC;
+  SLData *d = (SLData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
+  SEGMENT.fill(BLACK);
+  uint8_t low=0,mid=0,high=0;
+  if (um_data){
+    uint8_t *fft=(uint8_t*)um_data->u_data[2];
+    if (fft){
+      low=fft[0]; for(int i=1;i<3;i++) if(fft[i]>low) low=fft[i];
+      mid=fft[3]; for(int i=4;i<8;i++) if(fft[i]>mid) mid=fft[i];
+      high=fft[8]; for(int i=9;i<16;i++) if(fft[i]>high) high=fft[i];
+    }
+  }
+  int16_t dv;
+  dv=(int16_t)low -d->lowS; d->lowS +=(uint8_t)((dv*(dv>0?4:1))/8);
+  dv=(int16_t)mid -d->midS; d->midS +=(uint8_t)((dv*(dv>0?4:1))/8);
+  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?4:1))/8);
+  for (uint16_t x=0;x<cols;x++){
+    // 镜像：到中心距离 -> 频段 低-中-高-中-低
+    int16_t cx = (int16_t)(cols-1)/2;
+    int16_t dist = (int16_t)x - cx; if (dist<0) dist=-dist;
+    int16_t maxD = cx; if (maxD<1) maxD=1;
+    uint8_t band; uint8_t level;
+    if (dist < maxD/3){ band=2; level=d->highS; }
+    else if (dist < 2*maxD/3){ band=1; level=d->midS; }
+    else { band=0; level=d->lowS; }
+    uint8_t fillH = level; // 0..255 posY
+    uint32_t col = (band==0)?0xFF4020:(band==1?0x20FF80:0x4060FF);
+    for (uint16_t y=0;y<rows;y++){
+      uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
+      if (posY <= fillH){
+        uint8_t t = (fillH>0)?(uint8_t)(((uint32_t)posY*255)/fillH):0;
+        CRGB c(col); c.nscale8((uint8_t)(120 + (255-t)/2));
+        SEGMENT.setPixelColorXY(x,y,c);
+      }
+    }
+  }
+}
+static const char _data_FX_MODE_SPECTRUMLAMP[] PROGMEM = "Spectrum Lamp@速度,强度;;!;;";
 static const char _data_FX_MODE_LUMI_FOUNTAIN[] PROGMEM = "Lumi Spectrum Fountain@Speed,Bass gain,Stars,Sensitivity;;!;2f;sx=128,ix=180,c1=160,c2=140";
 
 
-// 8. 心跳脉冲环（真峰值：节拍 -> 自底向上的整圈光环 + 余晖）
-void mode_lumi_pulser(void) {
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
-
-  const uint16_t cols = SEG_W;
-  const uint16_t rows = SEG_H;
-  if (cols < 2 || rows < 2) return;
-
-  struct LumiPulseRing { uint8_t h, sp; };      // h: posY, sp=0 表示空闲
-  struct LumiPulseData {
-    uint8_t  bassS, prevVol;
-    uint32_t lastPeak;
-    LumiPulseRing ring[4];
-  };
-  if (!SEGENV.allocateData(sizeof(LumiPulseData))) FX_FALLBACK_STATIC;
-  LumiPulseData *d = reinterpret_cast<LumiPulseData*>(SEGENV.data);
-
-  um_data_t *um_data = getAudioData();
-  if (!um_data) { SEGMENT.fill(BLACK); return; }
-  float   vol  = *(float*)um_data->u_data[0];
-  uint8_t peak = *(uint8_t*)um_data->u_data[3];
-
-  int16_t dv = (int16_t)(uint8_t)vol - d->prevVol;
-  bool beat = false;
-  if (peak && (strip.now - d->lastPeak) > 220) { d->lastPeak = strip.now; beat = true; }
-  if (dv > 30) beat = true;
-  d->prevVol = (uint8_t)vol;
-
-  if (beat) {
-    uint8_t spawn = ((uint8_t)vol > 140) ? 2 : 1;
-    for (uint8_t i = 0; i < 4 && spawn; i++) if (d->ring[i].sp == 0) {
-      d->ring[i].h  = 0;
-      d->ring[i].sp = (uint8_t)(2 + (SEGMENT.speed >> 5));    // posY 单位/帧
-      spawn--;
-    }
-  }
-
-  const uint32_t t  = strip.now;
-  const uint8_t  trail = (uint8_t)(64 + ((uint16_t)SEGMENT.intensity * 40) / 255);  // 25%..40% 高度
-  const uint8_t  bgBase = (uint8_t)(1 + (SEGMENT.custom1 >> 4));
-  const uint8_t  bgBreath = (uint8_t)(bgBase + (sin8_t((uint8_t)(t >> 7)) >> 5));
-
-  for (uint16_t y = 0; y < rows; y++) {
-    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
-    CRGB bg(0x0A2A33);
-    bg.nscale8(lumiGuard(posY) ? scale8(lumiGuard(posY), bgBreath) : bgBreath);
-
-    for (uint16_t x = 0; x < cols; x++) {
-      CRGB c = bg;
-      for (uint8_t i = 0; i < 4; i++) {
-        if (d->ring[i].sp == 0) continue;
-        int16_t dd = (int16_t)d->ring[i].h - (int16_t)posY;   // >=0 表示在环下方（拖尾）
-        if (dd < 0 || dd > trail) continue;
-        uint8_t fade = (dd <= 2) ? 255 : (uint8_t)(255 - ((uint32_t)dd * 255) / trail);
-        CRGB rc = (dd <= 2) ? CRGB(0xFFF6E0) : CRGB(0xFFB070);
-        rc.nscale8(scale8(fade, LUMI_MAXV));
-        c.r = qadd8(c.r, rc.r);
-        c.g = qadd8(c.g, rc.g);
-        c.b = qadd8(c.b, rc.b);
-      }
-      SEGMENT.setPixelColorXY(x, y, c);
-    }
-  }
-
-  for (uint8_t i = 0; i < 4; i++) {
-    if (d->ring[i].sp == 0) continue;
-    d->ring[i].h += d->ring[i].sp;
-    if (d->ring[i].h > 255) d->ring[i].sp = 0;
-  }
-} // mode_lumi_pulser()
-static const char _data_FX_MODE_LUMI_PULSER[] PROGMEM = "Lumi Pulse Ring@Speed,Trail,Background,Sensitivity;;!;2v;sx=160,ix=128,c1=10,c2=140";
 
 
-// 9. 光环扫描（细环往复 + 充能余辉，音量驱动速度、峰值瞬时提亮）
-void mode_lumi_scanner(void) {
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
-
-  const uint16_t cols = SEG_W;
-  const uint16_t rows = SEG_H;
-  if (cols < 2 || rows < 2) return;
-
-  const uint16_t nRows = (rows > 64) ? 64 : rows;
-  if (!SEGENV.allocateData(15 + nRows)) FX_FALLBACK_STATIC;
-  uint32_t *lastPeak = reinterpret_cast<uint32_t*>(SEGENV.data);   // 节拍去抖
-  uint8_t  *flash    = SEGENV.data + 4;                            // 峰值闪光
-  uint16_t *pos      = reinterpret_cast<uint16_t*>(SEGENV.data + 6); // posY 的 8.8 定点
-  int8_t   *dir      = reinterpret_cast<int8_t*>(SEGENV.data + 12);
-  uint8_t  *charge   = SEGENV.data + 15;
-
-  // 真音量：驱动扫描速度；真峰值：瞬时提亮（不做假跳）
-  um_data_t *um_data = getAudioData();
-  uint8_t vol8 = 0, peak = 0;
-  if (um_data) {
-    vol8 = (uint8_t)(*(float*)um_data->u_data[0]);
-    peak = *(uint8_t*)um_data->u_data[3];
-  }
-  const uint32_t now = strip.now;
-  if (peak && (now - *lastPeak) > 150) { *lastPeak = now; *flash = 255; }
-
-  uint8_t nScan = 1 + (SEGMENT.speed * 3) / 256;                  // 1..3
-  if (nScan > 3) nScan = 3;
-  if (SEGENV.call == 0) {
-    for (uint8_t i = 0; i < 3; i++) {
-      pos[i] = (uint16_t)((uint16_t)prng.random8() << 8);
-      dir[i] = prng.random8(2) ? 1 : -1;
-    }
-  }
-
-  const int16_t step = (int16_t)(24 + (SEGMENT.intensity / 2) + (vol8 >> 3)); // 音量加快扫描
-  for (uint8_t i = 0; i < nScan; i++) {
-    int32_t p = (int32_t)pos[i] + (int32_t)dir[i] * step;
-    if (p < 0)           { p = 0;       dir[i] = 1; }
-    if (p > (255 << 8))  { p = 255 << 8; dir[i] = -1; }
-    pos[i] = (uint16_t)p;
-    uint8_t py = (uint8_t)(p >> 8);
-    uint16_t row = lumiRow(py, rows);
-    if (row < nRows) charge[row] = 255;                            // 经过行充能
-  }
-
-  const uint8_t  fl = (uint8_t)((*flash) ? scale8(*flash, 110) : 0);   // 峰值仅做轻微整屏提亮
-  if (*flash) *flash = scale8(*flash, 210);
-  for (uint16_t y = 0; y < rows; y++) {
-    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
-    uint8_t ch = (y < nRows) ? charge[y] : 0;
-    // 余辉衰减（约 4..6 秒）
-    if (ch) {
-      uint8_t dec = (uint8_t)((ch >> 6) + 1);
-      ch = (ch > dec) ? (uint8_t)(ch - dec) : 0;
-      if (y < nRows) charge[y] = ch;
-    }
-    // 环核
-    uint8_t core = 0;
-    for (uint8_t i = 0; i < nScan; i++) {
-      int16_t dd = (int16_t)posY - (int16_t)(pos[i] >> 8);
-      if (dd < 0) dd = -dd;
-      if (dd <= 1) { core = 255; break; }
-    }
-    if (!ch && !core && !fl) { for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK); continue; }
-
-    uint8_t br = (ch > core) ? ch : core;
-    if (fl > br) br = fl;
-    CRGB c = core ? CRGB(0xE8FFFF) : CRGB(0x7FE9FF);
-    c.nscale8(scale8(br, LUMI_MAXV));
-    for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, c);
-  }
-} // mode_lumi_scanner()
-static const char _data_FX_MODE_LUMI_SCANNER[] PROGMEM = "Lumi Scanner@Rings,Sweep speed,Glow;;!;2v;sx=128,ix=120,c1=200";
 
 
-// 10. 雨滴数据流（冷白长尾 + 落底溅落）
-void mode_lumi_rain(void) {
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
-
-  const uint16_t cols = SEG_W;
-  const uint16_t rows = SEG_H;
-  if (cols < 2 || rows < 2) return;
-
-  uint8_t nd = 2;
-  if ((uint32_t)cols * nd * 2 + cols > 508) nd = 1;
-  size_t bytes = 4 + (size_t)cols * nd * 2 + cols;
-  if (!SEGENV.allocateData(bytes)) FX_FALLBACK_STATIC;
-  uint32_t *lastPeak = reinterpret_cast<uint32_t*>(SEGENV.data);   // 节拍去抖
-  uint8_t  *yp     = SEGENV.data + 4;                  // 距顶部的高度 0..255
-  uint8_t  *sp     = yp + cols * nd;                   // 下落速度（高度单位/帧）
-  uint8_t  *splash = sp + cols * nd;                   // 每列溅落亮度
-
-  // 真高频能量：决定雨势速度；真峰值：瞬时加大雨量
-  um_data_t *um_data = getAudioData();
-  uint8_t high = 0, peak = 0;
-  if (um_data) {
-    uint8_t *fft = (uint8_t*)um_data->u_data[2];
-    if (fft) { for (uint8_t i = 8; i < 16; i++) if (fft[i] > high) high = fft[i]; }
-    peak = *(uint8_t*)um_data->u_data[3];
-  }
-  uint8_t boost = high >> 5;                                     // 0..7
-  const uint32_t now = strip.now;
-  if (peak && (now - *lastPeak) > 180) {
-    *lastPeak = now;
-    for (uint16_t i = 0; i < cols * nd; i++) if (!prng.random8(3)) yp[i] = 0;   // 雨量爆发
-  }
-
-  if (SEGENV.call == 0) {
-    for (uint16_t i = 0; i < cols * nd; i++) {
-      yp[i] = prng.random8();
-      sp[i] = (uint8_t)(8 + prng.random8(16));
-    }
-  }
-
-  const uint8_t lenPct = (uint8_t)(32 + ((uint16_t)SEGMENT.custom1 * 100) / 255); // 12%..52% 高度
-  uint16_t lenRows = (uint16_t)(((uint32_t)lenPct * (rows - 1)) / 255);
-  if (lenRows < 1) lenRows = 1;
-
-  SEGMENT.fill(BLACK);
-
-  for (uint16_t c = 0; c < cols; c++) {
-    uint8_t drops = nd;
-    if (nd == 2 && (c == 0 || c + 1 == cols)) drops = 1;   // 接缝两列减少一滴
-    for (uint8_t k = 0; k < drops; k++) {
-      uint16_t i = c * nd + k;
-      uint16_t ny = (uint16_t)yp[i] + sp[i] + boost;
-      if (ny >= 255) {
-        yp[i] = 0;
-        sp[i] = (uint8_t)(8 + prng.random8(16));
-        splash[c] = 255;
-        continue;
-      }
-      yp[i] = (uint8_t)ny;
-      uint16_t headRow = (uint16_t)(((uint32_t)yp[i] * (rows - 1)) / 255);
-      for (uint16_t j = 0; j <= lenRows; j++) {
-        if (headRow < j) break;
-        uint16_t row = headRow - j;
-        uint8_t fade = (uint8_t)(255 - ((uint32_t)j * 255) / (lenRows + 1));
-        CRGB c2 = (j == 0) ? CRGB(0xDCEFFF) : CRGB(0x7FD8FF);
-        c2.nscale8(scale8(fade, LUMI_MAXV));
-        SEGMENT.addPixelColorXY(c, row, c2);
-      }
-    }
-  }
-
-  // 溅落涟漪：底部约 4% 高度
-  uint16_t sh = 1 + (rows * 4) / 100;
-  for (uint16_t c = 0; c < cols; c++) {
-    if (splash[c] == 0) continue;
-    for (uint16_t r = 0; r < sh; r++) {
-      uint16_t row = (uint16_t)(rows - 1) - r;
-      uint8_t br = (uint8_t)(((uint32_t)splash[c] * (sh - r)) / sh / 2);
-      if (!br) continue;
-      CRGB c2(0x9FE8FF);
-      c2.nscale8(scale8(br, LUMI_MAXV));
-      for (int8_t dx = -1; dx <= 1; dx++) {
-        int16_t xx = (int16_t)c + dx;
-        if (xx < 0 || xx >= (int16_t)cols) continue;       // 不跨接缝
-        SEGMENT.addPixelColorXY((uint16_t)xx, row, c2);
-      }
-    }
-    splash[c] = (splash[c] > 48) ? (uint8_t)(splash[c] - 48) : 0;
-  }
-} // mode_lumi_rain()
-static const char _data_FX_MODE_LUMI_RAIN[] PROGMEM = "Lumi Rain@Drops,Fall speed,Tail;;!;2f;sx=128,ix=140,c1=76";
 
 
 // Black hole
@@ -7621,76 +7647,6 @@ static const char _data_FX_MODE_2DPLASMAROTOZOOM[] PROGMEM = "Rotozoomer@!,Scale
 ///////////////////////////////////////////////////////////////////////////////
 
 
-/////////////////////////////////
-//     * Ripple Peak           //
-/////////////////////////////////
-void mode_ripplepeak(void) {                // * Ripple peak. By Andrew Tuline.
-                                                          // This currently has no controls.
-  #define MAXSTEPS 16                                     // Case statement wouldn't allow a variable.
-
-  unsigned maxRipples = 16;
-  unsigned dataSize = sizeof(Ripple) * maxRipples;
-  if (!SEGENV.allocateData(dataSize)) FX_FALLBACK_STATIC; //allocation failed
-  Ripple* ripples = reinterpret_cast<Ripple*>(SEGENV.data);
-
-  um_data_t *um_data = getAudioData();
-  uint8_t samplePeak    = *(uint8_t*)um_data->u_data[3];
-  #ifdef ESP32
-  float   FFT_MajorPeak = *(float*)  um_data->u_data[4];
-  #endif
-  uint8_t *maxVol       =  (uint8_t*)um_data->u_data[6];
-  uint8_t *binNum       =  (uint8_t*)um_data->u_data[7];
-
-  // printUmData();
-
-  if (SEGENV.call == 0) {
-    SEGMENT.custom1 = *binNum;
-    SEGMENT.custom2 = *maxVol * 2;
-  }
-
-  *binNum = SEGMENT.custom1;                              // Select a bin.
-  *maxVol = SEGMENT.custom2 / 2;                          // Our volume comparator.
-
-  SEGMENT.fade_out(240);                                  // Lower frame rate means less effective fading than FastLED
-  SEGMENT.fade_out(240);
-
-  for (int i = 0; i < SEGMENT.intensity/16; i++) {   // Limit the number of ripples.
-    if (samplePeak) ripples[i].state = 255;
-
-    switch (ripples[i].state) {
-      case 254:     // Inactive mode
-        break;
-
-      case 255:                                           // Initialize ripple variables.
-        ripples[i].pos = hw_random16(SEGLEN);
-        #ifdef ESP32
-          if (FFT_MajorPeak > 1)                          // log10(0) is "forbidden" (throws exception)
-          ripples[i].color = (int)(log10f(FFT_MajorPeak)*128);
-          else ripples[i].color = 0;
-        #else
-          ripples[i].color = hw_random8();
-        #endif
-        ripples[i].state = 0;
-        break;
-
-      case 0:
-        SEGMENT.setPixelColor(ripples[i].pos, SEGMENT.color_from_palette(ripples[i].color, false, PALETTE_SOLID_WRAP, 0));
-        ripples[i].state++;
-        break;
-
-      case MAXSTEPS:                                      // At the end of the ripples. 254 is an inactive mode.
-        ripples[i].state = 254;
-        break;
-
-      default:                                            // Middle of the ripples.
-        SEGMENT.setPixelColor((ripples[i].pos + ripples[i].state + SEGLEN) % SEGLEN, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(ripples[i].color, false, PALETTE_SOLID_WRAP, 0), uint8_t(2*255/ripples[i].state)));
-        SEGMENT.setPixelColor((ripples[i].pos - ripples[i].state + SEGLEN) % SEGLEN, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(ripples[i].color, false, PALETTE_SOLID_WRAP, 0), uint8_t(2*255/ripples[i].state)));
-        ripples[i].state++;                               // Next step.
-        break;
-    } // switch step
-  } // for i
-} // mode_ripplepeak()
-static const char _data_FX_MODE_RIPPLEPEAK[] PROGMEM = "Ripple Peak@Fade rate,Max # of ripples,Select bin,Volume (min);!,!;!;1v;c2=0,m12=0,si=0"; // Pixel, Beatsin
 
 
 #ifndef WLED_DISABLE_2D
@@ -8010,33 +7966,6 @@ void mode_noisefire(void) {                 // Noisefire. By Andrew Tuline.
 static const char _data_FX_MODE_NOISEFIRE[] PROGMEM = "Noisefire@!,!;;;01v;m12=2,si=0"; // Circle, Beatsin
 
 
-///////////////////////
-//   * Noisemeter    //
-///////////////////////
-void mode_noisemeter(void) {                // Noisemeter. By Andrew Tuline.
-
-  um_data_t *um_data = getAudioData();
-  float   volumeSmth   = *(float*)  um_data->u_data[0];
-  int volumeRaw    = *(int16_t*)um_data->u_data[1];
-
-  //uint8_t fadeRate = map(SEGMENT.speed,0,255,224,255);
-  uint8_t fadeRate = map(SEGMENT.speed,0,255,200,254);
-  SEGMENT.fade_out(fadeRate);
-
-  float tmpSound2 = volumeRaw * 2.0 * (float)SEGMENT.intensity / 255.0;
-  unsigned maxLen = mapf(tmpSound2, 0, 255, 0, SEGLEN); // map to pixels availeable in current segment              // Still a bit too sensitive.
-  if (maxLen < 0) maxLen = 0;
-  if (maxLen > SEGLEN) maxLen = SEGLEN;
-
-  for (unsigned i=0; i<maxLen; i++) {                                    // The louder the sound, the wider the soundbar. By Andrew Tuline.
-    uint8_t index = perlin8(i*volumeSmth+SEGENV.aux0, SEGENV.aux1+i*volumeSmth);  // Get a value from the noise function. I'm using both x and y axis.
-    SEGMENT.setPixelColor(i, SEGMENT.color_from_palette(index, false, PALETTE_SOLID_WRAP, 0));
-  }
-
-  SEGENV.aux0+=beatsin8_t(5,0,10);
-  SEGENV.aux1+=beatsin8_t(4,0,10);
-} // mode_noisemeter()
-static const char _data_FX_MODE_NOISEMETER[] PROGMEM = "Noisemeter@Fade rate,Width;!,!;!;1v;ix=128,m12=2,si=0"; // Circle, Beatsin
 
 
 //////////////////////
@@ -8208,64 +8137,8 @@ void mode_blurz(void) {                    // Blurz. By Andrew Tuline.
 static const char _data_FX_MODE_BLURZ[] PROGMEM = "Blurz@Fade rate,Blur;!,Color mix;!;1f;m12=0,si=0"; // Pixels, Beatsin
 
 
-/////////////////////////
-//   ** DJLight        //
-/////////////////////////
-void mode_DJLight(void) {                   // Written by ??? Adapted by Will Tatam.
-  // No need to prevent from executing on single led strips, only mid will be set (mid = 0)
-  const int mid = SEGLEN / 2;
-
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t*)um_data->u_data[2];
-
-  if (SEGENV.call == 0) {
-    SEGMENT.fill(BLACK);
-  }
-
-  uint8_t secondHand = micros()/(256-SEGMENT.speed)/500+1 % 64;
-  if (SEGENV.aux0 != secondHand) {                        // Triggered millis timing.
-    SEGENV.aux0 = secondHand;
-
-    CRGB color = CRGB(gamma8inv(fftResult[15]/2), gamma8inv(fftResult[5]/2), gamma8inv(fftResult[0]/2)); // apply gamma inversion to restor pre 16.0 looks
-    SEGMENT.setPixelColor(mid, color.fadeToBlackBy(map(fftResult[4], 0, 255, 255, 4)));     // TODO - Update
-
-    // if SEGLEN equals 1 these loops won't execute
-    for (int i = SEGLEN - 1; i > mid; i--)   SEGMENT.setPixelColor(i, SEGMENT.getPixelColor(i-1)); // move to the left
-    for (int i = 0; i < mid; i++)            SEGMENT.setPixelColor(i, SEGMENT.getPixelColor(i+1)); // move to the right
-  }
-} // mode_DJLight()
-static const char _data_FX_MODE_DJLIGHT[] PROGMEM = "DJ Light@Speed;;;01f;m12=2,si=0"; // Circle, Beatsin
 
 
-////////////////////
-//   ** Freqmap   //
-////////////////////
-void mode_freqmap(void) {                   // Map FFT_MajorPeak to SEGLEN. Would be better if a higher framerate.
-  if (SEGLEN <= 1) FX_FALLBACK_STATIC;
-  // Start frequency = 60 Hz and log10(60) = 1.78
-  // End frequency = MAX_FREQUENCY in Hz and lo10(MAX_FREQUENCY) = MAX_FREQ_LOG10
-
-  um_data_t *um_data = getAudioData();
-  float FFT_MajorPeak = *(float*)um_data->u_data[4];
-  float my_magnitude  = *(float*)um_data->u_data[5] / 4.0f;
-  if (FFT_MajorPeak < 1) FFT_MajorPeak = 1;                                         // log10(0) is "forbidden" (throws exception)
-
-  if (SEGENV.call == 0) SEGMENT.fill(BLACK);
-  int fadeoutDelay = (256 - SEGMENT.speed) / 32;
-  if ((fadeoutDelay <= 1 ) || ((SEGENV.call % fadeoutDelay) == 0)) SEGMENT.fade_out(SEGMENT.speed);
-
-  int locn = (log10f((float)FFT_MajorPeak) - 1.78f) * (float)SEGLEN/(MAX_FREQ_LOG10 - 1.78f);  // log10 frequency range is from 1.78 to 3.71. Let's scale to SEGLEN.
-  if (locn < 1) locn = 0; // avoid underflow
-
-  if (locn >= (int)SEGLEN) locn = SEGLEN-1;
-  unsigned pixCol = (log10f(FFT_MajorPeak) - 1.78f) * 255.0f/(MAX_FREQ_LOG10 - 1.78f);   // Scale log10 of frequency values to the 255 colour index.
-  if (FFT_MajorPeak < 61.0f) pixCol = 0;                                                 // handle underflow
-
-  uint8_t bright = (uint8_t)my_magnitude;
-
-  SEGMENT.setPixelColor(locn, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(SEGMENT.intensity+pixCol, false, PALETTE_SOLID_WRAP, 0), bright));
-} // mode_freqmap()
-static const char _data_FX_MODE_FREQMAP[] PROGMEM = "Freqmap@Fade rate,Starting color;!,!;!;1f;m12=0,si=0"; // Pixels, Beatsin
 
 
 ///////////////////////
@@ -8326,28 +8199,78 @@ static const char _data_FX_MODE_FREQMATRIX[] PROGMEM = "Freqmatrix@Speed,Sound e
 //  SEGMENT.speed select faderate
 //  SEGMENT.intensity select colour index
 void mode_freqpixels(void) {                // Freqpixel. By Andrew Tuline.
+
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct FPx { uint8_t x, y; };
+  struct FPData { uint8_t bassS, midS, highS; FPx blob[4]; FPx midPix[24]; FPx highPix[24]; };
+  if (!SEGENV.allocateData(sizeof(FPData))) FX_FALLBACK_STATIC;
+  FPData *d = (FPData*)SEGENV.data;
   um_data_t *um_data = getAudioData();
-  float FFT_MajorPeak = *(float*)um_data->u_data[4];
-  float my_magnitude  = *(float*)um_data->u_data[5] / 16.0f;
-  if (FFT_MajorPeak < 1) FFT_MajorPeak = 1.0f; // log10(0) is "forbidden" (throws exception)
-
-  // this code translates to speed * (2 - speed/255) which is a) speed*2 or b) speed (when speed is 255)
-  // and since fade_out() can only take 0-255 it will behave incorrectly when speed > 127
-  //uint16_t fadeRate = 2*SEGMENT.speed - SEGMENT.speed*SEGMENT.speed/255;    // Get to 255 as quick as you can.
-  unsigned fadeRate = SEGMENT.speed*SEGMENT.speed; // Get to 255 as quick as you can.
-  fadeRate = map(fadeRate, 0, 65535, 1, 255);
-
-  int fadeoutDelay = (256 - SEGMENT.speed) / 64;
-  if ((fadeoutDelay <= 1 ) || ((SEGENV.call % fadeoutDelay) == 0)) SEGMENT.fade_out(fadeRate);
-
-  uint8_t pixCol = (log10f(FFT_MajorPeak) - 1.78f) * 255.0f/(MAX_FREQ_LOG10 - 1.78f);  // Scale log10 of frequency values to the 255 colour index.
-  if (FFT_MajorPeak < 61.0f) pixCol = 0;                                               // handle underflow
-  for (int i=0; i < SEGMENT.intensity/32+1; i++) {
-    unsigned locn = hw_random16(0,SEGLEN);
-    SEGMENT.setPixelColor(locn, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(SEGMENT.intensity+pixCol, false, PALETTE_SOLID_WRAP, 0), (uint8_t)my_magnitude));
+  SEGMENT.fill(BLACK);
+  if (!um_data) return;
+  uint8_t *fft = (uint8_t*)um_data->u_data[2];
+  if (!fft) return;
+  float vol = *(float*)um_data->u_data[0];
+  uint8_t bass = fft[0]; for (int i=1;i<3;i++) if (fft[i]>bass) bass=fft[i];
+  uint8_t mid  = fft[3]; for (int i=4;i<8;i++) if (fft[i]>mid)  mid=fft[i];
+  uint8_t high = fft[8]; for (int i=9;i<16;i++) if (fft[i]>high) high=fft[i];
+  int16_t dv;
+  dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
+  dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
+  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
+  if (vol < 6 && d->bassS < 10 && d->midS < 10 && d->highS < 10) return; // 无声全灭
+  if (SEGENV.call == 0) {
+    for (int i=0;i<4;i++){d->blob[i].x=prng.random8();d->blob[i].y=prng.random8();}
+    for (int i=0;i<24;i++){d->midPix[i].x=prng.random8();d->midPix[i].y=prng.random8();d->highPix[i].x=prng.random8();d->highPix[i].y=prng.random8();}
   }
-} // mode_freqpixels()
-static const char _data_FX_MODE_FREQPIXELS[] PROGMEM = "Freqpixels@Fade rate,Starting color and # of pixels;!,!,;!;1f;m12=0,si=0"; // Pixels, Beatsin
+  // 低频光团：随机游走，半径随 bass
+  uint8_t bRad = scale8(d->bassS, 64);          // posY 半径 0..64
+  for (int i=0;i<4;i++){
+    d->blob[i].x += (int8_t)(prng.random8(5)-2);
+    d->blob[i].y += (int8_t)(prng.random8(5)-2);
+    uint16_t cx = (uint16_t)(((uint32_t)d->blob[i].x*cols)>>8) % cols;
+    uint16_t cy = lumiRow(d->blob[i].y, rows);
+    int16_t rad = (int16_t)((uint32_t)bRad*rows/255); if (rad<1) rad=1;
+    for (int16_t dy=-rad; dy<=rad; dy++){
+      int16_t yy = (int16_t)cy+dy; if (yy<0||yy>=(int16_t)rows) continue;
+      int16_t xr = rad - (dy<0?-dy:dy); if (xr<0) xr=0;
+      uint8_t br = (uint8_t)(200 - ((dy<0?-dy:dy)*180)/rad);
+      CRGB c(0xFFE080); c.nscale8(br);
+      for (int16_t dx=-xr; dx<=xr; dx++){
+        int32_t sx = (int32_t)cx + dx;
+        sx = ((sx % (int32_t)cols) + cols) % cols; // 柱面环绕，防负值越界
+        SEGMENT.addPixelColorXY((uint16_t)sx, (uint16_t)yy, c);
+      }
+    }
+  }
+  // 中频：一族青色灯珠，数量随 mid
+  uint8_t midN = (uint8_t)(((uint16_t)d->midS*24)>>8);
+  for (int i=0;i<24;i++){
+    d->midPix[i].x += (int8_t)(prng.random8(7)-3);
+    d->midPix[i].y += (int8_t)(prng.random8(7)-3);
+    if (i < midN){
+      uint16_t xx=(uint16_t)(((uint32_t)d->midPix[i].x*cols)>>8)%cols;
+      uint16_t yy=lumiRow(d->midPix[i].y,rows);
+      CRGB c(0x40FFC0); c.nscale8((uint8_t)(120+(d->midS>>1)));
+      SEGMENT.addPixelColorXY(xx,yy,c);
+    }
+  }
+  // 高频：另一族品红灯珠，数量随 high
+  uint8_t highN = (uint8_t)(((uint16_t)d->highS*24)>>8);
+  for (int i=0;i<24;i++){
+    d->highPix[i].x += (int8_t)(prng.random8(7)-3);
+    d->highPix[i].y += (int8_t)(prng.random8(7)-3);
+    if (i < highN){
+      uint16_t xx=(uint16_t)(((uint32_t)d->highPix[i].x*cols)>>8)%cols;
+      uint16_t yy=lumiRow(d->highPix[i].y,rows);
+      CRGB c(0xFF50D0); c.nscale8((uint8_t)(120+(d->highS>>1)));
+      SEGMENT.addPixelColorXY(xx,yy,c);
+    }
+  }
+}
+static const char _data_FX_MODE_FREQPIXELS[] PROGMEM = "Freqpixels@速度,强度;;!;;"; // Pixels, Beatsin
 
 
 //////////////////////
@@ -8365,50 +8288,6 @@ static const char _data_FX_MODE_FREQPIXELS[] PROGMEM = "Freqpixels@Fade rate,Sta
 //
 // As a compromise between speed and accuracy we are currently sampling with 10240Hz, from which we can then determine with a 512bin FFT our max frequency is 5120Hz.
 // Depending on the music stream you have you might find it useful to change the frequency mapping.
-void mode_freqwave(void) {                  // Freqwave. By Andreas Pleschung.
-  // As before, this effect can also work on single pixels, we just lose the shifting effect
-  um_data_t *um_data = getAudioData();
-  float FFT_MajorPeak = *(float*)um_data->u_data[4];
-  float volumeSmth    = *(float*)um_data->u_data[0];
-
-  if (SEGENV.call == 0) {
-    SEGMENT.fill(BLACK);
-  }
-
-  uint8_t secondHand = micros()/(256-SEGMENT.speed)/500 % 16;
-  if(SEGENV.aux0 != secondHand) {
-    SEGENV.aux0 = secondHand;
-
-    float sensitivity = mapf(SEGMENT.custom3, 1, 31, 1, 10); // reduced resolution slider
-    float pixVal = min(255.0f, volumeSmth * (float)SEGMENT.intensity / 256.0f * sensitivity);
-    float intensity = mapf(pixVal, 0.0f, 255.0f, 0.0f, 100.0f) / 100.0f;  // make a brightness from the last avg
-
-    CRGB color = 0;
-
-    if (FFT_MajorPeak > MAX_FREQUENCY) FFT_MajorPeak = 1.0f;
-    // MajorPeak holds the freq. value which is most abundant in the last sample.
-    // With our sampling rate of 10240Hz we have a usable freq range from roughly 80Hz to 10240/2 Hz
-    // we will treat everything with less than 65Hz as 0
-
-    if (FFT_MajorPeak < 80) {
-      color = CRGB::Black;
-    } else {
-      int upperLimit = 80 + 42 * SEGMENT.custom2;
-      int lowerLimit = 80 + 3 * SEGMENT.custom1;
-      uint8_t i =  lowerLimit!=upperLimit ? map(FFT_MajorPeak, lowerLimit, upperLimit, 0, 255) : FFT_MajorPeak; // may under/overflow - so we enforce uint8_t
-      unsigned b = min(255.0f, 255.0f * intensity);
-      color = CHSV(i, 240, gamma8inv(b)); // use gamma inversion on brightness to restore pre 16.0 looks
-    }
-
-    SEGMENT.setPixelColor(SEGLEN/2, color);
-
-    // shift the pixels one pixel outwards
-    // if SEGLEN equals 1 these loops won't execute
-    for (unsigned i = SEGLEN - 1; i > SEGLEN/2; i--) SEGMENT.setPixelColor(i, SEGMENT.getPixelColor(i-1)); //move to the left
-    for (unsigned i = 0; i < SEGLEN/2; i++)          SEGMENT.setPixelColor(i, SEGMENT.getPixelColor(i+1)); // move to the right
-  }
-} // mode_freqwave()
-static const char _data_FX_MODE_FREQWAVE[] PROGMEM = "Freqwave@Speed,Sound effect,Low bin,High bin,Pre-amp;;;01f;m12=2,si=0"; // Circle, Beatsin
 
 
 //////////////////////
@@ -8520,69 +8399,6 @@ static const char _data_FX_MODE_WATERFALL[] PROGMEM = "Waterfall@!,Adjust color,
 
 
 #ifndef WLED_DISABLE_2D
-/////////////////////////
-//     ** 2D GEQ       //
-/////////////////////////
-void mode_2DGEQ(void) { // By Will Tatam. Code reduction by Ewoud Wijma.
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC; // not a 2D set-up
-
-  const int NUM_BANDS = map(SEGMENT.custom1, 0, 255, 1, 16);
-  const int CENTER_BIN = map(SEGMENT.custom3, 0, 31, 0, 15);
-  const int cols = SEG_W;
-  const int rows = SEG_H;
-
-  if (!SEGENV.allocateData(cols*sizeof(uint16_t))) FX_FALLBACK_STATIC; //allocation failed
-  uint16_t *previousBarHeight = reinterpret_cast<uint16_t*>(SEGENV.data); //array of previous bar heights per frequency band
-
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t*)um_data->u_data[2];
-
-  if (SEGENV.call == 0) {
-    for (int i=0; i<cols; i++) previousBarHeight[i] = 0;
-    SEGMENT.fill(BLACK);
-    SEGENV.step = 0;
-  }
-
-  bool rippleTime = false;
-  if (unsigned(strip.now - SEGENV.step) >= (256U - SEGMENT.intensity)) {
-    SEGENV.step = strip.now;
-    rippleTime = true;
-  }
-
-  int fadeoutDelay = (256 - SEGMENT.speed) / 64;
-  if ((fadeoutDelay <= 1 ) || ((SEGENV.call % fadeoutDelay) == 0)) SEGMENT.fadeToBlackBy(SEGMENT.speed);
-
-  for (int x=0; x < cols; x++) {
-    int band = map(x, 0, cols, 0, NUM_BANDS);
-    if (NUM_BANDS < 16) {
-        int startBin = constrain(CENTER_BIN - NUM_BANDS/2, 0, 15 - NUM_BANDS + 1);
-        if(NUM_BANDS <= 1)
-          band = CENTER_BIN; // map() does not work for single band
-        else
-          band = map(band, 0, NUM_BANDS - 1, startBin, startBin + NUM_BANDS - 1);
-    }
-    band = constrain(band, 0, 15);
-    unsigned colorIndex = band * 17;
-    unsigned barHeight  = map(fftResult[band], 0, 255, 0, rows); // do not subtract -1 from rows here
-    if (barHeight > rows) barHeight = rows;                      // map() can overshoot
-    if (barHeight > previousBarHeight[x]) previousBarHeight[x] = barHeight; //drive the peak up
-
-    uint32_t ledColor = BLACK;
-    for (int y=0; y < barHeight; y++) {
-      if (SEGMENT.check1) //color_vertical / color bars toggle
-        colorIndex = map(y, 0, rows-1, 0, 255);
-
-      ledColor = SEGMENT.color_from_palette(colorIndex, false, PALETTE_SOLID_WRAP, 0);
-      SEGMENT.setPixelColorXY(x, rows-1 - y, ledColor);
-    }
-    if ((SEGMENT.intensity < 255) && (previousBarHeight[x] > 0) && (previousBarHeight[x] < rows))  // avoid flickering, hide ripple when decay=255
-      //ledColor = SEGMENT.color_from_palette(colorIndex, false, PALETTE_SOLID_WRAP, 0); // uncomment to avoid black peak pixel
-      SEGMENT.setPixelColorXY(x, rows - previousBarHeight[x], (SEGCOLOR(2) != BLACK) ? SEGCOLOR(2) : ledColor);
-
-    if (rippleTime && previousBarHeight[x]>0) previousBarHeight[x]--;    //delay/ripple effect
-  }
-} // mode_2DGEQ()
-static const char _data_FX_MODE_2DGEQ[] PROGMEM = "GEQ@Fade speed,Ripple decay,# of bands,,Bin,Color bars;!,,Peaks;!;2f;c1=255,c2=64,pal=11,si=0,c3=0";
 
 
 /////////////////////////
@@ -8674,68 +8490,6 @@ static uint8_t akemi[] PROGMEM = {
   0,0,0,0,0,0,0,0,0,0,0,0,0,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
-void mode_2DAkemi(void) {
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC; // not a 2D set-up
-
-  const int cols = SEG_W;
-  const int rows = SEG_H;
-
-  unsigned counter = (strip.now * ((SEGMENT.speed >> 2) +2)) & 0xFFFF;
-  counter = counter >> 8;
-
-  const float lightFactor  = 0.15f;
-  const float normalFactor = 0.4f;
-
-  um_data_t *um_data;
-  if (!UsermodManager::getUMData(&um_data, USERMOD_ID_AUDIOREACTIVE)) {
-    um_data = simulateSound(SEGMENT.soundSim);
-  }
-  uint8_t *fftResult = (uint8_t*)um_data->u_data[2];
-  float base = fftResult[0]/255.0f;
-
-  //draw and color Akemi
-  for (int y=0; y < rows; y++) for (int x=0; x < cols; x++) {
-    CRGB color;
-    CRGB soundColor = CRGB::Orange;
-    CRGB faceColor  = CRGB(SEGMENT.color_wheel(counter));
-    CRGB armsAndLegsColor = CRGB(SEGCOLOR(1) > 0 ? SEGCOLOR(1) : 0xFFE0A0); //default warmish white 0xABA8FF; //0xFF52e5;//
-    uint8_t ak = pgm_read_byte_near(akemi + ((y * 32)/rows) * 32 + (x * 32)/cols); // akemi[(y * 32)/rows][(x * 32)/cols]
-    switch (ak) {
-      case 3: armsAndLegsColor.r *= lightFactor;  armsAndLegsColor.g *= lightFactor;  armsAndLegsColor.b *= lightFactor;  color = armsAndLegsColor; break; //light arms and legs 0x9B9B9B
-      case 2: armsAndLegsColor.r *= normalFactor; armsAndLegsColor.g *= normalFactor; armsAndLegsColor.b *= normalFactor; color = armsAndLegsColor; break; //normal arms and legs 0x888888
-      case 1: color = armsAndLegsColor; break; //dark arms and legs 0x686868
-      case 6: faceColor.r *= lightFactor;  faceColor.g *= lightFactor;  faceColor.b *= lightFactor;  color=faceColor; break; //light face 0x31AAFF
-      case 5: faceColor.r *= normalFactor; faceColor.g *= normalFactor; faceColor.b *= normalFactor; color=faceColor; break; //normal face 0x0094FF
-      case 4: color = faceColor; break; //dark face 0x007DC6
-      case 7: color = SEGCOLOR(2) > 0 ? SEGCOLOR(2) : 0xFFFFFF; break; //eyes and mouth default white
-      case 8: if (base > 0.4) {soundColor.r *= base; soundColor.g *= base; soundColor.b *= base; color=soundColor;} else color = armsAndLegsColor; break;
-      default: color = BLACK; break;
-    }
-
-    if (SEGMENT.intensity > 128 && fftResult && fftResult[0] > 128) { //dance if base is high
-      SEGMENT.setPixelColorXY(x, 0, BLACK);
-      SEGMENT.setPixelColorXY(x, y+1, color);
-    } else
-      SEGMENT.setPixelColorXY(x, y, color);
-  }
-
-  //add geq left and right
-  if (um_data && fftResult) {
-    int xMax = cols/8;
-    for (int x=0; x < xMax; x++) {
-      unsigned band = map(x, 0, max(xMax,4), 0, 15);  // map 0..cols/8 to 16 GEQ bands
-      band = constrain(band, 0, 15);
-      int barHeight = map(fftResult[band], 0, 255, 0, 17*rows/32);
-      uint32_t color = SEGMENT.color_from_palette((band * 35), false, PALETTE_SOLID_WRAP, 0);
-
-      for (int y=0; y < barHeight; y++) {
-        SEGMENT.setPixelColorXY(x, rows/2-y, color);
-        SEGMENT.setPixelColorXY(cols-1-x, rows/2-y, color);
-      }
-    }
-  }
-} // mode_2DAkemi
-static const char _data_FX_MODE_2DAKEMI[] PROGMEM = "Akemi@Color speed,Dance;Head palette,Arms & Legs,Eyes & Mouth;Face palette;2f;si=0"; //beatsin
 
 
 // Distortion waves - ldirko
@@ -10001,72 +9755,7 @@ static const char _data_FX_MODE_PARTICLESPRAY[] PROGMEM = "PS Spray@Speed,!,Left
   Uses palette for particle color
   by DedeHai (Damian Schneider)
 */
-void mode_particleGEQ(void) {
-  ParticleSystem2D *PartSys = nullptr;
 
-  if (SEGMENT.call == 0) { // initialization
-    if (!initParticleSystem2D(PartSys, 1))
-      FX_FALLBACK_STATIC; // allocation failed or not 2D
-    PartSys->setKillOutOfBounds(true);
-    PartSys->setUsedParticles(170); // use 2/3 of available particles
-  }
-  else
-    PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
-  if (PartSys == nullptr)
-    FX_FALLBACK_STATIC; // something went wrong, no data!
-
-  uint32_t i;
-  // set particle system properties
-  PartSys->updateSystem(); // update system properties (dimensions and data pointers)
-  PartSys->setWrapX(SEGMENT.check1);
-  PartSys->setBounceX(SEGMENT.check2);
-  PartSys->setBounceY(SEGMENT.check3);
-  //PartSys->enableParticleCollisions(false);
-  PartSys->setWallHardness(SEGMENT.custom2);
-  PartSys->setGravity(SEGMENT.custom3 << 2); // set gravity strength
-
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t *)um_data->u_data[2]; // 16 bins with FFT data, log mapped already, each band contains frequency amplitude 0-255
-
-  //map the bands into 16 positions on x axis, emit some particles according to frequency loudness
-  i = 0;
-  uint32_t binwidth = (PartSys->maxX + 1)>>4; //emit poisition variation for one bin (+/-) is equal to width/16 (for 16 bins)
-  uint32_t threshold = 300 - SEGMENT.intensity;
-  uint32_t emitparticles = 0;
-
-  for (uint32_t bin = 0; bin < 16; bin++) {
-    uint32_t xposition = binwidth*bin + (binwidth>>1); // emit position according to frequency band
-    uint8_t emitspeed = ((uint32_t)fftResult[bin] * (uint32_t)SEGMENT.speed) >> 9; // emit speed according to loudness of band (127 max!)
-    emitparticles = 0;
-
-    if (fftResult[bin] > threshold) {
-      emitparticles = 1;// + (fftResult[bin]>>6);
-    }
-    else if (fftResult[bin] > 0) { // band has low volue
-      uint32_t restvolume = ((threshold - fftResult[bin])>>2) + 2;
-      if (hw_random16() % restvolume == 0)
-        emitparticles = 1;
-    }
-
-    while (i < PartSys->usedParticles && emitparticles > 0) { // emit particles if there are any left, low frequencies take priority
-      if (PartSys->particles[i].ttl == 0) { // find a dead particle
-        //set particle properties TODO: could also use the spray...
-        PartSys->particles[i].ttl = 20 + map(SEGMENT.intensity, 0,255, emitspeed>>1, emitspeed + hw_random16(emitspeed)) ; // set particle alive, particle lifespan is in number of frames
-        PartSys->particles[i].x = xposition + hw_random16(binwidth) - (binwidth>>1); // position randomly, deviating half a bin width
-        PartSys->particles[i].y = 0; // start at the bottom
-        PartSys->particles[i].vx = hw_random16(SEGMENT.custom1>>1)-(SEGMENT.custom1>>2) ; //x-speed variation: +/- custom1/4
-        PartSys->particles[i].vy = emitspeed;
-        PartSys->particles[i].hue = (bin<<4) + hw_random16(17) - 8; // color from palette according to bin
-        emitparticles--;
-      }
-      i++;
-    }
-  }
-
-  PartSys->update(); // update and render
-}
-
-static const char _data_FX_MODE_PARTICLEGEQ[] PROGMEM = "PS GEQ 2D@Speed,Intensity,Diverge,Bounce,Gravity,Cylinder,Walls,Floor;;!;2f;pal=0,sx=155,ix=200,c1=0";
 
 /*
   Particle rotating GEQ
@@ -10075,69 +9764,6 @@ static const char _data_FX_MODE_PARTICLEGEQ[] PROGMEM = "PS GEQ 2D@Speed,Intensi
   by DedeHai (Damian Schneider)
 */
 #define NUMBEROFSOURCES 16
-void mode_particlecenterGEQ(void) {
-  ParticleSystem2D *PartSys = nullptr;
-  uint8_t numSprays;
-  uint32_t i;
-
-  if (SEGMENT.call == 0) { // initialization
-    if (!initParticleSystem2D(PartSys, NUMBEROFSOURCES))  // init, request 16 sources
-      FX_FALLBACK_STATIC; // allocation failed or not 2D
-
-    numSprays = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
-    for (i = 0; i < numSprays; i++) {
-      PartSys->sources[i].source.x = (PartSys->maxX + 1) >> 1; // center
-      PartSys->sources[i].source.y = (PartSys->maxY + 1) >> 1; // center
-      PartSys->sources[i].source.hue = i * 16; // even color distribution
-      PartSys->sources[i].maxLife = 400;
-      PartSys->sources[i].minLife = 200;
-    }
-    PartSys->setKillOutOfBounds(true);
-  }
-  else
-    PartSys = reinterpret_cast<ParticleSystem2D *>(SEGENV.data); // if not first call, just set the pointer to the PS
-
-  if (PartSys == nullptr)
-    FX_FALLBACK_STATIC; // something went wrong, no data!
-
-  PartSys->updateSystem(); // update system properties (dimensions and data pointers)
-  numSprays = min(PartSys->numSources, (uint32_t)NUMBEROFSOURCES);
-
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t *)um_data->u_data[2]; // 16 bins with FFT data, log mapped already, each band contains frequency amplitude 0-255
-  uint32_t threshold = 300 - SEGMENT.intensity;
-
-  if (SEGMENT.check2)
-    SEGENV.aux0 += SEGMENT.custom1 << 2;
-  else
-    SEGENV.aux0 -= SEGMENT.custom1 << 2;
-
-  uint16_t angleoffset = (uint16_t)0xFFFF / (uint16_t)numSprays;
-  uint32_t j = hw_random16(numSprays); // start with random spray so all get a chance to emit a particle if maximum number of particles alive is reached.
-  for (i = 0; i < numSprays; i++) {
-    if (SEGMENT.call % (32 - (SEGMENT.custom2 >> 3)) == 0 && SEGMENT.custom2 > 0)
-      PartSys->sources[j].source.hue += 1 + (SEGMENT.custom2 >> 4);
-
-    PartSys->sources[j].var = SEGMENT.custom3 >> 2;
-    int8_t emitspeed = 5 + (((uint32_t)fftResult[j] * ((uint32_t)SEGMENT.speed + 20)) >> 10); // emit speed according to loudness of band
-    uint16_t emitangle = j * angleoffset + SEGENV.aux0;
-
-    uint32_t emitparticles = 0;
-    if (fftResult[j] > threshold)
-      emitparticles = 1;
-    else if (fftResult[j] > 0) { // band has low value
-      uint32_t restvolume = ((threshold - fftResult[j]) >> 2) + 2;
-      if (hw_random16() % restvolume == 0)
-        emitparticles = 1;
-    }
-    if (emitparticles)
-      PartSys->angleEmit(PartSys->sources[j], emitangle, emitspeed);
-
-    j = (j + 1) % numSprays;
-  }
-  PartSys->update(); // update and render
-}
-static const char _data_FX_MODE_PARTICLECIRCULARGEQ[] PROGMEM = "PS GEQ Nova@Speed,Intensity,Rotation Speed,Color Change,Nozzle,,Direction;;!;2f;pal=13,ix=180,c1=0,c2=0,c3=8";
 
 /*
   Particle replacement of Ghost Rider by DedeHai (Damian Schneider), original FX by stepko adapted by Blaz Kristan (AKA blazoncek)
@@ -11343,71 +10969,35 @@ static const char _data_FX_MODE_PS_STARBURST[] PROGMEM = "PS Starburst@Chance,Fr
   by DedeHai (Damian Schneider)
 */
 void mode_particle1DGEQ(void) {
-  ParticleSystem1D *PartSys = nullptr;
-  uint32_t numSources;
-  uint32_t i;
 
-  if (SEGMENT.call == 0) { // initialization
-    if (!initParticleSystem1D(PartSys, 16, 255, 0, true)) // init, no additional data needed
-      FX_FALLBACK_STATIC; // allocation failed or is single pixel
-  }
-  else
-    PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
-  if (PartSys == nullptr)
-    FX_FALLBACK_STATIC; // something went wrong, no data!
-
-  // Particle System settings
-  PartSys->updateSystem(); // update system properties (dimensions and data pointers)
-  numSources = PartSys->numSources;
-  PartSys->setMotionBlur(SEGMENT.custom2); // anable motion blur
-
-  uint32_t spacing = PartSys->maxX / numSources;
-  for (i = 0; i < numSources; i++) {
-    PartSys->sources[i].source.hue = i * 16; // hw_random16();   //TODO: make adjustable, maybe even colorcycle?
-    PartSys->sources[i].var = SEGMENT.speed >> 2;
-    PartSys->sources[i].minLife = 180 + (SEGMENT.intensity >> 1);
-    PartSys->sources[i].maxLife = 240 + SEGMENT.intensity;
-    PartSys->sources[i].sat = 255;
-    PartSys->sources[i].size = SEGMENT.custom1;
-    PartSys->sources[i].source.x = (spacing >> 1) + spacing * i; //distribute evenly
-  }
-
-  for (i = 0; i < PartSys->usedParticles; i++) {
-    if (PartSys->particles[i].ttl > 20) PartSys->particles[i].ttl -= 20; //ttl is linked to brightness, this allows to use higher brightness but still a short lifespan
-    else PartSys->particles[i].ttl = 0;
-  }
-
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+  const uint16_t cols = SEG_W, rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  struct VUData { uint8_t volS; };
+  if (!SEGENV.allocateData(sizeof(VUData))) FX_FALLBACK_STATIC;
+  VUData *d = (VUData*)SEGENV.data;
   um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t *)um_data->u_data[2]; // 16 bins with FFT data, log mapped already, each band contains frequency amplitude 0-255
-
-  //map the bands into 16 positions on x axis, emit some particles according to frequency loudness
-  i = 0;
-  uint32_t bin = hw_random16(numSources); //current bin , start with random one to distribute available particles fairly
-  uint32_t threshold = 300 - SEGMENT.intensity;
-
-  for (i = 0; i < numSources; i++) {
-    bin++;
-    bin = bin % numSources;
-    uint32_t emitparticle = 0;
-    // uint8_t emitspeed = ((uint32_t)fftResult[bin] * (uint32_t)SEGMENT.speed) >> 10; // emit speed according to loudness of band (127 max!)
-    if (fftResult[bin] > threshold) {
-      emitparticle = 1;
-    }
-    else if (fftResult[bin] > 0) { // band has low volue
-      uint32_t restvolume = ((threshold - fftResult[bin]) >> 2) + 2;
-      if (hw_random() % restvolume == 0) {
-        emitparticle = 1;
-      }
-    }
-
-    if (emitparticle)
-      PartSys->sprayEmit(PartSys->sources[bin]);
+  float vol = 0;
+  if (um_data) vol = *(float*)um_data->u_data[0];
+  int16_t dv = (int16_t)vol - d->volS; d->volS += (uint8_t)((dv*(dv>0?4:1))/8); // 快攻慢放
+  uint32_t base = SEGCOLOR(0);
+  // 填充高度 posY 0..255
+  uint8_t fillH = d->volS;
+  // 先铺满底色
+  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,base);
+  if (fillH < 4) return; // 无声保持常亮底色
+  for (uint16_t y=0;y<rows;y++){
+    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
+    if (posY > fillH) continue;
+    // 越往上颜色越深：与底色混合 t=posY/fillH
+    uint8_t t = (uint8_t)(((uint32_t)posY*255)/fillH);
+    // 深色 = 底色压暗到 ~35%，再混合
+    uint32_t deep = color_blend(base, 0, 30); // 越往上越深的暗色（底色压暗）
+    CRGB c(color_blend(base, deep, t));
+    for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,c);
   }
-  //TODO: add color control?
-
-  PartSys->update(); // update and render
 }
-static const char _data_FX_MODE_PS_1D_GEQ[] PROGMEM = "PS GEQ 1D@Speed,!,Size,Blur,,,,;,!;!;1f;pal=0,sx=50,ix=200,c1=0,c2=0,c3=0,o1=1,o2=1";
+static const char _data_FX_MODE_PS_1D_GEQ[] PROGMEM = "PS GEQ 1D@速度,强度;;!;;";
 
 /*
   Particle based Fire effect
@@ -11477,193 +11067,12 @@ static const char _data_FX_MODE_PS_FIRE1D[] PROGMEM = "PS Fire 1D@!,!,Cooling,Bl
   Particle based AR effect, swoop particles along the strip with selected frequency loudness
   by DedeHai (Damian Schneider)
 */
-void mode_particle1DsonicStream(void) {
-  ParticleSystem1D *PartSys = nullptr;
-
-  if (SEGMENT.call == 0) { // initialization
-    if (!initParticleSystem1D(PartSys, 1, 255, 0, true)) // init, no additional data needed
-      FX_FALLBACK_STATIC; // allocation failed or is single pixel
-    PartSys->setKillOutOfBounds(true);
-    PartSys->sources[0].source.x = 0; // at start
-    //PartSys->sources[1].source.x = PartSys->maxX; // at end
-    PartSys->sources[0].var = 0;//SEGMENT.custom1 >> 3;
-  }
-  else
-    PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
-  if (PartSys == nullptr)
-    FX_FALLBACK_STATIC; // something went wrong, no data!
-
-  // Particle System settings
-  PartSys->updateSystem(); // update system properties (dimensions and data pointers)
-  PartSys->setMotionBlur(20 + (SEGMENT.custom2 >> 1)); // anable motion blur
-  PartSys->setSmearBlur(200); // smooth out the edges
-  PartSys->sources[0].v = 5 + (SEGMENT.speed >> 2);
-
-  // FFT processing
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t *)um_data->u_data[2]; // 16 bins with FFT data, log mapped already, each band contains frequency amplitude 0-255
-  uint32_t loudness;
-  uint32_t baseBin = SEGMENT.custom3 >> 1; // 0 - 15 map(SEGMENT.custom3, 0, 31, 0, 14);
-
-  loudness = fftResult[baseBin];// + fftResult[baseBin + 1];
-  int mids = 0;
-  if (SEGMENT.check1) mids = sqrt32_bw((int)fftResult[5] + (int)fftResult[6] + (int)fftResult[7] + (int)fftResult[8] + (int)fftResult[9] + (int)fftResult[10]); // average the mids, bin 5 is ~500Hz, bin 10 is ~2kHz (see audio_reactive.h)
-  if (baseBin > 12)
-    loudness = loudness << 2; // double loudness for high frequencies (better detecion)
-
-  uint32_t threshold = 140 - (SEGMENT.intensity >> 1);
-  if (SEGMENT.check2) { // enable low pass filter for dynamic threshold
-    SEGMENT.step = (SEGMENT.step * 31500 + loudness * (32768 - 31500)) >> 15; // low pass filter for simple beat detection: add average to base threshold
-    threshold = 20 + (threshold >> 1) + SEGMENT.step; // add average to threshold
-  }
-
-  // color
-  uint32_t hueincrement = (SEGMENT.custom1 >> 3); // 0-31
-  PartSys->sources[0].sat = SEGMENT.custom1 > 0 ? 255 : 0; // color slider at zero: set to white
-  PartSys->setColorByPosition(SEGMENT.custom1 == 255);
-
-  // particle manipulation
-  for (uint32_t i = 0; i < PartSys->usedParticles; i++) {
-    if (PartSys->sources[0].sourceFlags.perpetual == false) { // age faster if not perpetual
-      if (PartSys->particles[i].ttl > 2) {
-        PartSys->particles[i].ttl -= 2; //ttl is linked to brightness, this allows to use higher brightness but still a short lifespan
-      }
-      else PartSys->particles[i].ttl = 0;
-    }
-    if (SEGMENT.check1) { // modulate colors by mid frequencies
-      PartSys->particles[i].hue += (mids * perlin8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
-    }
-  }
-
-  if (loudness > threshold) {
-    SEGMENT.aux0 += hueincrement; // change color
-    PartSys->sources[0].minLife = 100 + (((unsigned)SEGMENT.intensity * loudness * loudness) >> 13);
-    PartSys->sources[0].maxLife = PartSys->sources[0].minLife;
-    PartSys->sources[0].source.hue = SEGMENT.aux0;
-    PartSys->sources[0].size = SEGMENT.speed;
-    if (PartSys->particles[SEGMENT.aux1].x > 3 * PS_P_RADIUS_1D || PartSys->particles[SEGMENT.aux1].ttl == 0) { // only emit if last particle is far enough away or dead
-      int partindex = PartSys->sprayEmit(PartSys->sources[0]); // emit a particle
-      if (partindex >= 0) SEGMENT.aux1 = partindex; // track last emitted particle
-    }
-  }
-  else loudness = 0; // required for push mode
-
-  PartSys->update(); // update and render (needs to be done before manipulation for initial particle spacing to be right)
-
-  if (SEGMENT.check3) { // push mode
-    PartSys->sources[0].sourceFlags.perpetual = true; // emitted particles dont age
-    PartSys->applyFriction(1); //slow down particles
-    int32_t movestep = (((int)SEGMENT.speed + 2) * loudness) >> 10;
-    if (movestep) {
-      for (uint32_t i = 0; i < PartSys->usedParticles; i++) {
-        if (PartSys->particles[i].ttl) {
-          PartSys->particles[i].x += movestep; // push particles
-          PartSys->particles[i].vx = 10 + (SEGMENT.speed >> 4) ; // give particles some speed for smooth movement (friction will slow them down)
-        }
-      }
-    }
-  }
-  else {
-    PartSys->sources[0].sourceFlags.perpetual = false; // emitted particles age
-    // move all particles (again) to allow faster speeds
-    for (uint32_t i = 0; i < PartSys->usedParticles; i++) {
-      if (PartSys->particles[i].vx == 0)
-        PartSys->particles[i].vx = PartSys->sources[0].v; // move static particles (after disabling push mode)
-      PartSys->particleMoveUpdate(PartSys->particles[i], PartSys->particleFlags[i], nullptr, &PartSys->advPartProps[i]);
-    }
-  }
-}
-static const char _data_FX_MODE_PS_SONICSTREAM[] PROGMEM = "PS Sonic Stream@!,!,Color,Blur,Bin,Mod,Filter,Push;,!;!;1f;c3=0,o2=1";
 
 
 /*
   Particle based AR effect, creates exploding particles on beats
   by DedeHai (Damian Schneider)
 */
-void mode_particle1DsonicBoom(void) {
-  ParticleSystem1D *PartSys = nullptr;
-  if (SEGMENT.call == 0) { // initialization
-    if (!initParticleSystem1D(PartSys, 1, 255, 0, true)) // init, no additional data needed
-      FX_FALLBACK_STATIC; // allocation failed or is single pixel
-    PartSys->setKillOutOfBounds(true);
-  }
-  else
-    PartSys = reinterpret_cast<ParticleSystem1D *>(SEGENV.data); // if not first call, just set the pointer to the PS
-  if (PartSys == nullptr)
-    FX_FALLBACK_STATIC; // something went wrong, no data!
-
-  // Particle System settings
-  PartSys->updateSystem(); // update system properties (dimensions and data pointers)
-  PartSys->setMotionBlur(180 * SEGMENT.check3);
-  PartSys->setSmearBlur(64 * SEGMENT.check3);
-  PartSys->sources[0].var = map(SEGMENT.speed, 0, 255, 10, 127);
-
-  // FFT processing
-  um_data_t *um_data = getAudioData();
-  uint8_t *fftResult = (uint8_t *)um_data->u_data[2]; // 16 bins with FFT data, log mapped already, each band contains frequency amplitude 0-255
-  uint32_t loudness;
-  uint32_t baseBin = SEGMENT.custom3 >> 1; // 0 - 15 map(SEGMENT.custom3, 0, 31, 0, 14);
-  loudness = fftResult[baseBin];// + fftResult[baseBin + 1];
-  int mids = 0;
-  if (SEGMENT.check1) mids = sqrt32_bw((int)fftResult[5] + (int)fftResult[6] + (int)fftResult[7] + (int)fftResult[8] + (int)fftResult[9] + (int)fftResult[10]); // average the mids, bin 5 is ~500Hz, bin 10 is ~2kHz (see audio_reactive.h)
-
-  if (baseBin > 12)
-    loudness = loudness << 2; // double loudness for high frequencies (better detecion)
-  uint32_t threshold = 150 - (SEGMENT.intensity >> 1);
-  if (SEGMENT.check2) { // enable low pass filter for dynamic threshold
-    SEGMENT.step = (SEGMENT.step * 31500 + loudness * (32768 - 31500)) >> 15; // low pass filter for simple beat detection: add average to base threshold
-    threshold = 20 + (threshold >> 1) + SEGMENT.step; // add average to threshold
-  }
-
-  // particle manipulation
-  for (uint32_t i = 0; i < PartSys->usedParticles; i++) {
-    if (SEGMENT.check1) { // modulate colors by mid frequencies
-      PartSys->particles[i].hue += (mids * perlin8(PartSys->particles[i].x << 2, SEGMENT.step << 2)) >> 9; // color by perlin noise from mid frequencies
-    }
-    if (PartSys->particles[i].ttl > 16) {
-      PartSys->particles[i].ttl -= 16; //ttl is linked to brightness, this allows to use higher brightness but still a (very) short lifespan
-    }
-  }
-
-  if (loudness > threshold) {
-    if (SEGMENT.aux1 == 0) { // edge detected, code only runs once per "beat"
-      // update position
-      if (SEGMENT.custom2 < 128) // fixed position
-        PartSys->sources[0].source.x = map(SEGMENT.custom2, 0, 127, 0, PartSys->maxX);
-      else if (SEGMENT.custom2 < 255) { // advances on each "beat"
-        int32_t step = PartSys->maxX / (((270 - SEGMENT.custom2) >> 3)); // step: 2 - 33 steps for full segment width
-        PartSys->sources[0].source.x = (PartSys->sources[0].source.x + step) % PartSys->maxX;
-        if (PartSys->sources[0].source.x < step) // align to be symmetrical by making the first position half a step from start
-          PartSys->sources[0].source.x = step >> 1;
-      }
-      else // position set to max, use random postion per beat
-        PartSys->sources[0].source.x = hw_random(PartSys->maxX);
-
-      // update color
-      //PartSys->setColorByPosition(SEGMENT.custom1 == 255);     // color slider at max: particle color by position
-      PartSys->sources[0].sat = SEGMENT.custom1 > 0 ? 255 : 0; // color slider at zero: set to white
-      if (SEGMENT.custom1 == 255) // emit color by position
-        SEGMENT.aux0 = map(PartSys->sources[0].source.x , 0, PartSys->maxX, 0, 255);
-      else if (SEGMENT.custom1 > 0)
-        SEGMENT.aux0 += (SEGMENT.custom1 >> 1); // change emit color per "beat"
-    }
-    SEGMENT.aux1 = 1; // track edge detection
-
-    PartSys->sources[0].minLife = 200;
-    PartSys->sources[0].maxLife = PartSys->sources[0].minLife + (((unsigned)SEGMENT.intensity * loudness * loudness) >> 13);
-    PartSys->sources[0].source.hue = SEGMENT.aux0;
-    uint32_t explosionsize = 4 + (PartSys->maxXpixel >> 2);
-    explosionsize = hw_random16((explosionsize * loudness) >> 10);
-    for (uint32_t e = 0; e < explosionsize; e++) { // emit explosion particles
-        PartSys->sprayEmit(PartSys->sources[0]); // emit a particle
-      }
-  }
-  else
-    SEGMENT.aux1 = 0; // reset edge detection
-
-  PartSys->update(); // update and render (needs to be done before manipulation for initial particle spacing to be right)
-}
-static const char _data_FX_MODE_PS_SONICBOOM[] PROGMEM = "PS Sonic Boom@!,!,Color,Position,Bin,Mod,Filter,Blur;,!;!;1f;c2=63,c3=0,o2=1";
 
 /*
 Particles bound by springs
@@ -12022,7 +11431,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_OSCILLATE, &mode_oscillate, _data_FX_MODE_OSCILLATE);
   addEffect(FX_MODE_JUGGLE, &mode_juggle, _data_FX_MODE_JUGGLE);
   addEffect(FX_MODE_PALETTE, &mode_palette, _data_FX_MODE_PALETTE);
-  addEffect(FX_MODE_BPM, &mode_bpm, _data_FX_MODE_BPM);
   addEffect(FX_MODE_FILLNOISE8, &mode_fillnoise8, _data_FX_MODE_FILLNOISE8);
   addEffect(FX_MODE_NOISE16_1, &mode_noise16_1, _data_FX_MODE_NOISE16_1);
   addEffect(FX_MODE_NOISE16_4, &mode_noise16_4, _data_FX_MODE_NOISE16_4);
@@ -12083,17 +11491,12 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_PLASMOID, &mode_plasmoid, _data_FX_MODE_PLASMOID);
   addEffect(FX_MODE_PUDDLES, &mode_puddles, _data_FX_MODE_PUDDLES);
   addEffect(FX_MODE_MIDNOISE, &mode_midnoise, _data_FX_MODE_MIDNOISE);
-  addEffect(FX_MODE_NOISEMETER, &mode_noisemeter, _data_FX_MODE_NOISEMETER);
-  addEffect(FX_MODE_FREQWAVE, &mode_freqwave, _data_FX_MODE_FREQWAVE);
   addEffect(FX_MODE_WATERFALL, &mode_waterfall, _data_FX_MODE_WATERFALL);
   addEffect(FX_MODE_FREQPIXELS, &mode_freqpixels, _data_FX_MODE_FREQPIXELS);
   addEffect(FX_MODE_NOISEFIRE, &mode_noisefire, _data_FX_MODE_NOISEFIRE);
   addEffect(FX_MODE_NOISEMOVE, &mode_noisemove, _data_FX_MODE_NOISEMOVE);
   addEffect(FX_MODE_PERLINMOVE, &mode_perlinmove, _data_FX_MODE_PERLINMOVE);
-  addEffect(FX_MODE_RIPPLEPEAK, &mode_ripplepeak, _data_FX_MODE_RIPPLEPEAK);
-  addEffect(FX_MODE_FREQMAP, &mode_freqmap, _data_FX_MODE_FREQMAP);
   addEffect(FX_MODE_GRAVCENTER, &mode_gravcenter, _data_FX_MODE_GRAVCENTER);
-  addEffect(FX_MODE_DJLIGHT, &mode_DJLight, _data_FX_MODE_DJLIGHT);
   addEffect(FX_MODE_BLURZ, &mode_blurz, _data_FX_MODE_BLURZ);
   addEffect(FX_MODE_FLOWSTRIPE, &mode_FlowStripe, _data_FX_MODE_FLOWSTRIPE);
   addEffect(FX_MODE_WAVESINS, &mode_wavesins, _data_FX_MODE_WAVESINS);
@@ -12114,7 +11517,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DSCROLLTEXT, &mode_2Dscrollingtext, _data_FX_MODE_2DSCROLLTEXT);
   addEffect(FX_MODE_2DDRIFTROSE, &mode_2Ddriftrose, _data_FX_MODE_2DDRIFTROSE);
   addEffect(FX_MODE_2DDISTORTIONWAVES, &mode_2Ddistortionwaves, _data_FX_MODE_2DDISTORTIONWAVES);
-  addEffect(FX_MODE_2DGEQ, &mode_2DGEQ, _data_FX_MODE_2DGEQ); // audio
 
   addEffect(FX_MODE_2DANALOGCLOCK, &mode_2DAnalogClock, _data_FX_MODE_2DANALOGCLOCK);
   addEffect(FX_MODE_LUMI_AURORA, &mode_lumi_aurora, _data_FX_MODE_LUMI_AURORA);
@@ -12125,10 +11527,13 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_LUMI_HEARTH,   &mode_lumi_hearth,   _data_FX_MODE_LUMI_HEARTH);
   addEffect(FX_MODE_LUMI_LAVA,     &mode_lumi_lava,     _data_FX_MODE_LUMI_LAVA);
   addEffect(FX_MODE_LUMI_CAUSTICS, &mode_lumi_caustics, _data_FX_MODE_LUMI_CAUSTICS);
-  addEffect(FX_MODE_LUMI_FOUNTAIN, &mode_lumi_fountain, _data_FX_MODE_LUMI_FOUNTAIN); // audio
-  addEffect(FX_MODE_LUMI_PULSER,   &mode_lumi_pulser,   _data_FX_MODE_LUMI_PULSER);   // audio
-  addEffect(FX_MODE_LUMI_SCANNER,  &mode_lumi_scanner,  _data_FX_MODE_LUMI_SCANNER);
-  addEffect(FX_MODE_LUMI_RAIN,     &mode_lumi_rain,     _data_FX_MODE_LUMI_RAIN);
+  addEffect(FX_MODE_LUMI_FOUNTAIN, &mode_lumi_fountain, _data_FX_MODE_LUMI_FOUNTAIN);
+  addEffect(FX_MODE_STAGELIGHT, &mode_stagelight, _data_FX_MODE_STAGELIGHT);
+  addEffect(FX_MODE_TRIBREATH, &mode_tribreath, _data_FX_MODE_TRIBREATH);
+  addEffect(FX_MODE_AUDIOSPIRAL, &mode_audiospiral, _data_FX_MODE_AUDIOSPIRAL);
+  addEffect(FX_MODE_SONICPULSE, &mode_sonicpulse, _data_FX_MODE_SONICPULSE);
+  addEffect(FX_MODE_BASSLAVA, &mode_basslava, _data_FX_MODE_BASSLAVA);
+  addEffect(FX_MODE_SPECTRUMLAMP, &mode_spectrumlamp, _data_FX_MODE_SPECTRUMLAMP); // audio
   addEffect(FX_MODE_2DNOISE, &mode_2Dnoise, _data_FX_MODE_2DNOISE);
   addEffect(FX_MODE_2DFIRENOISE, &mode_2Dfirenoise, _data_FX_MODE_2DFIRENOISE);
   addEffect(FX_MODE_2DSQUAREDSWIRL, &mode_2Dsquaredswirl, _data_FX_MODE_2DSQUAREDSWIRL);
@@ -12158,7 +11563,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DSOAP, &mode_2Dsoap, _data_FX_MODE_2DSOAP);
   addEffect(FX_MODE_2DOCTOPUS, &mode_2Doctopus, _data_FX_MODE_2DOCTOPUS);
   addEffect(FX_MODE_2DWAVINGCELL, &mode_2Dwavingcell, _data_FX_MODE_2DWAVINGCELL);
-  addEffect(FX_MODE_2DAKEMI, &mode_2DAkemi, _data_FX_MODE_2DAKEMI); // audio
 
 #ifndef WLED_DISABLE_PARTICLESYSTEM2D
   addEffect(FX_MODE_PARTICLEVOLCANO, &mode_particlevolcano, _data_FX_MODE_PARTICLEVOLCANO);
@@ -12172,8 +11576,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_PARTICLEIMPACT, &mode_particleimpact, _data_FX_MODE_PARTICLEIMPACT);
   addEffect(FX_MODE_PARTICLEWATERFALL, &mode_particlewaterfall, _data_FX_MODE_PARTICLEWATERFALL);
   addEffect(FX_MODE_PARTICLESPRAY, &mode_particlespray, _data_FX_MODE_PARTICLESPRAY);
-  addEffect(FX_MODE_PARTICLESGEQ, &mode_particleGEQ, _data_FX_MODE_PARTICLEGEQ);
-  addEffect(FX_MODE_PARTICLECENTERGEQ, &mode_particlecenterGEQ, _data_FX_MODE_PARTICLECIRCULARGEQ);
   addEffect(FX_MODE_PARTICLEGHOSTRIDER, &mode_particleghostrider, _data_FX_MODE_PARTICLEGHOSTRIDER);
   addEffect(FX_MODE_PARTICLEBLOBS, &mode_particleblobs, _data_FX_MODE_PARTICLEBLOBS);
   addEffect(FX_MODE_PARTICLEGALAXY, &mode_particlegalaxy, _data_FX_MODE_PARTICLEGALAXY);
@@ -12193,8 +11595,6 @@ addEffect(FX_MODE_PSCHASE, &mode_particleChase, _data_FX_MODE_PS_CHASE);
 addEffect(FX_MODE_PSSTARBURST, &mode_particleStarburst, _data_FX_MODE_PS_STARBURST);
 addEffect(FX_MODE_PS1DGEQ, &mode_particle1DGEQ, _data_FX_MODE_PS_1D_GEQ);
 addEffect(FX_MODE_PSFIRE1D, &mode_particleFire1D, _data_FX_MODE_PS_FIRE1D);
-addEffect(FX_MODE_PS1DSONICSTREAM, &mode_particle1DsonicStream, _data_FX_MODE_PS_SONICSTREAM);
-addEffect(FX_MODE_PS1DSONICBOOM, &mode_particle1DsonicBoom, _data_FX_MODE_PS_SONICBOOM);
 addEffect(FX_MODE_PS1DSPRINGY, &mode_particleSpringy, _data_FX_MODE_PS_SPRINGY);
 #endif // WLED_DISABLE_PARTICLESYSTEM1D
 

@@ -106,17 +106,6 @@ object CuratedEffects {
             gradient = listOf(0x00F5FF, 0xAF28FF),
         ),
 
-        // ── 音乐律动 ──────────────────────────────────────────────
-        Spec(
-            effectName = "Bpm",
-            paletteName = "Magenta",
-            speed = 180,
-            intensity = 200,
-            title = "赛博脉冲",
-            tagline = "Cyber Pulse",
-            gradient = listOf(0xFF007F, 0x00F0FF),
-        ),
-
         // ── 动态字幕 ──────────────────────────────────────────────
         Spec(
             effectName = "Scrolling Text",
