@@ -345,9 +345,19 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_SLOW_TRANSITION          186
 #define FX_MODE_2DANALOGCLOCK            187  // new in 16.1
 #define FX_MODE_LUMI_AURORA              188  // 光屿招牌灯效「极光之舞」
+#define FX_MODE_LUMI_FOREST              189  // 林间萤光
+#define FX_MODE_LUMI_DUSK                190  // 暮色晚霞
+#define FX_MODE_LUMI_POLAR               191  // 极地冰川
+#define FX_MODE_LUMI_HEARTH              192  // 壁炉火焰
+#define FX_MODE_LUMI_LAVA                193  // 熔岩灯
+#define FX_MODE_LUMI_CAUSTICS            194  // 深海波光
+#define FX_MODE_LUMI_FOUNTAIN            195  // 环形频谱喷泉
+#define FX_MODE_LUMI_PULSER              196  // 心跳脉冲环
+#define FX_MODE_LUMI_SCANNER             197  // 光环扫描
+#define FX_MODE_LUMI_RAIN                198  // 雨滴数据流
 
 
-#define MODE_COUNT                     189
+#define MODE_COUNT                     199
 
 
 #define TRANSITION_FADE            0x00  // universal

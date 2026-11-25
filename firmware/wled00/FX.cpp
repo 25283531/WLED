@@ -5308,6 +5308,767 @@ void mode_lumi_aurora(void) {
 static const char _data_FX_MODE_LUMI_AURORA[] PROGMEM = "极光之舞@速度,交织幅度;;2";
 
 
+// ===================== 光屿 Lumi 系列 2D 灯效（fx 189..198） =====================
+// 通用约定：
+//   - 尺寸一律由运行时 SEG_W / SEG_H 推导，纵向位置统一用归一化高度 posY：
+//     posY = (rows-1-y)*255/(rows-1)，0 = 物理底部，255 = 物理顶部。
+//   - 所有纵向尺寸（环高、拖尾、注入带、发射点）都是 posY 百分比，不写死行数。
+//   - 周向用 ux = x*256/cols 与 lumiWrapD() 做环绕，接缝不断裂。
+//   - 亮度：彩色走全局 bri≤153；白热像素再套 LUMI_MAXV=200。
+// ==============================================================================
+
+#define LUMI_MAXV 200
+
+// 圆周最短距离（0..128）
+static inline uint8_t lumiWrapD(uint8_t a, uint8_t b) {
+  int d = int(a) - int(b);
+  if (d < 0) d = -d;
+  return (d > 128) ? (uint8_t)(256 - d) : (uint8_t)d;
+}
+
+// 多色标渐变（t = 0..255）
+static inline uint32_t lumiRamp4(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3, uint8_t t) {
+  if (t < 85)  return color_blend(c0, c1, (uint8_t)(t * 3));
+  if (t < 170) return color_blend(c1, c2, (uint8_t)((t - 85) * 3));
+  return color_blend(c2, c3, (uint8_t)((t - 170) * 3));
+}
+
+static inline uint32_t lumiRamp5(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3, uint32_t c4, uint8_t t) {
+  if (t < 64)  return color_blend(c0, c1, (uint8_t)(t * 4));
+  if (t < 128) return color_blend(c1, c2, (uint8_t)((t - 64) * 4));
+  if (t < 192) return color_blend(c2, c3, (uint8_t)((t - 128) * 4));
+  return color_blend(c3, c4, (uint8_t)((t - 192) * 4));
+}
+
+static inline uint32_t lumiRamp6(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3, uint32_t c4, uint32_t c5, uint8_t t) {
+  if (t < 51)  return color_blend(c0, c1, (uint8_t)(t * 5));
+  if (t < 102) return color_blend(c1, c2, (uint8_t)((t - 51) * 5));
+  if (t < 153) return color_blend(c2, c3, (uint8_t)((t - 102) * 5));
+  if (t < 204) return color_blend(c3, c4, (uint8_t)((t - 153) * 5));
+  return color_blend(c4, c5, (uint8_t)((t - 204) * 5));
+}
+
+// 上下端 12 个归一化单位内渐变到 40% 亮度（端部收边，不硬切）
+static inline uint8_t lumiGuard(uint8_t posY) {
+  if (posY < 12)  return (uint8_t)(40 + (posY * 215) / 12);
+  if (posY > 243) return (uint8_t)(40 + ((255 - posY) * 215) / 12);
+  return 255;
+}
+
+// 归一化高度 -> 行号
+static inline uint16_t lumiRow(uint8_t posY, uint16_t rows) {
+  return (uint16_t)(rows - 1) - (uint16_t)(((uint32_t)posY * (rows - 1)) / 255);
+}
+
+// 1. 林间萤光（自然配色：苔绿 -> 嫩芽 -> 黄绿 + 暖白萤火）
+void mode_lumi_forest(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  struct LumiFirefly { uint8_t px, py, ph, drift; };   // px: 周向角度, py: 基准高度
+  const uint8_t maxFl = 12;
+  if (!SEGENV.allocateData(sizeof(LumiFirefly) * maxFl)) FX_FALLBACK_STATIC;
+  LumiFirefly *ff = reinterpret_cast<LumiFirefly*>(SEGENV.data);
+
+  uint8_t count = 1 + (uint8_t)(((uint16_t)SEGMENT.intensity * (maxFl - 1)) / 255);
+  if (count > maxFl) count = maxFl;
+
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < maxFl; i++) {
+      ff[i].px    = prng.random8();
+      ff[i].py    = (uint8_t)(20 + prng.random8(216));                                  // 8%..92% 高度
+      ff[i].ph    = prng.random8();
+      ff[i].drift = (uint8_t)(prng.random8(2) ? (1 + prng.random8(3)) : (0x80 | (1 + prng.random8(3))));
+    }
+  }
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t8 = (uint8_t)(t >> 6);
+  const uint8_t  spd = 1 + (SEGMENT.speed >> 6);                                    // 1..4
+  const uint8_t  amp = 4 + (SEGMENT.custom1 >> 4);                                  // 4..19 归一化单位
+
+  // 背景：纵向苔绿 -> 黄绿，叠加圆周慢波
+  const uint32_t cMoss = 0x1E5B2E, cLeaf = 0x3FA34D, cSprout = 0x8BD450, cBud = 0xC8E85A;
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    uint8_t g    = lumiGuard(posY);
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t ux = (uint8_t)((x * 256) / cols);
+      int16_t idx = (int16_t)posY + (((int16_t)sin8_t((uint8_t)(ux + t8)) - 128) / 4);
+      if (idx < 0) idx = 0; else if (idx > 255) idx = 255;
+      CRGB c(lumiRamp4(cMoss, cLeaf, cSprout, cBud, (uint8_t)idx));
+      c.nscale8(g);
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+
+  // 萤火：周向环绕漂移 + 纵向呼吸
+  for (uint8_t i = 0; i < count; i++) {
+    int8_t vx = (ff[i].drift & 0x80) ? -(int8_t)(ff[i].drift & 0x7F) : (int8_t)(ff[i].drift & 0x7F);
+    ff[i].px += (uint8_t)(vx * (int16_t)spd);
+    ff[i].ph += 1 + (SEGMENT.speed >> 5);
+
+    int16_t pyc = (int16_t)ff[i].py + (((int16_t)sin8_t(ff[i].ph) - 128) * (int16_t)amp) / 128;
+    if (pyc < 4) pyc = 4; else if (pyc > 251) pyc = 251;
+
+    uint16_t fx = (uint16_t)(((uint32_t)ff[i].px * cols) >> 8) % cols;
+    uint16_t fy = lumiRow((uint8_t)pyc, rows);
+
+    uint8_t breath = 40 + scale8(sin8_t((uint8_t)(ff[i].ph * 3 + t8)), 160);
+    CRGB core(0xFFE9A8);
+    core.nscale8(breath);
+    SEGMENT.addPixelColorXY(fx, fy, core);
+
+    CRGB halo(0xFFE9A8);
+    halo.nscale8(breath >> 2);
+    uint16_t xm = (fx + cols - 1) % cols;
+    uint16_t xp = (fx + 1) % cols;
+    SEGMENT.addPixelColorXY(xm, fy, halo);
+    SEGMENT.addPixelColorXY(xp, fy, halo);
+    if (fy > 0)        { SEGMENT.addPixelColorXY(xm, fy - 1, halo); SEGMENT.addPixelColorXY(xp, fy - 1, halo); }
+    if (fy + 1 < rows) { SEGMENT.addPixelColorXY(xm, fy + 1, halo); SEGMENT.addPixelColorXY(xp, fy + 1, halo); }
+  }
+} // mode_lumi_forest()
+static const char _data_FX_MODE_LUMI_FOREST[] PROGMEM = "Lumi Forest@Speed,Fireflies,Breath;;!;2;sx=96,ix=128,c1=128";
+
+
+// 2. 暮色晚霞（23% 高度色带：底红 -> 橙 -> 琥珀 -> 品红 -> 紫 -> 顶青）
+void mode_lumi_dusk(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t8 = (uint8_t)(t >> 5);
+  const uint8_t  cloud = SEGMENT.intensity;
+  // 落日高度：25%..85% 高度区间缓慢升落
+  const uint8_t  sunY = (uint8_t)(64 + scale8(sin8_t((uint8_t)(t >> 9)), 153));
+
+  const uint32_t cRed = 0xE23A1E, cOrange = 0xFF7A2E, cAmber = 0xFFC24A;
+  const uint32_t cMagenta = 0xE85CC4, cPurple = 0x7B5BE0, cCyan = 0x4FD8E8;
+
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    uint8_t g    = lumiGuard(posY);
+    // 云层按行取 perlin（每帧 <= rows 次），像素级只做 sin
+    uint8_t clRow = perlin8((uint16_t)(y * 24), (uint16_t)(t >> 9));
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t ux = (uint8_t)((x * 256) / cols);
+      int16_t idx = (int16_t)posY + (((int16_t)sin8_t((uint8_t)(ux + (uint8_t)(t >> 7))) - 128) / 8);
+      idx += (((int16_t)clRow - 128) * (int16_t)cloud) / 1024;
+      if (idx < 0) idx = 0; else if (idx > 255) idx = 255;
+
+      CRGB c(lumiRamp6(cRed, cOrange, cAmber, cMagenta, cPurple, cCyan, (uint8_t)idx));
+      c.nscale8(scale8(qadd8(200, (uint8_t)(clRow >> 2)), g));
+
+      // 正面（角度 128）落日高斯光斑
+      uint8_t  d  = lumiWrapD(ux, 128);
+      int16_t  dy = (int16_t)posY - (int16_t)sunY;
+      uint32_t dd = (uint32_t)d * d + (uint32_t)(dy * dy);
+      if (dd < 2200) {
+        uint8_t glow = (uint8_t)(255 - (dd * 255) / 2200);
+        glow = scale8(glow, (uint8_t)(60 + (SEGMENT.custom1 >> 1)));
+        CRGB s(0xFFE7C0);
+        s.nscale8(glow);
+        c.r = qadd8(c.r, s.r);
+        c.g = qadd8(c.g, s.g);
+        c.b = qadd8(c.b, s.b);
+      }
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+} // mode_lumi_dusk()
+static const char _data_FX_MODE_LUMI_DUSK[] PROGMEM = "Lumi Dusk@Speed,Clouds,Sun level;;!;2;sx=60,ix=120,c1=128";
+
+
+// 3. 极地冰川（21% 高度底品红 -> 顶极光绿 + 纵向帘幕 + 星点）
+void mode_lumi_polar(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  struct LumiStar { uint8_t x, y, ph; };
+  const uint8_t maxStars = 8;
+  if (!SEGENV.allocateData(sizeof(LumiStar) * maxStars)) FX_FALLBACK_STATIC;
+  LumiStar *st = reinterpret_cast<LumiStar*>(SEGENV.data);
+
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < maxStars; i++) {
+      st[i].x  = prng.random8();
+      st[i].y  = (uint8_t)(40 + prng.random8(191));   // 星点高度：16%..90%
+      st[i].ph = prng.random8();
+    }
+  }
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t8 = (uint8_t)(t >> 6);
+  // 帘宽为圆周百分比
+  const uint8_t  widthA = (uint8_t)(24 + (SEGMENT.intensity >> 2));
+  const uint8_t  widthB = (widthA > 8) ? (uint8_t)(widthA - 8) : widthA;
+
+  const uint32_t cMag = 0xE855B8, cPur = 0x9B5BE8, cBlue = 0x5B7CF0;
+  const uint32_t cCyan = 0x3FD0F0, cGreen = 0x2FE38A;
+
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    uint8_t g    = lumiGuard(posY);
+    uint8_t centerA = sin8_t((uint8_t)((posY * 3) / 2 + (uint8_t)(t >> 6)));
+    uint8_t centerB = sin8_t((uint8_t)(posY + (uint8_t)(t >> 5) + 85));
+    uint8_t tear    = perlin8((uint16_t)(posY * 3), (uint16_t)(t >> 8));   // 每行一次
+
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t ux = (uint8_t)((x * 256) / cols);
+      CRGB c(lumiRamp5(cMag, cPur, cBlue, cCyan, cGreen, posY));
+
+      uint8_t dA = lumiWrapD(ux, centerA);
+      uint8_t dB = lumiWrapD(ux, centerB);
+      uint8_t gA = (dA < widthA) ? (uint8_t)(255 - (dA * 255) / widthA) : 0;
+      uint8_t gB = (dB < widthB) ? (uint8_t)(255 - (dB * 255) / widthB) : 0;
+      if (gA) gA = scale8(gA, (uint8_t)(150 + (tear >> 2)));
+      if (gB) gB = scale8(gB, (uint8_t)(150 + (tear >> 2)));
+      uint8_t curtain = (gA > gB) ? gA : gB;
+
+      if (curtain) {
+        CRGB cc(0x9FFFE0);
+        cc.nscale8(scale8(curtain, 150));
+        c.r = qadd8(c.r, cc.r);
+        c.g = qadd8(c.g, cc.g);
+        c.b = qadd8(c.b, cc.b);
+      }
+      c.nscale8(g);
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+
+  // 星点
+  uint8_t starCount = 1 + (SEGMENT.custom1 >> 5);   // 1..8
+  if (starCount > maxStars) starCount = maxStars;
+  for (uint8_t i = 0; i < starCount; i++) {
+    uint8_t tw = sin8_t((uint8_t)(st[i].ph + t8 * 2));
+    uint8_t br = (uint8_t)(40 + scale8(tw, 150));
+    CRGB c(0xE8F6FF);
+    c.nscale8(scale8(br, LUMI_MAXV));
+    uint16_t fx = (uint16_t)(((uint32_t)st[i].x * cols) >> 8) % cols;
+    uint16_t fy = lumiRow(st[i].y, rows);
+    SEGMENT.addPixelColorXY(fx, fy, c);
+  }
+} // mode_lumi_polar()
+static const char _data_FX_MODE_LUMI_POLAR[] PROGMEM = "Lumi Polar@Speed,Curtain width,Stars;;!;2;sx=80,ix=110,c1=160";
+
+
+// 4. 壁炉火焰：2D 热场 + 火舌驱动
+void mode_lumi_hearth(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+  if ((uint32_t)cols * rows > 1024) FX_FALLBACK_STATIC;   // 热场上限 1024 B
+  if (!SEGENV.allocateData((size_t)cols * rows)) FX_FALLBACK_STATIC;
+  uint8_t *heat = SEGENV.data;
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t8 = (uint8_t)(t >> 4);
+
+  // 冷却 + 上移（每 shiftDiv 帧上移一次，速度越快越频繁）
+  const uint8_t cool     = 1 + (SEGMENT.speed >> 6);
+  const uint8_t shiftDiv = 1 + (uint8_t)((255 - SEGMENT.speed) / 32);
+  const uint32_t n = (uint32_t)cols * rows;
+  for (uint32_t i = 0; i < n; i++) heat[i] = (heat[i] > cool) ? (uint8_t)(heat[i] - cool) : 0;
+
+  if ((SEGENV.call % shiftDiv) == 0) {
+    for (uint16_t y = 0; y + 1 < rows; y++) {      // y=0 是顶部，热从下方 y+1 升上来
+      uint8_t *dst = heat + (uint32_t)y * cols;
+      uint8_t *src = heat + (uint32_t)(y + 1) * cols;
+      for (uint16_t x = 0; x < cols; x++) dst[x] = (uint8_t)((src[x] * 3 + dst[x]) >> 2);
+    }
+  }
+
+  // 底部注入（约 6% 高度）
+  uint16_t injRows = 1 + (rows * 6) / 100;
+  for (uint16_t j = 0; j < injRows; j++) {
+    uint8_t *dst = heat + (uint32_t)(rows - 1 - j) * cols;
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t noise = perlin8((uint16_t)(x * 40), (uint16_t)(t8 + j * 17));
+      uint8_t v = (uint8_t)(150 + scale8(noise, 105));
+      dst[x] = (v > dst[x]) ? v : dst[x];
+    }
+  }
+
+  // 着色：黑 -> 橙红 -> 亮橙 -> 白热，火舌行波只抬升高热区
+  const uint32_t cBlack = 0x000000, cDeep = 0x8A1400, cRed = 0xFF5A1E;
+  const uint32_t cOrange = 0xFFB43C, cWhiteHot = 0xFFF3D0;
+  for (uint16_t y = 0; y < rows; y++) {
+    for (uint16_t x = 0; x < cols; x++) {
+      int16_t h = heat[(uint32_t)y * cols + x];
+      uint8_t tongue = sin8_t((uint8_t)((uint16_t)y * 8 + (t8 >> 1) + x * 37));
+      if (h > 100) h += (((int16_t)tongue - 128) * (int16_t)SEGMENT.intensity) / 512;
+      if (h < 20) h = 20; else if (h > 255) h = 255;
+
+      CRGB c(lumiRamp5(cBlack, cDeep, cRed, cOrange, cWhiteHot, (uint8_t)h));
+      if (h > 200) c.nscale8(LUMI_MAXV);     // 白热像素封顶
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+} // mode_lumi_hearth()
+static const char _data_FX_MODE_LUMI_HEARTH[] PROGMEM = "Lumi Hearth@Speed,Tongue,Flicker;;!;2;sx=100,ix=140,c1=90";
+
+
+// 5. 熔岩灯：少量大色团缓慢融合 + 上升气泡
+void mode_lumi_lava(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  struct LumiBlob  { uint8_t cx, cy; };
+  struct LumiBubble{ uint8_t x, y; };
+  const uint8_t maxBlobs = 8, maxBubbles = 6;
+  if (!SEGENV.allocateData(sizeof(LumiBlob) * maxBlobs + sizeof(LumiBubble) * maxBubbles)) FX_FALLBACK_STATIC;
+  LumiBlob   *blob = reinterpret_cast<LumiBlob*>(SEGENV.data);
+  LumiBubble *bub  = reinterpret_cast<LumiBubble*>(SEGENV.data + sizeof(LumiBlob) * maxBlobs);
+
+  uint8_t nBlob = 4 + (SEGMENT.speed >> 6);         // 4..7
+  if (nBlob > maxBlobs) nBlob = maxBlobs;
+
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < maxBubbles; i++) {
+      bub[i].x = prng.random8();
+      bub[i].y = prng.random8();
+    }
+  }
+
+  const uint32_t t  = strip.now;
+  const uint8_t  radius = (uint8_t)(55 + (SEGMENT.intensity >> 3));   // 归一化半径 55..86
+  const uint32_t r2 = (uint32_t)radius * radius;
+  const uint16_t inv = (uint16_t)(65535UL / r2);
+
+  // 团块中心：极慢 perlin 漂移（每帧 <= maxBlobs 次）
+  uint8_t cxA[8], cyA[8];
+  for (uint8_t i = 0; i < maxBlobs; i++) {
+    cxA[i] = perlin8((uint16_t)((t >> 9) + i * 41), 0);
+    cyA[i] = (uint8_t)(64 + (perlin8((uint16_t)((t >> 10) + i * 67), 128) >> 1));  // 25%..75% 高度
+  }
+
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t ux = (uint8_t)((x * 256) / cols);
+      uint16_t sum = 0;
+      for (uint8_t b = 0; b < nBlob; b++) {
+        uint8_t dx = lumiWrapD(ux, cxA[b]);
+        int16_t dy = (int16_t)posY - (int16_t)cyA[b];
+        uint32_t d2 = (uint32_t)dx * dx + (uint32_t)(dy * dy);
+        if (d2 < r2) {
+          uint16_t q = (uint16_t)((((r2 - d2) * inv) >> 8));
+          sum += q;
+          if (sum > 255) { sum = 255; break; }
+        }
+      }
+      uint32_t col;
+      if (sum < 12) col = 0x050103;
+      else          col = lumiRamp4(0x1A0004, 0xB3001B, 0xFF6B1A, 0xE0457B, (uint8_t)(sum > 128 ? 255 : sum * 2));
+      CRGB c(col);
+      if (sum >= 12) c.nscale8(200);
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+
+  // 气泡上升
+  for (uint8_t i = 0; i < maxBubbles; i++) {
+    if (bub[i].y < 6) {
+      bub[i].y = (uint8_t)(230 + prng.random8(25));
+      bub[i].x = prng.random8();
+    } else {
+      bub[i].y -= (uint8_t)(1 + (SEGMENT.custom1 >> 6));
+    }
+    uint16_t fx = (uint16_t)(((uint32_t)bub[i].x * cols) >> 8) % cols;
+    uint16_t fy = lumiRow(bub[i].y, rows);
+    CRGB c(0xFFB070);
+    c.nscale8(120);
+    SEGMENT.addPixelColorXY(fx, fy, c);
+  }
+} // mode_lumi_lava()
+static const char _data_FX_MODE_LUMI_LAVA[] PROGMEM = "Lumi Lava@Speed,Blob size,Rise;;!;2;sx=128,ix=120,c1=90";
+
+
+// 6. 深海波光：三重干涉的焦散网纹
+void mode_lumi_caustics(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t1 = (uint8_t)(t >> 6), t2 = (uint8_t)(t >> 5), t3 = (uint8_t)(t >> 4);
+  const uint8_t  k  = 1 + (SEGMENT.intensity * 3) / 255;        // 网眼密度 1..4
+  const uint8_t  sharp = (uint8_t)(128 + (SEGMENT.custom1 >> 1));
+
+  const uint32_t cDeep = 0x012A33, cTeal = 0x0E6B7A, cBright = 0x7FF2FF, cWhite = 0xDFFFFF;
+
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    uint8_t g    = lumiGuard(posY);
+    for (uint16_t x = 0; x < cols; x++) {
+      uint8_t ux = (uint8_t)((x * 256) / cols);
+      uint16_t w = (uint16_t)sin8_t((uint8_t)(ux * k + t1))
+                 + (uint16_t)sin8_t((uint8_t)((posY * 5) / 2 - t2))
+                 + (uint16_t)sin8_t((uint8_t)((ux + posY) * 2 + t3));
+      int16_t dev = (int16_t)w - 384;
+      if (dev < 0) dev = -dev;
+      uint16_t cut = (uint16_t)((dev * 2) / 3);
+      if (cut > 255) cut = 255;
+      uint8_t ridge = (uint8_t)(255 - cut);
+      ridge = scale8(ridge, ridge);
+      ridge = scale8(ridge, sharp);
+
+      CRGB c(lumiRamp4(cDeep, cTeal, cBright, cWhite, ridge));
+      c.nscale8(g);
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+} // mode_lumi_caustics()
+static const char _data_FX_MODE_LUMI_CAUSTICS[] PROGMEM = "Lumi Caustics@Speed,Grid,Sharpness;;!;2;sx=70,ix=100,c1=150";
+
+
+// 7. 环形频谱喷泉（真 FFT：低频 -> 底部暖浪，中高音 -> 星光，瞬态 -> 扩散波纹）
+void mode_lumi_fountain(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  struct LumiFountainRing { uint8_t h, life, pad; };              // h: posY, life: 亮度
+  struct LumiFountainPart { int8_t vx, vy; uint8_t x, y, life; };
+  const uint8_t kMaxRings = 3, kMaxParts = 16;
+  struct LumiFountainData {
+    uint8_t bassS, midS, highS, prevVol;
+    uint32_t lastPeak;
+    LumiFountainRing ring[3];
+    LumiFountainPart part[16];
+  };
+  if (!SEGENV.allocateData(sizeof(LumiFountainData))) FX_FALLBACK_STATIC;
+  LumiFountainData *d = reinterpret_cast<LumiFountainData*>(SEGENV.data);
+
+  um_data_t *um_data = getAudioData();
+  if (!um_data) { SEGMENT.fill(BLACK); return; }
+  uint8_t *fft = (uint8_t*)um_data->u_data[2];
+  if (!fft) { SEGMENT.fill(BLACK); return; }
+  float    vol  = *(float*)um_data->u_data[0];
+  uint8_t  peak = *(uint8_t*)um_data->u_data[3];
+
+  uint8_t bass = fft[0];
+  for (uint8_t i = 1; i < 3; i++) if (fft[i] > bass) bass = fft[i];
+  uint8_t mid = fft[3];
+  for (uint8_t i = 4; i < 8; i++) if (fft[i] > mid) mid = fft[i];
+  uint8_t high = fft[8];
+  for (uint8_t i = 9; i < 16; i++) if (fft[i] > high) high = fft[i];
+
+  // 快攻慢放
+  int16_t dv = (int16_t)bass - d->bassS; d->bassS += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
+  dv = (int16_t)mid  - d->midS;  d->midS  += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
+  dv = (int16_t)high - d->highS; d->highS += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
+
+  bool transient = false;
+  if (peak && (strip.now - d->lastPeak) > 120) { d->lastPeak = strip.now; transient = true; }
+  if ((uint8_t)vol > d->prevVol + 30) transient = true;   // 音量上升沿
+  d->prevVol = (uint8_t)vol;
+  // 瞬态灵敏度
+  if (transient && (uint8_t)vol < (256 - SEGMENT.custom2)) transient = false;
+
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < kMaxRings; i++) { d->ring[i].h = 0; d->ring[i].life = 0; }
+    for (uint8_t i = 0; i < kMaxParts; i++) d->part[i].life = 0;
+  }
+
+  // 瞬态 -> 扩散波纹
+  if (transient) {
+    for (uint8_t i = 0; i < kMaxRings; i++) if (d->ring[i].life == 0) {
+      d->ring[i].h = 0;
+      d->ring[i].life = 255;
+      break;
+    }
+  }
+
+  // 底部暖浪：环高 = bass 映射到 0..50% 高度
+  uint8_t bandH = scale8(d->bassS, 128);
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    if (posY <= bandH && bandH > 0) {
+      uint8_t f = (uint8_t)(((uint32_t)posY * 255) / bandH);
+      CRGB c(lumiRamp4(0xFF3D00, 0xFF7A00, 0xFFB000, 0xFFD060, f));
+      c.nscale8((uint8_t)(180 + (d->midS >> 2)));
+      for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, c);
+    } else {
+      for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK);
+    }
+  }
+
+  // 波纹：从底部向上扩散，亮度随寿命衰减
+  for (uint8_t i = 0; i < kMaxRings; i++) {
+    if (d->ring[i].life == 0) continue;
+    d->ring[i].h += (uint8_t)(4 + (SEGMENT.speed >> 6));
+    d->ring[i].life = scale8(d->ring[i].life, 220);
+    if (d->ring[i].life < 12 || d->ring[i].h > 250) { d->ring[i].life = 0; continue; }
+    uint16_t fy = lumiRow(d->ring[i].h, rows);
+    CRGB c(0xFFD9A0);
+    c.nscale8(d->ring[i].life);
+    for (uint16_t x = 0; x < cols; x++) SEGMENT.addPixelColorXY(x, fy, c);
+  }
+
+  // 中高音 -> 星光粒子（真 FFT 驱动）
+  uint8_t partCount = 1 + (SEGMENT.custom1 >> 4);      // 1..16
+  if (partCount > kMaxParts) partCount = kMaxParts;
+  uint8_t energy = (uint8_t)(d->midS + d->highS);
+  if (energy > 40 && prng.random8(255) < energy) {
+    for (uint8_t i = 0; i < partCount; i++) if (d->part[i].life == 0) {
+      d->part[i].x    = prng.random8();
+      d->part[i].y    = (uint8_t)(80 + prng.random8(40));            // 从约 35% 高度发射
+      d->part[i].vx   = (int8_t)((int16_t)prng.random8(5) - 2);
+      d->part[i].vy   = (int8_t)-(1 + (d->highS >> 6));
+      d->part[i].life = (uint8_t)(12 + prng.random8(8));
+      break;
+    }
+  }
+  for (uint8_t i = 0; i < partCount; i++) {
+    if (d->part[i].life == 0) continue;
+    d->part[i].x += (uint8_t)d->part[i].vx;
+    d->part[i].y += (uint8_t)d->part[i].vy;
+    d->part[i].life--;
+    if (d->part[i].life == 0 || d->part[i].y < 8 || d->part[i].y > 250) { d->part[i].life = 0; continue; }
+    uint16_t fx = (uint16_t)(((uint32_t)d->part[i].x * cols) >> 8) % cols;
+    uint16_t fy = lumiRow(d->part[i].y, rows);
+    CRGB c(0xCFF6FF);
+    c.nscale8(scale8(d->part[i].life, LUMI_MAXV));
+    SEGMENT.addPixelColorXY(fx, fy, c);
+  }
+} // mode_lumi_fountain()
+static const char _data_FX_MODE_LUMI_FOUNTAIN[] PROGMEM = "Lumi Spectrum Fountain@Speed,Bass gain,Stars,Sensitivity;;!;2f;sx=128,ix=180,c1=160,c2=140";
+
+
+// 8. 心跳脉冲环（真峰值：节拍 -> 自底向上的整圈光环 + 余晖）
+void mode_lumi_pulser(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  struct LumiPulseRing { uint8_t h, sp; };      // h: posY, sp=0 表示空闲
+  struct LumiPulseData {
+    uint8_t  bassS, prevVol;
+    uint32_t lastPeak;
+    LumiPulseRing ring[4];
+  };
+  if (!SEGENV.allocateData(sizeof(LumiPulseData))) FX_FALLBACK_STATIC;
+  LumiPulseData *d = reinterpret_cast<LumiPulseData*>(SEGENV.data);
+
+  um_data_t *um_data = getAudioData();
+  if (!um_data) { SEGMENT.fill(BLACK); return; }
+  float   vol  = *(float*)um_data->u_data[0];
+  uint8_t peak = *(uint8_t*)um_data->u_data[3];
+
+  int16_t dv = (int16_t)(uint8_t)vol - d->prevVol;
+  bool beat = false;
+  if (peak && (strip.now - d->lastPeak) > 220) { d->lastPeak = strip.now; beat = true; }
+  if (dv > 30) beat = true;
+  d->prevVol = (uint8_t)vol;
+
+  if (beat) {
+    uint8_t spawn = ((uint8_t)vol > 140) ? 2 : 1;
+    for (uint8_t i = 0; i < 4 && spawn; i++) if (d->ring[i].sp == 0) {
+      d->ring[i].h  = 0;
+      d->ring[i].sp = (uint8_t)(2 + (SEGMENT.speed >> 5));    // posY 单位/帧
+      spawn--;
+    }
+  }
+
+  const uint32_t t  = strip.now;
+  const uint8_t  trail = (uint8_t)(64 + ((uint16_t)SEGMENT.intensity * 40) / 255);  // 25%..40% 高度
+  const uint8_t  bgBase = (uint8_t)(1 + (SEGMENT.custom1 >> 4));
+  const uint8_t  bgBreath = (uint8_t)(bgBase + (sin8_t((uint8_t)(t >> 7)) >> 5));
+
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    CRGB bg(0x0A2A33);
+    bg.nscale8(lumiGuard(posY) ? scale8(lumiGuard(posY), bgBreath) : bgBreath);
+
+    for (uint16_t x = 0; x < cols; x++) {
+      CRGB c = bg;
+      for (uint8_t i = 0; i < 4; i++) {
+        if (d->ring[i].sp == 0) continue;
+        int16_t dd = (int16_t)d->ring[i].h - (int16_t)posY;   // >=0 表示在环下方（拖尾）
+        if (dd < 0 || dd > trail) continue;
+        uint8_t fade = (dd <= 2) ? 255 : (uint8_t)(255 - ((uint32_t)dd * 255) / trail);
+        CRGB rc = (dd <= 2) ? CRGB(0xFFF6E0) : CRGB(0xFFB070);
+        rc.nscale8(scale8(fade, LUMI_MAXV));
+        c.r = qadd8(c.r, rc.r);
+        c.g = qadd8(c.g, rc.g);
+        c.b = qadd8(c.b, rc.b);
+      }
+      SEGMENT.setPixelColorXY(x, y, c);
+    }
+  }
+
+  for (uint8_t i = 0; i < 4; i++) {
+    if (d->ring[i].sp == 0) continue;
+    d->ring[i].h += d->ring[i].sp;
+    if (d->ring[i].h > 255) d->ring[i].sp = 0;
+  }
+} // mode_lumi_pulser()
+static const char _data_FX_MODE_LUMI_PULSER[] PROGMEM = "Lumi Pulse Ring@Speed,Trail,Background,Sensitivity;;!;2v;sx=160,ix=128,c1=10,c2=140";
+
+
+// 9. 光环扫描（细环往复 + 充能余辉，非音频）
+void mode_lumi_scanner(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  const uint16_t nRows = (rows > 64) ? 64 : rows;
+  if (!SEGENV.allocateData(6 + 3 + nRows)) FX_FALLBACK_STATIC;
+  uint16_t *pos    = reinterpret_cast<uint16_t*>(SEGENV.data);   // posY 的 8.8 定点
+  int8_t   *dir    = reinterpret_cast<int8_t*>(SEGENV.data + 6);
+  uint8_t  *charge = SEGENV.data + 9;
+
+  uint8_t nScan = 1 + (SEGMENT.speed * 3) / 256;                  // 1..3
+  if (nScan > 3) nScan = 3;
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < 3; i++) {
+      pos[i] = (uint16_t)((uint16_t)prng.random8() << 8);
+      dir[i] = prng.random8(2) ? 1 : -1;
+    }
+  }
+
+  const int16_t step = (int16_t)(24 + (SEGMENT.intensity / 2));    // posY 8.8 单位/帧
+  for (uint8_t i = 0; i < nScan; i++) {
+    int32_t p = (int32_t)pos[i] + (int32_t)dir[i] * step;
+    if (p < 0)           { p = 0;       dir[i] = 1; }
+    if (p > (255 << 8))  { p = 255 << 8; dir[i] = -1; }
+    pos[i] = (uint16_t)p;
+    uint8_t py = (uint8_t)(p >> 8);
+    uint16_t row = lumiRow(py, rows);
+    if (row < nRows) charge[row] = 255;                            // 经过行充能
+  }
+
+  const uint32_t t  = strip.now;
+  const uint8_t  t8 = (uint8_t)(t >> 7);
+  for (uint16_t y = 0; y < rows; y++) {
+    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
+    uint8_t ch = (y < nRows) ? charge[y] : 0;
+    // 余辉衰减（约 4..6 秒）
+    if (ch) {
+      uint8_t dec = (uint8_t)((ch >> 6) + 1);
+      ch = (ch > dec) ? (uint8_t)(ch - dec) : 0;
+      if (y < nRows) charge[y] = ch;
+    }
+    // 环核
+    uint8_t core = 0;
+    for (uint8_t i = 0; i < nScan; i++) {
+      int16_t dd = (int16_t)posY - (int16_t)(pos[i] >> 8);
+      if (dd < 0) dd = -dd;
+      if (dd <= 1) { core = 255; break; }
+    }
+    if (!ch && !core) { for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK); continue; }
+
+    uint8_t br = (ch > core) ? ch : core;
+    CRGB c = core ? CRGB(0xE8FFFF) : CRGB(0x7FE9FF);
+    c.nscale8(scale8(br, LUMI_MAXV));
+    for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, c);
+  }
+  (void)t8;
+} // mode_lumi_scanner()
+static const char _data_FX_MODE_LUMI_SCANNER[] PROGMEM = "Lumi Scanner@Rings,Sweep speed,Glow;;!;2;sx=128,ix=120,c1=200";
+
+
+// 10. 雨滴数据流（冷白长尾 + 落底溅落）
+void mode_lumi_rain(void) {
+  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
+
+  const uint16_t cols = SEG_W;
+  const uint16_t rows = SEG_H;
+  if (cols < 2 || rows < 2) return;
+
+  uint8_t nd = 2;
+  if ((uint32_t)cols * nd * 2 + cols > 512) nd = 1;
+  size_t bytes = (size_t)cols * nd * 2 + cols;
+  if (!SEGENV.allocateData(bytes)) FX_FALLBACK_STATIC;
+  uint8_t *yp     = SEGENV.data;                       // 距顶部的高度 0..255
+  uint8_t *sp     = yp + cols * nd;                    // 下落速度（高度单位/帧）
+  uint8_t *splash = sp + cols * nd;                    // 每列溅落亮度
+
+  if (SEGENV.call == 0) {
+    for (uint16_t i = 0; i < cols * nd; i++) {
+      yp[i] = prng.random8();
+      sp[i] = (uint8_t)(8 + prng.random8(16));
+    }
+  }
+
+  const uint8_t lenPct = (uint8_t)(32 + ((uint16_t)SEGMENT.custom1 * 100) / 255); // 12%..52% 高度
+  uint16_t lenRows = (uint16_t)(((uint32_t)lenPct * (rows - 1)) / 255);
+  if (lenRows < 1) lenRows = 1;
+
+  SEGMENT.fill(BLACK);
+
+  for (uint16_t c = 0; c < cols; c++) {
+    uint8_t drops = nd;
+    if (nd == 2 && (c == 0 || c + 1 == cols)) drops = 1;   // 接缝两列减少一滴
+    for (uint8_t k = 0; k < drops; k++) {
+      uint16_t i = c * nd + k;
+      uint16_t ny = (uint16_t)yp[i] + sp[i];
+      if (ny >= 255) {
+        yp[i] = 0;
+        sp[i] = (uint8_t)(8 + prng.random8(16));
+        splash[c] = 255;
+        continue;
+      }
+      yp[i] = (uint8_t)ny;
+      uint16_t headRow = (uint16_t)(((uint32_t)yp[i] * (rows - 1)) / 255);
+      for (uint16_t j = 0; j <= lenRows; j++) {
+        if (headRow < j) break;
+        uint16_t row = headRow - j;
+        uint8_t fade = (uint8_t)(255 - ((uint32_t)j * 255) / (lenRows + 1));
+        CRGB c2 = (j == 0) ? CRGB(0xDCEFFF) : CRGB(0x7FD8FF);
+        c2.nscale8(scale8(fade, LUMI_MAXV));
+        SEGMENT.addPixelColorXY(c, row, c2);
+      }
+    }
+  }
+
+  // 溅落涟漪：底部约 4% 高度
+  uint16_t sh = 1 + (rows * 4) / 100;
+  for (uint16_t c = 0; c < cols; c++) {
+    if (splash[c] == 0) continue;
+    for (uint16_t r = 0; r < sh; r++) {
+      uint16_t row = (uint16_t)(rows - 1) - r;
+      uint8_t br = (uint8_t)(((uint32_t)splash[c] * (sh - r)) / sh / 2);
+      if (!br) continue;
+      CRGB c2(0x9FE8FF);
+      c2.nscale8(scale8(br, LUMI_MAXV));
+      for (int8_t dx = -1; dx <= 1; dx++) {
+        int16_t xx = (int16_t)c + dx;
+        if (xx < 0 || xx >= (int16_t)cols) continue;       // 不跨接缝
+        SEGMENT.addPixelColorXY((uint16_t)xx, row, c2);
+      }
+    }
+    splash[c] = (splash[c] > 48) ? (uint8_t)(splash[c] - 48) : 0;
+  }
+} // mode_lumi_rain()
+static const char _data_FX_MODE_LUMI_RAIN[] PROGMEM = "Lumi Rain@Drops,Fall speed,Tail;;!;2;sx=128,ix=140,c1=76";
+
+
 // Black hole
 void mode_2DBlackHole(void) {            // By: Stepko https://editor.soulmatelights.com/gallery/1012 , Modified by: Andrew Tuline
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC; // not a 2D set-up
@@ -11329,6 +12090,17 @@ void WS2812FX::setupEffectData() {
 
   addEffect(FX_MODE_2DANALOGCLOCK, &mode_2DAnalogClock, _data_FX_MODE_2DANALOGCLOCK);
   addEffect(FX_MODE_LUMI_AURORA, &mode_lumi_aurora, _data_FX_MODE_LUMI_AURORA);
+  // 光屿 Lumi 系列（M2，新增 10 个，只追加不移动 0..188）
+  addEffect(FX_MODE_LUMI_FOREST,   &mode_lumi_forest,   _data_FX_MODE_LUMI_FOREST);
+  addEffect(FX_MODE_LUMI_DUSK,     &mode_lumi_dusk,     _data_FX_MODE_LUMI_DUSK);
+  addEffect(FX_MODE_LUMI_POLAR,    &mode_lumi_polar,    _data_FX_MODE_LUMI_POLAR);
+  addEffect(FX_MODE_LUMI_HEARTH,   &mode_lumi_hearth,   _data_FX_MODE_LUMI_HEARTH);
+  addEffect(FX_MODE_LUMI_LAVA,     &mode_lumi_lava,     _data_FX_MODE_LUMI_LAVA);
+  addEffect(FX_MODE_LUMI_CAUSTICS, &mode_lumi_caustics, _data_FX_MODE_LUMI_CAUSTICS);
+  addEffect(FX_MODE_LUMI_FOUNTAIN, &mode_lumi_fountain, _data_FX_MODE_LUMI_FOUNTAIN); // audio
+  addEffect(FX_MODE_LUMI_PULSER,   &mode_lumi_pulser,   _data_FX_MODE_LUMI_PULSER);   // audio
+  addEffect(FX_MODE_LUMI_SCANNER,  &mode_lumi_scanner,  _data_FX_MODE_LUMI_SCANNER);
+  addEffect(FX_MODE_LUMI_RAIN,     &mode_lumi_rain,     _data_FX_MODE_LUMI_RAIN);
   addEffect(FX_MODE_2DNOISE, &mode_2Dnoise, _data_FX_MODE_2DNOISE);
   addEffect(FX_MODE_2DFIRENOISE, &mode_2Dfirenoise, _data_FX_MODE_2DFIRENOISE);
   addEffect(FX_MODE_2DSQUAREDSWIRL, &mode_2Dsquaredswirl, _data_FX_MODE_2DSQUAREDSWIRL);
