@@ -260,3 +260,89 @@
 2. 音频三件套（7/8/9）是否允许「背景近乎全暗」——圆柱无环境光时观感偏冷。
 3. 是否接受「不新增调色板」（效果自带色带，不可换色）。
 4. §0.2 的 Aurora 纵向疑似颠倒，是否同意先实测并顺手修正。
+
+---
+
+## 14. M2 落地结果（2026-11-25）
+
+> 本节记录实际实现与上文的差异，**以本节为准**。§12.1 的 `TBD` 表已被下表取代。
+
+### 14.1 最终 id 映射
+
+| id | 宏 | 名称 | 分类 / 律动 | 状态字节 | 亮度档（全局 bri） |
+|---|---|---|---|---|---|
+| 189 | `FX_MODE_LUMI_FOREST` | Lumi Forest 林间萤光 | TWO_D / AURORA | 48 B（12 只萤火） | 153（彩色 60%） |
+| 190 | `FX_MODE_LUMI_DUSK` | Lumi Dusk 暮色晚霞 | TWO_D / AURORA | 0（纯函数） | 153 |
+| 191 | `FX_MODE_LUMI_POLAR` | Lumi Polar 极地冰川 | TWO_D / AURORA | 24 B（8 星点） | 128（冷白 50%） |
+| 192 | `FX_MODE_LUMI_HEARTH` | Lumi Hearth 壁炉火焰 | TWO_D / AURORA | 207 B（`cols*rows` 热场，>1024 B 回退） | 153 |
+| 193 | `FX_MODE_LUMI_LAVA` | Lumi Lava 熔岩灯 | TWO_D / AURORA | 44 B（8 团 + 6 泡） | 153 |
+| 194 | `FX_MODE_LUMI_CAUSTICS` | Lumi Caustics 深海波光 | TWO_D / AURORA | 0（纯函数） | 153 |
+| 195 | `FX_MODE_LUMI_FOUNTAIN` | Lumi Spectrum Fountain 环形频谱喷泉 | TWO_D / **MUSIC**（FFT `2f`） | 73 B | 153 |
+| 196 | `FX_MODE_LUMI_PULSER` | Lumi Pulse Ring 心跳脉冲环 | TWO_D / **MUSIC**（峰值 `2v`） | 16 B | 153 |
+| 197 | `FX_MODE_LUMI_SCANNER` | Lumi Scanner 光环扫描 | TWO_D / **MUSIC**（音量+峰值 `2v`） | 15 + rows B | 128 |
+| 198 | `FX_MODE_LUMI_RAIN` | Lumi Rain 雨滴数据流 | TWO_D / **MUSIC**（高频+峰值 `2f`） | 4 + 3·cols B | 128 |
+
+`MODE_COUNT = 199`；M1 的 0..188 **未做任何位移**。
+
+### 14.2 与设计稿的差异
+
+1. **音律四个全部真接音频**（用户 M2 硬性要求，覆盖 §1/§9/§10 的「音频：无」）：
+   - 195：`fftResult[0..2]/[3..7]/[8..15]` 分频段 + `samplePeak` 瞬态；快攻慢放。
+   - 196：`samplePeak` 为主、`volumeSmth` 上升沿为辅，220 ms 耐火期。
+   - 197：`volumeSmth` 映射扫描速度（`step += vol8>>3`），`samplePeak` 触发整屏微弱提亮（150 ms 去抖）。
+   - 198：`fftResult[8..15]` 最大值映射雨速（`boost = high>>5`），`samplePeak` 按 1/3 概率把雨滴拉回顶部形成雨量爆发（180 ms 去抖）。
+   - 元数据 flags 相应改为 `2v` / `2f`，并已加入 `MUSIC_IDS`。
+2. **纵向尺寸一律百分比**（用户两轮驳回后的最终口径）：不再出现「5 段 / 6 段」这类按行计数的描述；
+   - 190 暮色晚霞：**23% 高度的色带**（底红→橙→琥珀→品红→紫→顶青），全部色标按 `posY` 百分比分布；
+   - 191 极地冰川：**21% 高度的底品红**→顶部极光绿，星点高度 16%–90%，帘宽为圆周百分比。
+3. 191/197/198 按「冷白为主」归入 50% 档（`bri=128`），其余为彩色 60% 档（`bri=153`）。
+
+### 14.3 编译 / 部署
+
+| 项 | 结果 |
+|---|---|
+| 本地编译 `esp32lichuang` | SUCCESS（Flash 40.9%，RAM 15.3%） |
+| CI Firmware（run 45536869953，`00e16ab`） | success |
+| CI Android APP（run 45536870024，`00e16ab`） | success |
+| CI Effect previews（run 45536870164，`00e16ab`） | success |
+| OTA `10.0.1.172` | Update successful |
+| `/json/info` | `fxcount=199`，`leds.count=207`（matrix 9×23），`freeheap≈257.3 KB` |
+| `/json/effects` | 长度 199；`[188]=极光之舞`，`[189..198]` 名称与上表一致；0..188 未变 |
+
+### 14.4 真机逐效果抽查（2026-11-25）
+
+采集方式：`POST /json/state` 切 fx，稳定 3.2 s 后读 `/json/info`。
+
+| fx | bri | fps | 估算功率 | freeheap |
+|---|---|---|---|---|
+| 189 | 153 | 43 | 2093 mW | 257272 |
+| 190 | 153 | 43 | 2570 mW | 257272 |
+| 191 | 128 | 43 | 3238 mW | 257272 |
+| 192 | 153 | 43 | 1346 mW | 257272 |
+| 193 | 153 | 43 | 909 mW | 257272 |
+| 194 | 153 | 43 | 1897 mW | 257272 |
+| 195 | 153 | 43 | 327 mW | 257272 |
+| 196 | 153 | 43 | 327 mW | 257272 |
+| 197 | 128 | 43 | 578 mW | 257272 |
+| 198 | 128 | 43 | 993 mW | 257272 |
+
+- **帧率**：10 个效果都维持 43 fps（与基线一致），未触发降帧，说明单帧预算未超。
+- **堆**：全程稳定 257.3 KB；192 壁炉（207 B 热场）切换时较其它低 176 B，切走后即释放，无泄漏。
+- **亮度**：功率与 bri 档位吻合；195/196 在无音频输入时接近熄灭（设计上背景近乎全暗），符合 §12.1 音乐类预期。
+- **音频**：设备当前 `Audio Source = I2S digital - quiet`（无声音输入），律动响应需放音乐后再验。
+
+### 14.5 预览图与 APP 同步
+
+- 预览图：`effect-previews` 工作流自动生成并回提交，bot commit `7418ada`，`assets/effect_previews/` 共 **199** 张（含 189..198）。
+- 生成器：`tools/gen_effect_gifs.py` 新增 10 个 recipe（32×18、16 帧）。
+- 索引：修复 `tools/gen_effect_index.py` 的两处正则（行首锚定，跳过注释掉的 `//#define FX_MODE_METEOR_SMOOTH 77` 与注释掉的 `addEffect`），
+  槽位 77 恢复为 `Heartbeat`，`effects_enabled.json` 199 项、`RSVD=0`、注册被拒 0。
+- Catalog：`EffectCatalog.kt` **199** 条（ONE_D 118 / TWO_D 79 / ART 2），常用 32，律动 MUSIC 18；
+  10 个新效果均内联中英文名，**四个语言包无需新增文案**（灯效名不走 `strings.xml`，与既有 188 条一致）。
+- `EffectRecipeTest` 锁定的 39/97/98/188 均未受影响（只追加，不位移）。
+
+### 14.6 仍需人工确认
+
+1. 视觉项（朝向 / 接缝 / 第 46 颗空位 / 与设计意图是否一致）需肉眼确认，API 无法代测。
+2. 195..198 的律动响应需放音乐：确认 `Audio Source` 不再是 `- quiet`，并观察节奏与动画同步。
+
