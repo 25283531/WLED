@@ -5918,7 +5918,7 @@ void mode_tribreath(void) {
   uint8_t bassBoost = transient ? 80 : 0;
   for (uint16_t y=0;y<rows;y++){
     uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
-    uint8_t level, col;
+    uint8_t level; uint32_t col;
     if (posY < 86){            // 整个底部三分之一：随低频呼吸
       level = d->bassS; col = 0xFF7020;
     } else if (posY < 171){    // 中部三分之一：随中频呼吸
@@ -5941,7 +5941,7 @@ void mode_audiospiral(void) {
   struct SpirData { float spinPhase, bassEnv, mhEnv; uint32_t lastMs; };
   if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
   SpirData *d = (SpirData*)SEGENV.data;
-  const float PI = 3.14159265f, TWO_PI = 6.2831853f;
+  const float fPI = 3.14159265f, fTWO_PI = 6.2831853f; // 避开 Arduino.h 的 PI/TWO_PI 宏
   if (d->lastMs == 0){ d->spinPhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = 1; }
   // 取色：主/副色覆盖默认螺旋色（用户色卡）
   uint8_t hueA = 135, hueB = 235;
@@ -5988,17 +5988,17 @@ void mode_audiospiral(void) {
     if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
     else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
     for (uint16_t x=0;x<cols;x++){
-      float theta = ((float)x / (float)cols) * TWO_PI;
-      float twist = ny * 1.35f * TWO_PI + d->spinPhase + d->bassEnv * 0.45f * ny;
+      float theta = ((float)x / (float)cols) * fTWO_PI;
+      float twist = ny * 1.35f * fTWO_PI + d->spinPhase + d->bassEnv * 0.45f * ny;
       float phaseA = theta - twist;
-      float phaseB = phaseA + PI; // 双链相差 180°
+      float phaseB = phaseA + fPI; // 双链相差 180°
       // 归一化角距离 [0,1]：折叠到 [-PI,PI] 再取绝对值/PI（不调用 atan2/sin）
       float kA = (float)(int)(phaseA * 0.15915494f + (phaseA >= 0 ? 0.5f : -0.5f));
-      float wA = phaseA - kA * TWO_PI;
-      float distA = (wA < 0 ? -wA : wA) / PI;
+      float wA = phaseA - kA * fTWO_PI;
+      float distA = (wA < 0 ? -wA : wA) / fPI;
       float kB = (float)(int)(phaseB * 0.15915494f + (phaseB >= 0 ? 0.5f : -0.5f));
-      float wB = phaseB - kB * TWO_PI;
-      float distB = (wB < 0 ? -wB : wB) / PI;
+      float wB = phaseB - kB * fTWO_PI;
+      float distB = (wB < 0 ? -wB : wB) / fPI;
       float nA = distA / activeW;
       float iA = (nA < 1.5f) ? expf(-2.2f * nA * nA) : 0.0f;
       float nB = distB / activeW;
