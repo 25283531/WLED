@@ -13,6 +13,7 @@ import kotlinx.serialization.Serializable
 data class WledConfig(
     val nw: NetworkConfig? = null,
     val def: BootConfig? = null,
+    val um: UserModsConfig? = null,
     /** 只写字段：true 表示保存后立刻重启，WiFi 变更需要它才会生效。 */
     val rb: Boolean? = null,
 )
@@ -42,3 +43,43 @@ data class BootConfig(
     @SerialName("bri")
     val brightness: Int? = null,
 )
+
+/** `cfg.um` 里 App 需要读写的 usermod 片段，其余 usermod 由固件保留。 */
+@Serializable
+data class UserModsConfig(
+    @SerialName("AudioReactive")
+    val audioReactive: AudioReactiveConfig? = null,
+)
+
+/**
+ * 音频反应 usermod 的配置。
+ *
+ * 来源由两项共同决定：
+ * - `sync.mode` 的 bit1 置位 => 只收网络音频（手机 APP 当音源）
+ * - `digitalmic.type = 4` => 板载 ES7210 麦克风
+ */
+@Serializable
+data class AudioReactiveConfig(
+    val enabled: Boolean? = null,
+    val digitalmic: DigitalMicConfig? = null,
+    val sync: AudioSyncConfig? = null,
+)
+
+@Serializable
+data class DigitalMicConfig(
+    val type: Int? = null,
+    val pin: List<Int>? = null,
+)
+
+@Serializable
+data class AudioSyncConfig(
+    val port: Int? = null,
+    val mode: Int? = null,
+) {
+    val isReceiveMode: Boolean
+        get() = (mode ?: 0).and(RECEIVE_MODE_BIT) != 0
+
+    companion object {
+        const val RECEIVE_MODE_BIT = 0x02
+    }
+}

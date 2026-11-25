@@ -3,6 +3,7 @@ package ca.cgagnier.wlednativeandroid.ui
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,13 +25,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
+import ca.cgagnier.wlednativeandroid.audio.AudioStreamService
 import ca.cgagnier.wlednativeandroid.ui.components.ChangelogBottomSheet
+import ca.cgagnier.wlednativeandroid.ui.settings.AudioDowngradeDialogs
+import ca.cgagnier.wlednativeandroid.ui.settings.AudioUnavailableDialog
 import ca.cgagnier.wlednativeandroid.ui.theme.ThemeViewModel
 import ca.cgagnier.wlednativeandroid.ui.theme.WLEDNativeTheme
 import ca.cgagnier.wlednativeandroid.util.AppLanguageManager
@@ -71,6 +76,8 @@ class MainActivity : ComponentActivity() {
                     openChangelogs = { changelogViewModel.showAllChangelogs() },
                 )
                 ChangelogBottomSheet(viewModel = changelogViewModel)
+                // 内录静音的确认框放在根组合里：通知点进来后不管停在哪个页面都能确认
+                AudioStreamAlertHost()
             }
         }
         viewModel.downloadUpdateMetadata()
@@ -85,6 +92,32 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_DEVICE_MAC_ADDRESS = "device_mac_address"
     }
+}
+
+@Composable
+private fun AudioStreamAlertHost() {
+    val state by AudioStreamService.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    AudioDowngradeDialogs(
+        streamState = state,
+        onKeepCapturing = {
+            AudioStreamService.dismissAsk(context)
+            Toast.makeText(context, R.string.isle_audio_no_downgrade, Toast.LENGTH_SHORT).show()
+        },
+        onConfirmSwitch = {
+            AudioStreamService.switchToMicrophone(context)
+            Toast.makeText(context, R.string.isle_audio_switched_mic, Toast.LENGTH_SHORT).show()
+        },
+    )
+    // A 内录起不来时按 2.3.6 询问是否改用手机麦克风，绝不静默降级
+    AudioUnavailableDialog(
+        streamState = state,
+        onUseMicrophone = { host ->
+            AudioStreamService.startWithMicrophone(context, host)
+            Toast.makeText(context, R.string.isle_audio_switched_mic, Toast.LENGTH_SHORT).show()
+        },
+        onCancel = { AudioStreamService.stop(context) },
+    )
 }
 
 @Composable

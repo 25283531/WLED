@@ -332,6 +332,31 @@ OTA 说明：本地 `pio run -e esp32lichuang` 产出的 `firmware.bin` 因构�
 `WLED_RELEASE_NAME` 校验不通过，使用 `POST /update` 的 `skipValidation=1` 表单字段跳过校验后刷入；
 升级前后均可用 `work/backup/e80690a6c20c/rollback-WLED_16.0.1_ESP32-S3_16MB_opi.bin` 回退。
 
+## T2 网络音频接收协议验证（2026-11-25，通过）
+
+目的：在写 Android 采集端之前，先用 PC 脚本验证固件 `audioSyncPacket`（v2，44 字节 packed）的
+头、字段偏移与字节序，确认「手机当音频源」这条链路成立（任务书 T2.3.9 第 1 步）。
+
+| 项 | 值 |
+|---|---|
+| 脚本 | `tools/audio_sync_sender.py`（`<6s2sffBB16sHff`，header `"00002\0"`，20 Hz） |
+| 设备配置 | `um.AudioReactive.enabled=true`、`sync={port:11988,mode:2}`（仅接收），改后重启 |
+| 设备回读 | `Audio Source = "UDP sound sync" - receiving`；`UDP Sound Sync = "receive mode v2"` |
+| 目标地址 | 组播 `239.0.0.1:11988`（固件 `beginMulticast` 绑定的地址） |
+
+功率对照（`bri=120`，彩色上限 60% 内）：
+
+| 效果 | 无 UDP 包 | 有 UDP 包（95 BPM，12 次采样） | Δ |
+|---|---|---|---|
+| `GEQ (113)`，`sx=64/ix=240` | 恒 **711 mA** | **733–1666 mA** | **933** |
+| `Lumi Spectrum Fountain (195)` | — | 487–763 mA（含停包后回落） | 276 |
+
+结论：v2 包被完整解析（`v2` 标记 + 效果随包律动），字段偏移与字节序正确；
+固件 network-only 接收通路可用，Android 侧按同一 44 字节结构发送即可。
+
+恢复：`sync.mode` 回 `0`、`digitalmic.type` 保持 `4`、`fx=198 / bri=128` 已写回；
+改前 cfg/state/info 存于 `work/backup/10.0.1.172-audio-sync/`。
+
 
 
 

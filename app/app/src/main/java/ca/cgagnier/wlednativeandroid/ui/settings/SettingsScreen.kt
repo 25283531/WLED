@@ -1,9 +1,18 @@
 package ca.cgagnier.wlednativeandroid.ui.settings
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +37,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,8 +53,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
+import ca.cgagnier.wlednativeandroid.audio.AudioStreamService
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
@@ -79,6 +91,15 @@ fun SettingsScreen(
     val followingSystem = remember(context) { AppLanguageManager.isFollowingSystem(context) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showWifiPage by remember { mutableStateOf(false) }
+    var showAudioSheet by remember { mutableStateOf(false) }
+
+    val audioViewModel: AudioSettingsViewModel = koinViewModel()
+    val audioUiState by audioViewModel.uiState.collectAsStateWithLifecycle()
+    val streamState by AudioStreamService.state.collectAsStateWithLifecycle()
+    val audioAddress = device?.device?.address
+    LaunchedEffect(audioAddress) {
+        audioAddress?.let { audioViewModel.load(it) }
+    }
 
     fun openWeb(path: String = "") {
         val target = device ?: return
@@ -114,6 +135,81 @@ fun SettingsScreen(
         val name = bootFx?.let { EffectCatalog.find(it)?.nameZh }
             ?: return context.getString(R.string.isle_boot_state_factory)
         return context.getString(R.string.isle_boot_state_effect, name)
+    }
+
+    // T2：手机音频 → WLED。内录需要每次会话重新授权，因此先拿投屏 token 再启动前台服务
+    val projectionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val host = device?.device?.address
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null && host != null) {
+            AudioStreamService.start(context, host, result.resultCode, data)
+        } else {
+            Toast.makeText(context, R.string.isle_audio_permission_denied, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val launchProjection: () -> Unit = {
+        val target = device
+        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+        if (target == null) {
+            Toast.makeText(context, R.string.isle_audio_switch_failed_hint, Toast.LENGTH_SHORT).show()
+        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || manager == null) {
+            // Android 10 以下没有内录，只能由手机麦克风采集
+            AudioStreamService.startWithMicrophone(context, target.device.address)
+        } else {
+            runCatching { projectionLauncher.launch(manager.createScreenCaptureIntent()) }
+                .onFailure {
+                    Toast.makeText(context, R.string.isle_audio_permission_denied, Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        val recordGranted = grants[Manifest.permission.RECORD_AUDIO]
+            ?: (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED)
+        if (recordGranted) {
+            if (grants[Manifest.permission.POST_NOTIFICATIONS] == false) {
+                Toast.makeText(context, R.string.isle_audio_notification_denied, Toast.LENGTH_SHORT).show()
+            }
+            launchProjection()
+        } else {
+            Toast.makeText(context, R.string.isle_audio_permission_denied, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val startAudioCapture: () -> Unit = {
+        val required = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (required.isEmpty()) {
+            launchProjection()
+        } else {
+            audioPermissionLauncher.launch(required.toTypedArray())
+        }
+    }
+
+    val openBatterySettings: () -> Unit = {
+        val requested = runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:${context.packageName}"),
+                ),
+            )
+        }.isSuccess
+        if (!requested) {
+            runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        }
     }
 
     // WiFi 已原生化：直接读设备的扫描结果与配置，不再跳系统浏览器
@@ -172,6 +268,20 @@ fun SettingsScreen(
             }
 
             SettingsGroup(title = stringResource(R.string.isle_settings_hardware)) {
+                SettingsRow(
+                    glyph = Glyph.Music,
+                    iconTint = IsleColors.Pink,
+                    label = stringResource(R.string.isle_audio_source),
+                    value = when (audioUiState.source) {
+                        DeviceAudioSource.APP -> stringResource(R.string.isle_audio_source_app)
+                        DeviceAudioSource.DEVICE -> stringResource(R.string.isle_audio_source_device)
+                        null -> null
+                    },
+                    onClick = {
+                        audioAddress?.let { audioViewModel.load(it) }
+                        showAudioSheet = true
+                    },
+                )
                 DisabledSliderRow(
                     glyph = Glyph.Mic,
                     iconTint = IsleColors.Pink,
@@ -237,6 +347,25 @@ fun SettingsScreen(
                 showLanguageSheet = false
             },
             onDismiss = { showLanguageSheet = false },
+        )
+    }
+
+    if (showAudioSheet) {
+        AudioSettingsSheet(
+            uiState = audioUiState,
+            streamState = streamState,
+            onSelectSource = { source ->
+                audioViewModel.selectSource(source)
+                // 切回设备麦克风后手机侧继续发没有意义，直接停掉，避免两路音源打架
+                if (source == DeviceAudioSource.DEVICE) {
+                    AudioStreamService.stop(context)
+                }
+            },
+            onStart = startAudioCapture,
+            onStop = { AudioStreamService.stop(context) },
+            onRetryCapture = startAudioCapture,
+            onOpenBatterySettings = openBatterySettings,
+            onDismiss = { showAudioSheet = false },
         )
     }
 }
