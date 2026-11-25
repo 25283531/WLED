@@ -229,6 +229,16 @@ object EffectCatalog {
         EffectInfo(186, "Slow Transition", "缓慢流转", EffectCategory.ONE_D, EffectMood.AURORA, false, "186"),
         EffectInfo(187, "Analog Clock 2D", "指针时钟", EffectCategory.TWO_D, EffectMood.TEXT, false, "187"),
         EffectInfo(188, "极光之舞", "极光之舞", EffectCategory.TWO_D, EffectMood.AURORA, true, "188"),
+        EffectInfo(189, "Lumi Forest", "林间萤光", EffectCategory.TWO_D, EffectMood.AURORA, false, "189"),
+        EffectInfo(190, "Lumi Dusk", "暮色晚霞", EffectCategory.TWO_D, EffectMood.AURORA, true, "190"),
+        EffectInfo(191, "Lumi Polar", "极地冰川", EffectCategory.TWO_D, EffectMood.AURORA, true, "191"),
+        EffectInfo(192, "Lumi Hearth", "壁炉火焰", EffectCategory.TWO_D, EffectMood.AURORA, true, "192"),
+        EffectInfo(193, "Lumi Lava", "熔岩灯", EffectCategory.TWO_D, EffectMood.AURORA, false, "193"),
+        EffectInfo(194, "Lumi Caustics", "深海波光", EffectCategory.TWO_D, EffectMood.AURORA, false, "194"),
+        EffectInfo(195, "Lumi Spectrum Fountain", "环形频谱喷泉", EffectCategory.TWO_D, EffectMood.MUSIC, true, "195"),
+        EffectInfo(196, "Lumi Pulse Ring", "心跳脉冲环", EffectCategory.TWO_D, EffectMood.MUSIC, false, "196"),
+        EffectInfo(197, "Lumi Scanner", "光环扫描", EffectCategory.TWO_D, EffectMood.MUSIC, false, "197"),
+        EffectInfo(198, "Lumi Rain", "雨滴数据流", EffectCategory.TWO_D, EffectMood.MUSIC, false, "198"),
     )
 
     private val byId: Map<Int, EffectInfo> = all.associateBy { it.id }

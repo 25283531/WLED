@@ -5929,7 +5929,7 @@ void mode_lumi_pulser(void) {
 static const char _data_FX_MODE_LUMI_PULSER[] PROGMEM = "Lumi Pulse Ring@Speed,Trail,Background,Sensitivity;;!;2v;sx=160,ix=128,c1=10,c2=140";
 
 
-// 9. 光环扫描（细环往复 + 充能余辉，非音频）
+// 9. 光环扫描（细环往复 + 充能余辉，音量驱动速度、峰值瞬时提亮）
 void mode_lumi_scanner(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
 
@@ -5938,10 +5938,22 @@ void mode_lumi_scanner(void) {
   if (cols < 2 || rows < 2) return;
 
   const uint16_t nRows = (rows > 64) ? 64 : rows;
-  if (!SEGENV.allocateData(6 + 3 + nRows)) FX_FALLBACK_STATIC;
-  uint16_t *pos    = reinterpret_cast<uint16_t*>(SEGENV.data);   // posY 的 8.8 定点
-  int8_t   *dir    = reinterpret_cast<int8_t*>(SEGENV.data + 6);
-  uint8_t  *charge = SEGENV.data + 9;
+  if (!SEGENV.allocateData(15 + nRows)) FX_FALLBACK_STATIC;
+  uint32_t *lastPeak = reinterpret_cast<uint32_t*>(SEGENV.data);   // 节拍去抖
+  uint8_t  *flash    = SEGENV.data + 4;                            // 峰值闪光
+  uint16_t *pos      = reinterpret_cast<uint16_t*>(SEGENV.data + 6); // posY 的 8.8 定点
+  int8_t   *dir      = reinterpret_cast<int8_t*>(SEGENV.data + 12);
+  uint8_t  *charge   = SEGENV.data + 15;
+
+  // 真音量：驱动扫描速度；真峰值：瞬时提亮（不做假跳）
+  um_data_t *um_data = getAudioData();
+  uint8_t vol8 = 0, peak = 0;
+  if (um_data) {
+    vol8 = (uint8_t)(*(float*)um_data->u_data[0]);
+    peak = *(uint8_t*)um_data->u_data[3];
+  }
+  const uint32_t now = strip.now;
+  if (peak && (now - *lastPeak) > 150) { *lastPeak = now; *flash = 255; }
 
   uint8_t nScan = 1 + (SEGMENT.speed * 3) / 256;                  // 1..3
   if (nScan > 3) nScan = 3;
@@ -5952,7 +5964,7 @@ void mode_lumi_scanner(void) {
     }
   }
 
-  const int16_t step = (int16_t)(24 + (SEGMENT.intensity / 2));    // posY 8.8 单位/帧
+  const int16_t step = (int16_t)(24 + (SEGMENT.intensity / 2) + (vol8 >> 3)); // 音量加快扫描
   for (uint8_t i = 0; i < nScan; i++) {
     int32_t p = (int32_t)pos[i] + (int32_t)dir[i] * step;
     if (p < 0)           { p = 0;       dir[i] = 1; }
@@ -5963,8 +5975,8 @@ void mode_lumi_scanner(void) {
     if (row < nRows) charge[row] = 255;                            // 经过行充能
   }
 
-  const uint32_t t  = strip.now;
-  const uint8_t  t8 = (uint8_t)(t >> 7);
+  const uint8_t  fl = (uint8_t)((*flash) ? scale8(*flash, 110) : 0);   // 峰值仅做轻微整屏提亮
+  if (*flash) *flash = scale8(*flash, 210);
   for (uint16_t y = 0; y < rows; y++) {
     uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
     uint8_t ch = (y < nRows) ? charge[y] : 0;
@@ -5981,16 +5993,16 @@ void mode_lumi_scanner(void) {
       if (dd < 0) dd = -dd;
       if (dd <= 1) { core = 255; break; }
     }
-    if (!ch && !core) { for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK); continue; }
+    if (!ch && !core && !fl) { for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK); continue; }
 
     uint8_t br = (ch > core) ? ch : core;
+    if (fl > br) br = fl;
     CRGB c = core ? CRGB(0xE8FFFF) : CRGB(0x7FE9FF);
     c.nscale8(scale8(br, LUMI_MAXV));
     for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, c);
   }
-  (void)t8;
 } // mode_lumi_scanner()
-static const char _data_FX_MODE_LUMI_SCANNER[] PROGMEM = "Lumi Scanner@Rings,Sweep speed,Glow;;!;2;sx=128,ix=120,c1=200";
+static const char _data_FX_MODE_LUMI_SCANNER[] PROGMEM = "Lumi Scanner@Rings,Sweep speed,Glow;;!;2v;sx=128,ix=120,c1=200";
 
 
 // 10. 雨滴数据流（冷白长尾 + 落底溅落）
@@ -6002,12 +6014,28 @@ void mode_lumi_rain(void) {
   if (cols < 2 || rows < 2) return;
 
   uint8_t nd = 2;
-  if ((uint32_t)cols * nd * 2 + cols > 512) nd = 1;
-  size_t bytes = (size_t)cols * nd * 2 + cols;
+  if ((uint32_t)cols * nd * 2 + cols > 508) nd = 1;
+  size_t bytes = 4 + (size_t)cols * nd * 2 + cols;
   if (!SEGENV.allocateData(bytes)) FX_FALLBACK_STATIC;
-  uint8_t *yp     = SEGENV.data;                       // 距顶部的高度 0..255
-  uint8_t *sp     = yp + cols * nd;                    // 下落速度（高度单位/帧）
-  uint8_t *splash = sp + cols * nd;                    // 每列溅落亮度
+  uint32_t *lastPeak = reinterpret_cast<uint32_t*>(SEGENV.data);   // 节拍去抖
+  uint8_t  *yp     = SEGENV.data + 4;                  // 距顶部的高度 0..255
+  uint8_t  *sp     = yp + cols * nd;                   // 下落速度（高度单位/帧）
+  uint8_t  *splash = sp + cols * nd;                   // 每列溅落亮度
+
+  // 真高频能量：决定雨势速度；真峰值：瞬时加大雨量
+  um_data_t *um_data = getAudioData();
+  uint8_t high = 0, peak = 0;
+  if (um_data) {
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    if (fft) { for (uint8_t i = 8; i < 16; i++) if (fft[i] > high) high = fft[i]; }
+    peak = *(uint8_t*)um_data->u_data[3];
+  }
+  uint8_t boost = high >> 5;                                     // 0..7
+  const uint32_t now = strip.now;
+  if (peak && (now - *lastPeak) > 180) {
+    *lastPeak = now;
+    for (uint16_t i = 0; i < cols * nd; i++) if (!prng.random8(3)) yp[i] = 0;   // 雨量爆发
+  }
 
   if (SEGENV.call == 0) {
     for (uint16_t i = 0; i < cols * nd; i++) {
@@ -6027,7 +6055,7 @@ void mode_lumi_rain(void) {
     if (nd == 2 && (c == 0 || c + 1 == cols)) drops = 1;   // 接缝两列减少一滴
     for (uint8_t k = 0; k < drops; k++) {
       uint16_t i = c * nd + k;
-      uint16_t ny = (uint16_t)yp[i] + sp[i];
+      uint16_t ny = (uint16_t)yp[i] + sp[i] + boost;
       if (ny >= 255) {
         yp[i] = 0;
         sp[i] = (uint8_t)(8 + prng.random8(16));
@@ -6066,7 +6094,7 @@ void mode_lumi_rain(void) {
     splash[c] = (splash[c] > 48) ? (uint8_t)(splash[c] - 48) : 0;
   }
 } // mode_lumi_rain()
-static const char _data_FX_MODE_LUMI_RAIN[] PROGMEM = "Lumi Rain@Drops,Fall speed,Tail;;!;2;sx=128,ix=140,c1=76";
+static const char _data_FX_MODE_LUMI_RAIN[] PROGMEM = "Lumi Rain@Drops,Fall speed,Tail;;!;2f;sx=128,ix=140,c1=76";
 
 
 // Black hole

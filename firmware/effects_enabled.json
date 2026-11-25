@@ -1132,5 +1132,65 @@
   "fx": "FX_MODE_LUMI_AURORA",
   "name": "极光之舞",
   "fn": null
+ },
+ {
+  "idx": 189,
+  "fx": "FX_MODE_LUMI_FOREST",
+  "name": "Lumi Forest",
+  "fn": null
+ },
+ {
+  "idx": 190,
+  "fx": "FX_MODE_LUMI_DUSK",
+  "name": "Lumi Dusk",
+  "fn": null
+ },
+ {
+  "idx": 191,
+  "fx": "FX_MODE_LUMI_POLAR",
+  "name": "Lumi Polar",
+  "fn": null
+ },
+ {
+  "idx": 192,
+  "fx": "FX_MODE_LUMI_HEARTH",
+  "name": "Lumi Hearth",
+  "fn": null
+ },
+ {
+  "idx": 193,
+  "fx": "FX_MODE_LUMI_LAVA",
+  "name": "Lumi Lava",
+  "fn": null
+ },
+ {
+  "idx": 194,
+  "fx": "FX_MODE_LUMI_CAUSTICS",
+  "name": "Lumi Caustics",
+  "fn": null
+ },
+ {
+  "idx": 195,
+  "fx": "FX_MODE_LUMI_FOUNTAIN",
+  "name": "Lumi Spectrum Fountain",
+  "fn": null
+ },
+ {
+  "idx": 196,
+  "fx": "FX_MODE_LUMI_PULSER",
+  "name": "Lumi Pulse Ring",
+  "fn": null
+ },
+ {
+  "idx": 197,
+  "fx": "FX_MODE_LUMI_SCANNER",
+  "name": "Lumi Scanner",
+  "fn": null
+ },
+ {
+  "idx": 198,
+  "fx": "FX_MODE_LUMI_RAIN",
+  "name": "Lumi Rain",
+  "fn": null
  }
 ]

@@ -37,9 +37,11 @@ TARGET = os.path.join(ROOT, "firmware", "effects_enabled.json")
 def parse_macros() -> dict[str, int]:
     text = open(FX_H, encoding="utf-8", errors="replace").read()
     macros: dict[str, int] = {}
-    for match in re.finditer(r"#define\s+(FX_MODE_\w+)\s+(\d+)", text):
+    # Anchor at line start so commented-out defines (e.g. "//#define FX_MODE_METEOR_SMOOTH 77")
+    # are not parsed. Otherwise their stale value collides with the live macro that reuses the slot.
+    for match in re.finditer(r"^[ \t]*#define\s+(FX_MODE_\w+)\s+(\d+)", text, re.M):
         macros.setdefault(match.group(1), int(match.group(2)))
-    mode_count = int(re.search(r"#define\s+MODE_COUNT\s+(\d+)", text).group(1))
+    mode_count = int(re.search(r"^[ \t]*#define\s+MODE_COUNT\s+(\d+)", text, re.M).group(1))
     return macros, mode_count
 
 
@@ -61,8 +63,9 @@ def parse_registrations(source: str) -> list[tuple[str, str]]:
     _data_FX_MODE_PARTICLEDRIP）。
     """
     return re.findall(
-        r"addEffect\(\s*(FX_MODE_\w+)\s*,\s*&\w+\s*,\s*(_data_FX_MODE_\w+)\s*\)",
+        r"^[ \t]*addEffect\(\s*(FX_MODE_\w+)\s*,\s*&\w+\s*,\s*(_data_FX_MODE_\w+)\s*\)",
         source,
+        re.M,
     )
 
 

@@ -39,6 +39,7 @@ POPULAR_NAMES = {
     "Solid Glitter", "Multi Comet", "Bouncing Balls", "Sinelon", "Plasma",
     "PacMan", "Rotozoomer", "Scrolling Text", "GEQ", "Matrix", "Image",
     "Solid Pattern", "Aurora", "Candle", "极光之舞",
+    "Lumi Dusk", "Lumi Polar", "Lumi Hearth", "Lumi Spectrum Fountain",
 }
 
 # 「音乐律动」：由音频频谱驱动的效果
@@ -46,6 +47,7 @@ MUSIC_IDS = {
     "FX_MODE_BPM", "FX_MODE_NOISEMETER", "FX_MODE_FREQWAVE", "FX_MODE_2DGEQ", "FX_MODE_FREQPIXELS",
     "FX_MODE_RIPPLEPEAK", "FX_MODE_FREQMAP", "FX_MODE_DJLIGHT", "FX_MODE_2DAKEMI", "FX_MODE_PARTICLESGEQ",
     "FX_MODE_PARTICLECENTERGEQ", "FX_MODE_PS1DGEQ", "FX_MODE_PS1DSONICSTREAM", "FX_MODE_PS1DSONICBOOM",
+    "FX_MODE_LUMI_FOUNTAIN", "FX_MODE_LUMI_PULSER", "FX_MODE_LUMI_SCANNER", "FX_MODE_LUMI_RAIN",
 }
 
 # 「动态字幕」：直接显示用户内容（文字、图片、时钟、数字雨）
@@ -85,6 +87,10 @@ NAME_ZH = {
     'FX_MODE_HALLOWEEN_EYES': '万圣之眼', 'FX_MODE_HEARTBEAT': '心跳', 'FX_MODE_ICU': '监护仪',
     'FX_MODE_IMAGE': '自定义图片', 'FX_MODE_JUGGLE': '抛球', 'FX_MODE_JUGGLES': '流光飞舞', 'FX_MODE_LAKE': '湖光',
     'FX_MODE_LARSON_SCANNER': '巡航', 'FX_MODE_LIGHTNING': '闪电', 'FX_MODE_LUMI_AURORA': '极光之舞',
+    'FX_MODE_LUMI_FOREST': '林间萤光', 'FX_MODE_LUMI_DUSK': '暮色晚霞', 'FX_MODE_LUMI_POLAR': '极地冰川',
+    'FX_MODE_LUMI_HEARTH': '壁炉火焰', 'FX_MODE_LUMI_LAVA': '熔岩灯', 'FX_MODE_LUMI_CAUSTICS': '深海波光',
+    'FX_MODE_LUMI_FOUNTAIN': '环形频谱喷泉', 'FX_MODE_LUMI_PULSER': '心跳脉冲环',
+    'FX_MODE_LUMI_SCANNER': '光环扫描', 'FX_MODE_LUMI_RAIN': '雨滴数据流',
     'FX_MODE_MATRIPIX': '矩阵像素', 'FX_MODE_METEOR': '流星', 'FX_MODE_MIDNOISE': '中段噪声',
     'FX_MODE_MULTI_COMET': '多重彗尾', 'FX_MODE_MULTI_STROBE': '疾速频闪', 'FX_MODE_NOISE16_1': '噪声 I',
     'FX_MODE_NOISE16_4': '噪声 IV', 'FX_MODE_NOISEFIRE': '噪声之火', 'FX_MODE_NOISEMETER': '噪声电平',
@@ -131,8 +137,8 @@ def categorize(entry: dict) -> str:
     if name in ART_EFFECT_NAMES:
         return "ART"
     # FX_MODE_LUMI_AURORA 是自定义命名的 2D 效果，用 setPixelColorXY 逐点绘制，
-    # 宏名不带 2D 前缀，只能靠白名单识别。
-    if fx == "FX_MODE_LUMI_AURORA":
+    # 宏名不带 2D 前缀，只能靠白名单识别。LUMI 系列同理。
+    if fx.startswith("FX_MODE_LUMI"):
         return "TWO_D"
     if fx.startswith(("FX_MODE_2D", "FX_MODE_PARTICLE", "FX_MODE_PS")):
         return "TWO_D"

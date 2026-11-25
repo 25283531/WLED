@@ -914,6 +914,17 @@ def build_effects() -> dict:
         99: lambda t: r_waves(t, AURORA_STOPS, 2.0),
         113: lambda t: r_bars_2d(t, 63),
         188: lambda t: r_lumi_aurora(t),
+        # Lumi 系列新增 10 个（fx 189..198），与固件同名实现对应
+        189: lambda t: r_lumi_forest(t),
+        190: lambda t: r_lumi_dusk(t),
+        191: lambda t: r_lumi_polar(t),
+        192: lambda t: r_lumi_hearth(t),
+        193: lambda t: r_lumi_lava(t),
+        194: lambda t: r_lumi_caustics(t),
+        195: lambda t: r_lumi_fountain(t),
+        196: lambda t: r_lumi_pulser(t),
+        197: lambda t: r_lumi_scanner(t),
+        198: lambda t: r_lumi_rain(t),
         187: lambda t: r_clock(t),
         118: lambda t: r_noise2d(t, AURORA_STOPS, 64),
         121: lambda t: r_noise2d(t, FIRE_STOPS, 65),
@@ -1138,6 +1149,227 @@ def r_rain2d(t, color=(120, 200, 255)):
             y = head - i
             if 0 <= y < H:
                 grid[y][x] = dim(color, (1.0 - i / 5) ** 1.5)
+    return grid
+
+
+# ------------------------------------------------------------------ Lumi 新增 10 个（fx 189..198）
+# 与固件同名函数对应：纵向用 pos（0=画面底部），周向用 x/W 的环绕距离。
+FOREST_STOPS = [0.0, (30, 91, 46), 0.4, (63, 163, 77), 0.75, (139, 212, 80), 1.0, (200, 232, 90)]
+DUSK_STOPS = [0.0, (226, 58, 30), 0.22, (255, 122, 46), 0.42, (255, 194, 74),
+              0.62, (232, 92, 196), 0.8, (123, 91, 224), 1.0, (79, 216, 232)]
+POLAR_STOPS = [0.0, (232, 85, 184), 0.21, (155, 91, 232), 0.45, (91, 124, 240),
+               0.7, (63, 208, 240), 1.0, (47, 227, 138)]
+LAVA_STOPS = [0.0, (26, 0, 4), 0.35, (179, 0, 27), 0.7, (255, 107, 26), 1.0, (224, 69, 123)]
+CAUSTIC_STOPS = [0.0, (1, 42, 51), 0.45, (14, 107, 122), 0.8, (127, 242, 255), 1.0, (223, 255, 255)]
+
+
+def _wrap_dist(a: float, b: float) -> float:
+    d = abs(a - b) % 1.0
+    return min(d, 1.0 - d)
+
+
+def r_lumi_forest(t):
+    grid = empty()
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        for x in range(W):
+            wob = math.sin((x / W + t * 0.25) * 2 * math.pi) * 0.06
+            grid[y][x] = gradient(FOREST_STOPS, max(0.0, min(1.0, pos + wob)))
+    rnd = random.Random(11)
+    for i in range(7):
+        px = (rnd.random() + t * 0.05 * (1 if i % 2 else -1)) % 1.0
+        py = 0.2 + 0.7 * (0.5 + 0.5 * math.sin(rnd.random() * 6.28 + t * 3))
+        br = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(t * 5 + i))
+        x = int(px * W) % W
+        y = int((1.0 - py) * (H - 1))
+        grid[y][x] = add(grid[y][x], (255, 233, 168), br)
+    return grid
+
+
+def r_lumi_dusk(t):
+    grid = empty()
+    sun = 0.25 + 0.6 * (0.5 + 0.5 * math.sin(t * 0.5))
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        cloud = 0.5 + 0.5 * math.sin(y * 1.3 + t * 2.0)
+        for x in range(W):
+            idx = pos + math.sin((x / W + t * 0.15) * 2 * math.pi) * 0.03 + (cloud - 0.5) * 0.08
+            c = gradient(DUSK_STOPS, max(0.0, min(1.0, idx)))
+            c = dim(c, 0.78 + 0.22 * cloud)
+            d = math.hypot(_wrap_dist(x / W, 0.5) * 1.6, pos - sun)
+            if d < 0.22:
+                c = add(c, (255, 231, 192), (1 - d / 0.22) ** 2)
+            grid[y][x] = c
+    return grid
+
+
+def r_lumi_polar(t):
+    grid = empty()
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        ca = 0.5 + 0.5 * math.sin(pos * 4.7 + t * 2.0)
+        cb = 0.5 + 0.5 * math.sin(pos * 3.1 - t * 2.6 + 1.3)
+        for x in range(W):
+            ux = x / W
+            c = gradient(POLAR_STOPS, pos)
+            ga = max(0.0, 1.0 - _wrap_dist(ux, ca) / 0.16)
+            gb = max(0.0, 1.0 - _wrap_dist(ux, cb) / 0.12)
+            g = max(ga, gb)
+            if g > 0:
+                c = add(c, (159, 255, 224), g * 0.55)
+            grid[y][x] = c
+    rnd = random.Random(5)
+    for i in range(5):
+        x = rnd.randrange(W)
+        y = int((1 - (0.2 + 0.65 * rnd.random())) * (H - 1))
+        tw = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(t * 4 + i * 2))
+        grid[y][x] = add(grid[y][x], (232, 246, 255), tw)
+    return grid
+
+
+def r_lumi_hearth(t):
+    grid = empty()
+    rnd = random.Random(17)
+    for x in range(W):
+        base = 0.55 + 0.28 * math.sin(x * 0.7 + rnd.random() * 6.28)
+        flick = 0.10 * math.sin(t * 9 + x * 1.9) + 0.06 * math.sin(t * 14.7 + x * 0.6)
+        h = max(0.08, min(1.0, base + flick))
+        for y in range(H):
+            pos = (H - 1 - y) / (H - 1)
+            if pos > h:
+                continue
+            lvl = 1.0 - pos / h
+            c = gradient(FIRE_STOPS, lvl)
+            edge = 1.0 - 0.35 * min(1.0, _wrap_dist(x / W, 0.5) * 2)
+            grid[y][x] = dim(c, (0.45 + 0.55 * lvl) * edge)
+    return grid
+
+
+def r_lumi_lava(t):
+    grid = empty()
+    blobs = []
+    for i in range(5):
+        cx = 0.5 + 0.34 * math.sin(t * 0.35 + i * 2.1)
+        cy = 0.5 + 0.26 * math.sin(t * 0.27 + i * 1.7 + 0.9)
+        blobs.append((cx, cy, 0.17 + 0.05 * math.sin(t * 0.5 + i)))
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        for x in range(W):
+            ux = x / W
+            field = 0.0
+            for cx, cy, r in blobs:
+                d = math.hypot(_wrap_dist(ux, cx) * 1.3, pos - cy) / r
+                if d < 1.0:
+                    field += (1.0 - d) ** 2
+            field = min(1.0, field)
+            c = gradient(LAVA_STOPS, 0.15 + 0.85 * field) if field > 0.02 else (5, 1, 3)
+            grid[y][x] = dim(c, 0.45 + 0.55 * field)
+    for i in range(6):
+        bx = (i * 0.37 + t * 0.05) % 1.0
+        by = (0.15 + i * 0.13 + t * 0.12) % 1.0
+        x = int(bx * W) % W
+        y = int((1 - by) * (H - 1))
+        grid[y][x] = add(grid[y][x], (255, 176, 112), 0.7)
+    return grid
+
+
+def r_lumi_caustics(t):
+    grid = empty()
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        for x in range(W):
+            ux = x / W
+            w = (math.sin((ux * 3 + t * 0.55) * 2 * math.pi)
+                 + math.sin((pos * 2.5 - t * 0.9) * 2 * math.pi)
+                 + math.sin(((ux + pos) * 2 + t * 1.3) * 2 * math.pi))
+            ridge = max(0.0, 1.0 - abs(w) / 2.4)
+            ridge = ridge ** 3
+            grid[y][x] = dim(gradient(CAUSTIC_STOPS, ridge), 0.55 + 0.45 * ridge)
+    return grid
+
+
+def r_lumi_fountain(t):
+    grid = empty()
+    bass = 0.45 + 0.55 * (0.5 + 0.5 * math.sin(t * 6.0))
+    band = bass * 0.5
+    for y in range(H):
+        pos = (H - 1 - y) / (H - 1)
+        if pos <= band:
+            f = pos / max(1e-6, band)
+            c = gradient([0.0, (255, 61, 0), 0.55, (255, 122, 0), 1.0, (255, 208, 96)], f)
+            for x in range(W):
+                grid[y][x] = dim(c, 0.75 + 0.25 * bass)
+    rnd = random.Random(23)
+    for i in range(10):
+        phase = (t * (0.8 + 0.4 * rnd.random()) + rnd.random()) % 1.0
+        y = int((1 - (0.35 + 0.6 * phase)) * (H - 1))
+        x = int(((rnd.random() + (phase - 0.5) * 0.5 * (1 if i % 2 else -1)) % 1.0) * W) % W
+        if 0 <= y < H:
+            grid[y][x] = add(grid[y][x], (207, 246, 255), 0.35 + 0.65 * (1 - phase))
+    ry = int((1 - (t * 0.6) % 1.0 * 0.95) * (H - 1))
+    if 0 <= ry < H:
+        for x in range(W):
+            grid[ry][x] = add(grid[ry][x], (255, 217, 160), 0.55)
+    return grid
+
+
+def r_lumi_pulser(t):
+    grid = empty()
+    for y in range(H):
+        for x in range(W):
+            grid[y][x] = dim((10, 42, 51), 0.09 + 0.05 * math.sin(t * 1.5))
+    for k in range(3):
+        phase = (t * 0.75 + k / 3.0) % 1.0
+        ring = 1.0 - phase
+        trail = 0.32
+        for y in range(H):
+            pos = (H - 1 - y) / (H - 1)
+            dd = ring - pos
+            if dd < -0.02 or dd > trail:
+                continue
+            fade = 1.0 if dd <= 0.03 else 1.0 - dd / trail
+            c = (255, 246, 224) if dd <= 0.03 else (255, 176, 112)
+            for x in range(W):
+                grid[y][x] = add(grid[y][x], c, fade * 0.9)
+    return grid
+
+
+def r_lumi_scanner(t):
+    grid = empty()
+    charge = [0.0] * H
+    for k in range(2):
+        tri = abs(((t * 0.45 + k * 0.5) % 1.0) * 2 - 1.0)
+        pos = 1.0 - tri
+        for i in range(H):
+            row_pos = 1.0 - i / (H - 1)
+            charge[i] = max(charge[i], max(0.0, 1.0 - abs(row_pos - pos) * 3.5))
+    for y in range(H):
+        c = charge[y]
+        if c <= 0.01:
+            continue
+        for x in range(W):
+            grid[y][x] = add(grid[y][x], (127, 233, 255), c * 0.85)
+    return grid
+
+
+def r_lumi_rain(t):
+    grid = empty()
+    rnd = random.Random(29)
+    for x in range(W):
+        speed = 0.9 + 0.7 * rnd.random()
+        phase = rnd.random()
+        head = (t * speed + phase) % 1.0
+        y = int(head * (H - 1))
+        for i in range(6):
+            yy = y - i
+            if 0 <= yy < H:
+                c = (220, 239, 255) if i == 0 else (127, 216, 255)
+                grid[yy][x] = add(grid[yy][x], c, (1.0 - i / 6) * 0.9)
+        if y >= H - 1:
+            for dx in (-1, 0, 1):
+                xx = x + dx
+                if 0 <= xx < W:
+                    grid[H - 1][xx] = add(grid[H - 1][xx], (159, 232, 255), 0.5)
     return grid
 
 
