@@ -1,5 +1,6 @@
 package ca.cgagnier.wlednativeandroid.ui.settings
 
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,19 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.audio.AudioStreamState
-import ca.cgagnier.wlednativeandroid.audio.CaptureSource
+import ca.cgagnier.wlednativeandroid.audio.AudioTransportType
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
 import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
@@ -40,8 +35,12 @@ import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
 /**
  * 设备页「音频来源」面板。
  *
- * 来源决定设备端行为：选设备麦克风时不启动手机采集；选 APP 音频时由前台服务
- * 采集手机声音并单播到设备，划掉任务/锁屏都继续发送。
+ * 三种来源：
+ * - 设备麦克风：手机不发送任何音频；
+ * - 蓝牙：内录 → BLE GATT；
+ * - 直通：内录 → UDP。
+ *
+ * 蓝牙与直通都依赖 Android 10 的内录能力，低版本系统上置灰并说明原因。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +75,7 @@ fun AudioSettingsSheet(
                 modifier = Modifier.padding(bottom = 2.dp),
             )
 
+            val android10Missing = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
             AudioSourceRow(
                 label = stringResource(R.string.isle_audio_source_device),
                 selected = uiState.source == DeviceAudioSource.DEVICE,
@@ -83,10 +83,26 @@ fun AudioSettingsSheet(
                 onClick = { onSelectSource(DeviceAudioSource.DEVICE) },
             )
             AudioSourceRow(
-                label = stringResource(R.string.isle_audio_source_app),
-                selected = uiState.source == DeviceAudioSource.APP,
-                enabled = !uiState.switching,
-                onClick = { onSelectSource(DeviceAudioSource.APP) },
+                label = stringResource(R.string.isle_audio_source_ble),
+                description = when {
+                    uiState.bleSupported -> null
+                    android10Missing -> stringResource(R.string.isle_audio_needs_android10)
+                    else -> stringResource(R.string.isle_audio_ble_unsupported)
+                },
+                selected = uiState.source == DeviceAudioSource.BLE,
+                enabled = uiState.bleSupported && !uiState.switching,
+                onClick = { onSelectSource(DeviceAudioSource.BLE) },
+            )
+            AudioSourceRow(
+                label = stringResource(R.string.isle_audio_source_passthrough),
+                description = if (uiState.playbackSupported) {
+                    null
+                } else {
+                    stringResource(R.string.isle_audio_needs_android10)
+                },
+                selected = uiState.source == DeviceAudioSource.PLAYBACK,
+                enabled = uiState.playbackSupported && !uiState.switching,
+                onClick = { onSelectSource(DeviceAudioSource.PLAYBACK) },
             )
 
             if (uiState.switching || uiState.rebootPending) {
@@ -115,7 +131,12 @@ fun AudioSettingsSheet(
                 modifier = Modifier.padding(top = 4.dp),
             )
 
-            val active = streamState is AudioStreamState.Active || streamState is AudioStreamState.AskingDowngrade
+            val canStream = when (uiState.source) {
+                DeviceAudioSource.BLE -> uiState.bleSupported
+                DeviceAudioSource.PLAYBACK -> uiState.playbackSupported
+                else -> false
+            } && !uiState.switching && !uiState.rebootPending
+            val active = streamState is AudioStreamState.Active
             if (active) {
                 Button(
                     onClick = onStop,
@@ -128,9 +149,7 @@ fun AudioSettingsSheet(
             } else {
                 Button(
                     onClick = onStart,
-                    enabled = uiState.source == DeviceAudioSource.APP &&
-                        !uiState.switching &&
-                        !uiState.rebootPending,
+                    enabled = canStream,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
@@ -141,10 +160,10 @@ fun AudioSettingsSheet(
 
             OutlinedButton(
                 onClick = onRetryCapture,
-                enabled = uiState.source == DeviceAudioSource.APP,
+                enabled = canStream,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = stringResource(R.string.isle_audio_retry_capture))
+                Text(text = stringResource(R.string.isle_audio_restart))
             }
 
             Text(
@@ -173,96 +192,14 @@ fun AudioSettingsSheet(
     }
 }
 
-/**
- * 内录静音后的用户确认流程。
- *
- * 第一次询问"是否在播放"，第二次确认"是否改用麦克风"；
- * 只有两次都点确认，才会调用 [onConfirmSwitch]。后台由通知先问，第二次确认统一进 APP 完成。
- */
 @Composable
-fun AudioDowngradeDialogs(
-    streamState: AudioStreamState,
-    onKeepCapturing: () -> Unit,
-    onConfirmSwitch: () -> Unit,
+private fun AudioSourceRow(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    description: String? = null,
 ) {
-    if (streamState !is AudioStreamState.AskingDowngrade) {
-        return
-    }
-    var confirming by remember(streamState) { mutableStateOf(false) }
-    if (!confirming) {
-        AlertDialog(
-            onDismissRequest = onKeepCapturing,
-            title = { Text(stringResource(R.string.isle_audio_ask_title)) },
-            text = { Text(stringResource(R.string.isle_audio_ask_body)) },
-            confirmButton = {
-                TextButton(onClick = { confirming = true }) {
-                    Text(stringResource(R.string.isle_audio_ask_yes))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onKeepCapturing) {
-                    Text(stringResource(R.string.isle_audio_ask_no))
-                }
-            },
-        )
-    } else {
-        AlertDialog(
-            onDismissRequest = onKeepCapturing,
-            title = { Text(stringResource(R.string.isle_audio_confirm_title)) },
-            text = { Text(stringResource(R.string.isle_audio_confirm_body)) },
-            confirmButton = {
-                TextButton(onClick = onConfirmSwitch) {
-                    Text(stringResource(R.string.isle_audio_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onKeepCapturing) {
-                    Text(stringResource(R.string.isle_audio_cancel))
-                }
-            },
-        )
-    }
-}
-
-/**
- * 内录（A）启动失败时的降级询问。
- *
- * 只处理「投屏授权被拒/采集起不来」两种情况；用户同意后由调用方用麦克风重新启动，
- * 不同意则结束本次采集，不保留失败状态。
- */
-@Composable
-fun AudioUnavailableDialog(
-    streamState: AudioStreamState,
-    onUseMicrophone: (String) -> Unit,
-    onCancel: () -> Unit,
-) {
-    val failed = streamState as? AudioStreamState.Failed ?: return
-    if (failed.source != CaptureSource.PLAYBACK) return
-    val host = failed.host?.takeIf { it.isNotBlank() } ?: return
-    if (failed.failure != AudioStreamState.Failed.Failure.PERMISSION &&
-        failed.failure != AudioStreamState.Failed.Failure.CAPTURE_START
-    ) {
-        return
-    }
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.isle_audio_unavailable_title)) },
-        text = { Text(stringResource(R.string.isle_audio_unavailable_body)) },
-        confirmButton = {
-            TextButton(onClick = { onUseMicrophone(host) }) {
-                Text(stringResource(R.string.isle_audio_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.isle_audio_cancel))
-            }
-        },
-    )
-}
-
-@Composable
-private fun AudioSourceRow(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -271,16 +208,25 @@ private fun AudioSourceRow(label: String, selected: Boolean, enabled: Boolean, o
         padding = 14.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                color = when {
-                    !enabled -> IsleColors.TextMuted
-                    selected -> IsleColors.Cyan
-                    else -> IsleColors.TextPrimary
-                },
-                fontSize = 14.sp,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = when {
+                        !enabled -> IsleColors.TextMuted
+                        selected -> IsleColors.Cyan
+                        else -> IsleColors.TextPrimary
+                    },
+                    fontSize = 14.sp,
+                )
+                if (!description.isNullOrBlank()) {
+                    Text(
+                        text = description,
+                        color = IsleColors.TextMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
             if (selected) {
                 GlyphIcon(glyph = Glyph.Check, size = 16.dp, tint = IsleColors.Cyan)
             }
@@ -328,9 +274,8 @@ private fun statusText(state: AudioStreamState): String = when (state) {
     AudioStreamState.Idle -> stringResource(R.string.isle_audio_status_idle)
     is AudioStreamState.Active -> when {
         state.deviceUnreachable -> stringResource(R.string.isle_audio_status_unreachable)
-        state.source == CaptureSource.MICROPHONE -> stringResource(R.string.isle_audio_status_mic)
-        else -> stringResource(R.string.isle_audio_status_playback)
+        state.transport == AudioTransportType.BLE -> stringResource(R.string.isle_audio_status_ble)
+        else -> stringResource(R.string.isle_audio_status_passthrough)
     }
-    is AudioStreamState.AskingDowngrade -> stringResource(R.string.isle_audio_status_asking)
     is AudioStreamState.Failed -> stringResource(R.string.isle_audio_status_failed)
 }

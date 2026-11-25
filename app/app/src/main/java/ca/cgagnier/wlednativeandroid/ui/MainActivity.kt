@@ -33,9 +33,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.audio.AudioStreamService
+import ca.cgagnier.wlednativeandroid.audio.AudioStreamState
 import ca.cgagnier.wlednativeandroid.ui.components.ChangelogBottomSheet
-import ca.cgagnier.wlednativeandroid.ui.settings.AudioDowngradeDialogs
-import ca.cgagnier.wlednativeandroid.ui.settings.AudioUnavailableDialog
 import ca.cgagnier.wlednativeandroid.ui.theme.ThemeViewModel
 import ca.cgagnier.wlednativeandroid.ui.theme.WLEDNativeTheme
 import ca.cgagnier.wlednativeandroid.util.AppLanguageManager
@@ -76,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     openChangelogs = { changelogViewModel.showAllChangelogs() },
                 )
                 ChangelogBottomSheet(viewModel = changelogViewModel)
-                // 内录静音的确认框放在根组合里：通知点进来后不管停在哪个页面都能确认
+                // 发送失败时给一次明确提示，不再弹任何降级确认框
                 AudioStreamAlertHost()
             }
         }
@@ -98,26 +97,11 @@ class MainActivity : ComponentActivity() {
 private fun AudioStreamAlertHost() {
     val state by AudioStreamService.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    AudioDowngradeDialogs(
-        streamState = state,
-        onKeepCapturing = {
-            AudioStreamService.dismissAsk(context)
-            Toast.makeText(context, R.string.isle_audio_no_downgrade, Toast.LENGTH_SHORT).show()
-        },
-        onConfirmSwitch = {
-            AudioStreamService.switchToMicrophone(context)
-            Toast.makeText(context, R.string.isle_audio_switched_mic, Toast.LENGTH_SHORT).show()
-        },
-    )
-    // A 内录起不来时按 2.3.6 询问是否改用手机麦克风，绝不静默降级
-    AudioUnavailableDialog(
-        streamState = state,
-        onUseMicrophone = { host ->
-            AudioStreamService.startWithMicrophone(context, host)
-            Toast.makeText(context, R.string.isle_audio_switched_mic, Toast.LENGTH_SHORT).show()
-        },
-        onCancel = { AudioStreamService.stop(context) },
-    )
+    LaunchedEffect(state) {
+        if (state is AudioStreamState.Failed) {
+            Toast.makeText(context, R.string.isle_audio_status_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
 }
 
 @Composable

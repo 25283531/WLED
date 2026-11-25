@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * WLED Audio Sync v2 发送器（UDP 11988）。
+ * WLED Audio Sync v2 的 44 字节包编码。
  *
  * 包结构来自固件 `audio_reactive.cpp` 的 `audioSyncPacket`（44 字节、packed）：
  *
@@ -25,37 +25,22 @@ import java.nio.ByteOrder
  * offset 40 float    FFT_MajorPeak
  * ```
  *
- * 固件用 `fftUdp.beginMulticast(IPAddress(239, 0, 0, 1), port)` 接收（见
- * `audio_reactive.cpp:1531`），所以**组播是主路径**；单播/广播只作为兜底。
- * UDP 没有回执，发送成功不代表设备收到，"设备不可达"只能由发送异常推断。
+ * UDP 与 BLE 收到的都是同一个包，编码只保留这一份实现，避免两处偏移各自漂移。
  */
-class WledAudioSyncSender(
-    private val host: String,
-    private val port: Int = DEFAULT_PORT,
-) : Closeable {
+object WledAudioSyncPacket {
 
-    private val socket = DatagramSocket().apply {
-        broadcast = true
-    }
-    private val buffer = ByteBuffer.allocate(PACKET_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+    const val SIZE = 44
 
-    /** 最近一次发送是否成功（异常时为 false），供服务判断是否需要提示设备不可达。 */
-    var lastSendFailed: Boolean = false
-        private set
+    private const val GEQ_CHANNELS = 16
+    private const val PEAK_ON: Byte = 1
+    private const val PEAK_OFF: Byte = 0
+    private const val RESERVED_SHORT: Short = 0
+    private val HEADER = "00002".toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
+    private val RESERVED = ByteArray(2)
+    private const val RESERVED_ONE: Byte = 0
 
-    fun send(frame: AudioFrame): Boolean {
-        val bytes = encode(frame)
-        lastSendFailed = false
-        // 设备只加入了 239.0.0.1 组播组，组播必须是首选，单播放在后面兜底
-        if (sendTo(bytes, MULTICAST_HOST)) return true
-        if (sendTo(bytes, host)) return true
-        if (sendTo(bytes, BROADCAST_HOST)) return true
-        lastSendFailed = true
-        return false
-    }
-
-    private fun encode(frame: AudioFrame): ByteArray {
-        buffer.clear()
+    fun encode(frame: AudioFrame): ByteArray {
+        val buffer = ByteBuffer.allocate(SIZE).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put(HEADER)
         buffer.put(RESERVED)
         buffer.putFloat(frame.sampleRaw)
@@ -69,6 +54,38 @@ class WledAudioSyncSender(
         buffer.putFloat(frame.magnitude)
         buffer.putFloat(frame.majorPeak)
         return buffer.array()
+    }
+}
+
+/**
+ * WLED Audio Sync v2 发送器（UDP 11988）。
+ *
+ * 固件用 `fftUdp.beginMulticast(IPAddress(239, 0, 0, 1), port)` 接收（见
+ * `audio_reactive.cpp:1531`），所以**组播是主路径**；单播/广播只作为兜底。
+ * UDP 没有回执，发送成功不代表设备收到，"设备不可达"只能由发送异常推断。
+ */
+class WledAudioSyncSender(
+    private val host: String,
+    private val port: Int = DEFAULT_PORT,
+) : Closeable {
+
+    private val socket = DatagramSocket().apply {
+        broadcast = true
+    }
+
+    /** 最近一次发送是否成功（异常时为 false），供服务判断是否需要提示设备不可达。 */
+    var lastSendFailed: Boolean = false
+        private set
+
+    fun send(frame: AudioFrame): Boolean {
+        val bytes = WledAudioSyncPacket.encode(frame)
+        lastSendFailed = false
+        // 设备只加入了 239.0.0.1 组播组，组播必须是首选，单播放在后面兜底
+        if (sendTo(bytes, MULTICAST_HOST)) return true
+        if (sendTo(bytes, host)) return true
+        if (sendTo(bytes, BROADCAST_HOST)) return true
+        lastSendFailed = true
+        return false
     }
 
     private fun sendTo(bytes: ByteArray, address: String): Boolean = try {
@@ -88,14 +105,5 @@ class WledAudioSyncSender(
         const val DEFAULT_PORT = 11_988
         const val MULTICAST_HOST = "239.0.0.1"
         const val BROADCAST_HOST = "255.255.255.255"
-
-        private const val PACKET_SIZE = 44
-        private const val GEQ_CHANNELS = 16
-        private const val PEAK_ON: Byte = 1
-        private const val PEAK_OFF: Byte = 0
-        private const val RESERVED_SHORT: Short = 0
-        private val HEADER = "00002".toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
-        private val RESERVED = ByteArray(2)
-        private val RESERVED_ONE = 0.toByte()
     }
 }

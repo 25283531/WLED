@@ -31,6 +31,7 @@ import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.settings.AudioSettingsViewModel
+import ca.cgagnier.wlednativeandroid.ui.settings.AudioSourcePreferenceStore
 import ca.cgagnier.wlednativeandroid.ui.settings.WifiSettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
@@ -117,6 +118,7 @@ val appModule: Module = module {
 
     singleOf(::DeepLinkHandler)
     singleOf(::ChangelogProvider)
+    single { AudioSourcePreferenceStore(androidContext()) }
     single {
         WledWidgetManager(get(), get())
     }
@@ -185,5 +187,11 @@ val appModule: Module = module {
     viewModelOf(::LibraryViewModel)
     viewModelOf(::CreateViewModel)
     viewModelOf(::WifiSettingsViewModel)
-    viewModelOf(::AudioSettingsViewModel)
+    viewModel {
+        AudioSettingsViewModel(
+            deviceApiFactory = get(),
+            context = androidContext(),
+            sourcePreferences = get(),
+        )
+    }
 }

@@ -57,6 +57,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.audio.AudioStreamService
+import ca.cgagnier.wlednativeandroid.audio.AudioTransportType
+import ca.cgagnier.wlednativeandroid.audio.BleAudioSyncSender
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
@@ -138,13 +140,47 @@ fun SettingsScreen(
     }
 
     // T2：手机音频 → WLED。内录需要每次会话重新授权，因此先拿投屏 token 再启动前台服务
+    var pendingTransport by remember { mutableStateOf(AudioTransportType.UDP) }
+
+    fun missingNotificationPermission(): String? = if (
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        Manifest.permission.POST_NOTIFICATIONS
+    } else {
+        null
+    }
+
+    // 内录走 AudioRecord，系统依然要求 RECORD_AUDIO；没有它 AudioRecord 会直接初始化失败
+    fun missingRecordAudioPermission(): String? = if (
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        Manifest.permission.RECORD_AUDIO
+    } else {
+        null
+    }
+
+    fun bluetoothPermissionRequests(): Array<String> {
+        if (!BleAudioSyncSender.isSupported(context)) return emptyArray()
+        val required = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        return required
+            .filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+            .toTypedArray()
+    }
+
     val projectionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val host = device?.device?.address
         val data = result.data
         if (result.resultCode == Activity.RESULT_OK && data != null && host != null) {
-            AudioStreamService.start(context, host, result.resultCode, data)
+            AudioStreamService.start(context, host, result.resultCode, data, pendingTransport)
         } else {
             Toast.makeText(context, R.string.isle_audio_permission_denied, Toast.LENGTH_SHORT).show()
         }
@@ -156,8 +192,8 @@ fun SettingsScreen(
         if (target == null) {
             Toast.makeText(context, R.string.isle_audio_switch_failed_hint, Toast.LENGTH_SHORT).show()
         } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || manager == null) {
-            // Android 10 以下没有内录，只能由手机麦克风采集
-            AudioStreamService.startWithMicrophone(context, target.device.address)
+            // Android 10 以下没有内录，蓝牙与直通都无法使用
+            Toast.makeText(context, R.string.isle_audio_needs_android10, Toast.LENGTH_SHORT).show()
         } else {
             runCatching { projectionLauncher.launch(manager.createScreenCaptureIntent()) }
                 .onFailure {
@@ -169,33 +205,53 @@ fun SettingsScreen(
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { grants ->
-        val recordGranted = grants[Manifest.permission.RECORD_AUDIO]
-            ?: (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED)
-        if (recordGranted) {
-            if (grants[Manifest.permission.POST_NOTIFICATIONS] == false) {
-                Toast.makeText(context, R.string.isle_audio_notification_denied, Toast.LENGTH_SHORT).show()
-            }
-            launchProjection()
-        } else {
+        if (grants[Manifest.permission.POST_NOTIFICATIONS] == false) {
+            Toast.makeText(context, R.string.isle_audio_notification_denied, Toast.LENGTH_SHORT).show()
+        }
+        if (pendingTransport == AudioTransportType.BLE && !BleAudioSyncSender.hasPermissions(context)) {
+            Toast.makeText(context, R.string.isle_audio_ble_permission_denied, Toast.LENGTH_SHORT).show()
+        } else if (missingRecordAudioPermission() != null) {
             Toast.makeText(context, R.string.isle_audio_permission_denied, Toast.LENGTH_SHORT).show()
+        } else {
+            launchProjection()
         }
     }
 
     val startAudioCapture: () -> Unit = {
-        val required = buildList {
-            add(Manifest.permission.RECORD_AUDIO)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
+        when (audioUiState.source) {
+            DeviceAudioSource.BLE -> {
+                pendingTransport = AudioTransportType.BLE
+                if (!BleAudioSyncSender.isSupported(context)) {
+                    Toast.makeText(context, R.string.isle_audio_ble_unsupported, Toast.LENGTH_SHORT).show()
+                } else {
+                    val required = bluetoothPermissionRequests().toMutableList()
+                    missingNotificationPermission()?.let { required.add(it) }
+                    missingRecordAudioPermission()?.let { required.add(it) }
+                    if (required.isEmpty()) {
+                        launchProjection()
+                    } else {
+                        audioPermissionLauncher.launch(required.toTypedArray())
+                    }
+                }
             }
-        }.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+            DeviceAudioSource.PLAYBACK -> {
+                pendingTransport = AudioTransportType.UDP
+                val required = mutableListOf<String>()
+                missingNotificationPermission()?.let { required.add(it) }
+                missingRecordAudioPermission()?.let { required.add(it) }
+                if (required.isEmpty()) {
+                    launchProjection()
+                } else {
+                    audioPermissionLauncher.launch(required.toTypedArray())
+                }
+            }
+            DeviceAudioSource.DEVICE, null -> Unit
         }
-        if (required.isEmpty()) {
-            launchProjection()
-        } else {
-            audioPermissionLauncher.launch(required.toTypedArray())
-        }
+    }
+
+    val openAudioPanel: () -> Unit = {
+        audioAddress?.let { audioViewModel.load(it) }
+        showAudioSheet = true
     }
 
     val openBatterySettings: () -> Unit = {
@@ -273,14 +329,12 @@ fun SettingsScreen(
                     iconTint = IsleColors.Pink,
                     label = stringResource(R.string.isle_audio_source),
                     value = when (audioUiState.source) {
-                        DeviceAudioSource.APP -> stringResource(R.string.isle_audio_source_app)
+                        DeviceAudioSource.BLE -> stringResource(R.string.isle_audio_source_ble)
+                        DeviceAudioSource.PLAYBACK -> stringResource(R.string.isle_audio_source_passthrough)
                         DeviceAudioSource.DEVICE -> stringResource(R.string.isle_audio_source_device)
                         null -> null
                     },
-                    onClick = {
-                        audioAddress?.let { audioViewModel.load(it) }
-                        showAudioSheet = true
-                    },
+                    onClick = openAudioPanel,
                 )
                 DisabledSliderRow(
                     glyph = Glyph.Mic,
@@ -355,11 +409,11 @@ fun SettingsScreen(
             uiState = audioUiState,
             streamState = streamState,
             onSelectSource = { source ->
-                audioViewModel.selectSource(source)
-                // 切回设备麦克风后手机侧继续发没有意义，直接停掉，避免两路音源打架
-                if (source == DeviceAudioSource.DEVICE) {
+                // 换来源后旧通道不再有效，先停掉再写 cfg/等设备重启
+                if (source != audioUiState.source) {
                     AudioStreamService.stop(context)
                 }
+                audioViewModel.selectSource(source)
             },
             onStart = startAudioCapture,
             onStop = { AudioStreamService.stop(context) },

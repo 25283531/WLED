@@ -29,8 +29,7 @@ data class AudioFrame(
  * 输出口径按固件 `NUM_GEQ_CHANNELS = 16`：40 Hz 到 16 kHz 对数分箱（不超过 Nyquist），
  * 每段取该频段内最大幅度。
  *
- * 内录（44.1/48 kHz）与麦克风（16 kHz）共用本类，采样率由调用方传入，
- * 因此不写死窗口内包含多少频率点，也不假设输入一定是 16 kHz。
+ * 采样率由调用方传入，因此不写死窗口内包含多少频率点。
  */
 class FftAnalyzer(
     private val sampleRate: Int,
