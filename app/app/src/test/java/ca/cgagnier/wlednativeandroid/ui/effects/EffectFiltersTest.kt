@@ -45,9 +45,9 @@ class EffectFiltersTest {
     fun `ART 收录自定义图片与滚动字幕`() {
         val art = filterEffects(all, EffectFilter.ART, "")
         assertEquals(
-            setOf(39, 97),
+            setOf(39, 96),
             art.map { it.id }.toSet(),
-            "「字画」应收纳 Image(53) 与 Scrolling Text(122)",
+            "「字画」应收纳 Image(39) 与 Scrolling Text(96)",
         )
         assertTrue(art.all { it.category == EffectCategory.ART })
     }
@@ -98,8 +98,8 @@ class EffectFiltersTest {
             "英文名 Aurora 应命中 id 26",
         )
         assertTrue(
-            byChinese.any { it.id == 188 },
-            "中文名「极光之舞」应命中 id 188",
+            byChinese.any { it.id == 176 },
+            "中文名「极光之舞」应命中 id 176",
         )
     }
 
