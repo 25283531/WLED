@@ -63,8 +63,8 @@ class AudioSettingsViewModel(
                     source = config?.um?.audioReactive?.sync?.let { sync ->
                         if (sync.isReceiveMode) DeviceAudioSource.APP else DeviceAudioSource.DEVICE
                     },
-                    deviceAudioStatus = info?.userMods?.audioReactive?.let { audio ->
-                        listOfNotNull(audio.audioSourceText, audio.soundProcessingText)
+                    deviceAudioStatus = info?.userMods?.let { mods ->
+                        listOfNotNull(mods.audioSourceText, mods.soundProcessingText)
                             .joinToString(" · ")
                             .takeIf { text -> text.isNotBlank() }
                     },

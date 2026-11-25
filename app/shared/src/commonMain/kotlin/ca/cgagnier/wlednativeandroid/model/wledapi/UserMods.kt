@@ -11,29 +11,24 @@ data class UserMods(
     // Battery values
     @SerialName("Battery level") val batteryLevel: List<JsonElement>? = null,
     @SerialName("Battery voltage") val batteryVoltage: List<JsonElement>? = null,
-    @SerialName("AudioReactive") val audioReactive: AudioReactiveInfo? = null,
+    @SerialName("Audio Source") val audioSource: List<JsonElement>? = null,
+    @SerialName("Sound Processing") val soundProcessing: List<JsonElement>? = null,
 ) {
     val batteryPercentage: Double?
         get() = (batteryLevel?.firstOrNull() as? JsonPrimitive)?.doubleOrNull
 
     val batteryVoltageValue: Double?
         get() = (batteryVoltage?.firstOrNull() as? JsonPrimitive)?.doubleOrNull
-}
 
-/**
- * `/json/info.u.AudioReactive`：固件按人类可读的字符串数组输出，例如
- * `"Audio Source": ["UDP sound sync", " - receiving"]`。
- *
- * 这里只取 App 需要展示的两项，其余字段忽略。
- */
-@Serializable
-data class AudioReactiveInfo(
-    @SerialName("Audio Source") val audioSource: List<JsonElement>? = null,
-    @SerialName("Sound Processing") val soundProcessing: List<JsonElement>? = null,
-) {
+    /**
+     * `/json/info.u["Audio Source"]`，例如 `["UDP sound sync", " - receiving"]`。
+     *
+     * 固件把每一项拆成多个字符串片段（有的还带 HTML），这里只拼接纯文本。
+     */
     val audioSourceText: String?
         get() = audioSource.joinText()
 
+    /** `/json/info.u["Sound Processing"]`，正常运行时是 `["running"]`。 */
     val soundProcessingText: String?
         get() = soundProcessing.joinText()
 
