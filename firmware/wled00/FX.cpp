@@ -11085,18 +11085,42 @@ void mode_particle1DGEQ(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct VUData { uint8_t volS; };
+  struct VUData { uint8_t volS; uint8_t ref; uint8_t tick; };
   if (!SEGENV.allocateData(sizeof(VUData))) FX_FALLBACK_STATIC;
   VUData *d = (VUData*)SEGENV.data;
-  // 高度由"绝对音量等级"驱动：audioLoudness 来自音频包携带的 App 侧 AGC 前原始响度，
-  // 不过设备端 AGC（AGC 只归一化频谱形状，会让任何音乐都顶满）。
+  if (SEGMENT.call == 0) { d->volS = 0; d->ref = 0; d->tick = 0; }
+
+  // 输入：audioLoudness 是 App 侧 AGC 之前的原始响度（0~255），其绝对值与手机音量成正比。
+  // 为做到"与音量无关"，不使用绝对映射，而是以当前素材自身的峰值为参考做相对映射：
+  // 换歌、调手机音量只改变输入绝对值，不改变"最响到顶、安静下落"的观感。
   uint8_t loud = 0;
   if (um_data_t *um_data = getAudioData()){
     if (um_data->u_size > 8 && um_data->u_data[8]) loud = *(uint8_t*)um_data->u_data[8];
   }
-  // 噪声门 + 感知曲线：常规音量约 40~70%，音量最高时才亮到顶；静音（<4）完全熄灭
-  float lvl = (loud > 4) ? ((float)loud / 255.0f) : 0.0f;
-  uint8_t target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
+
+  // 自适应参考：首个有效帧直接对齐当前电平（避免起播长时间偏暗），
+  // 之后上行每帧追 1/4 差值（约 0.25s 跟上新最响值），下行约 5 单位/秒缓慢回落。
+  if (d->ref == 0) {
+    if (loud > 8) d->ref = loud;
+  } else if (loud > d->ref) {
+    d->ref = (uint8_t)(d->ref + (loud - d->ref + 3) / 4);
+  } else if (++d->tick >= 8) {          // 约 5 单位/秒（42fps），给慢歌留出回差
+    d->tick = 0;
+    if (d->ref > 16) d->ref--;
+  }
+  const uint8_t ref = d->ref;
+  const bool    silent = (loud <= 8 || ref <= 16);
+
+  // 实测真实音乐（手机直通）响度集中在参考峰值的 85%~100%：
+  // 以当前素材峰值 ref 的 85% 作为熄灭线（约 2.5dB 的显示窗口），
+  // 安静段压到接近熄灭，只有最响段才到顶；gamma 1.3 让中段层次更明显。
+  uint8_t target = 0;
+  if (!silent) {
+    const float floorL = (float)ref * 0.85f;
+    float lvl = ((float)loud - floorL) / ((float)ref - floorL);
+    if (lvl > 1.0f) lvl = 1.0f;
+    if (lvl > 0.0f) target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
+  }
   int16_t dv = (int16_t)target - d->volS;
   // 快攻慢放；上升至少 1 级，否则整数截断会让目标 255 永远停在 254（顶行不亮）
   int16_t step = (dv > 0) ? (int16_t)((dv * 5 + 7) / 8) : (int16_t)(dv / 8);
