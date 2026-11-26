@@ -54,7 +54,7 @@ void setup() {
       }
     } else if (wipeState == 3) { //switch to wipe off
       #ifdef STAIRCASE_WIPE_OFF
-      effectCurrent = FX_MODE_COLOR_WIPE;
+      effectCurrent = FX_MODE_CHASE_COLOR;
       strip.timebase = 360 + (255 - effectSpeed)*75 - millis(); //make sure wipe starts fully lit
       colorUpdated(CALL_MODE_NOTIFICATION);
       wipeState = 4;
@@ -95,7 +95,7 @@ void setup() {
     bri = briLast; //turn on
     jsonTransitionOnce = true;
     strip.setTransition(0); //no transition
-    effectCurrent = FX_MODE_COLOR_WIPE;
+    effectCurrent = FX_MODE_CHASE_COLOR;
     strip.resetTimebase(); //make sure wipe starts from beginning
 
     //set wipe direction

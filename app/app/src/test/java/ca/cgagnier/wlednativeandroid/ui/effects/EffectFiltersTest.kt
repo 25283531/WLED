@@ -30,10 +30,10 @@ class EffectFiltersTest {
 
     @Test
     fun `FAVORITE 只返回收藏中的灯效`() {
-        val favorites = setOf(0, 1, 188)
+        val favorites = setOf(0, 1, all.last().id)
         val result = filterEffects(all, EffectFilter.FAVORITE, "", favorites)
         assertEquals(3, result.size)
-        assertEquals(setOf(0, 1, 188), result.map { it.id }.toSet())
+        assertEquals(favorites, result.map { it.id }.toSet())
     }
 
     @Test
@@ -45,9 +45,9 @@ class EffectFiltersTest {
     fun `ART 收录自定义图片与滚动字幕`() {
         val art = filterEffects(all, EffectFilter.ART, "")
         assertEquals(
-            setOf(39, 96),
-            art.map { it.id }.toSet(),
-            "「字画」应收纳 Image(39) 与 Scrolling Text(96)",
+            setOf("Image", "Scrolling Text"),
+            art.map { it.name }.toSet(),
+            "「字画」应收纳 Image 与 Scrolling Text",
         )
         assertTrue(art.all { it.category == EffectCategory.ART })
     }
@@ -89,26 +89,25 @@ class EffectFiltersTest {
 
     @Test
     fun `搜索同时匹配英文名与中文名`() {
-        val byEnglish = filterEffects(all, EffectFilter.ALL, "Aurora")
+        val byEnglish = filterEffects(all, EffectFilter.ALL, "Rainbow")
         val byChinese = filterEffects(all, EffectFilter.ALL, "极光")
         assertTrue(byEnglish.isNotEmpty())
         assertTrue(byChinese.isNotEmpty())
         assertTrue(
-            byEnglish.any { it.id == 26 },
-            "英文名 Aurora 应命中 id 26",
+            byEnglish.any { it.name == "Rainbow" },
+            "英文名 Rainbow 应命中对应灯效",
         )
         assertTrue(
-            byChinese.any { it.id == 176 },
-            "中文名「极光之舞」应命中 id 176",
+            byChinese.any { it.name == "极光之舞" },
+            "中文名「极光之舞」应命中对应灯效",
         )
     }
 
     @Test
     fun `搜索忽略大小写`() {
-        assertEquals(
-            filterEffects(all, EffectFilter.ALL, "aurora").map { it.id },
-            filterEffects(all, EffectFilter.ALL, "AURORA").map { it.id },
-        )
+        val lower = filterEffects(all, EffectFilter.ALL, "rainbow").map { it.id }
+        assertEquals(lower, filterEffects(all, EffectFilter.ALL, "RAINBOW").map { it.id })
+        assertTrue(lower.isNotEmpty())
     }
 
     @Test

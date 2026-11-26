@@ -257,6 +257,10 @@
     <string name="isle_stage_band_mid">Mid</string>
     <string name="isle_stage_band_high">High</string>
     <string name="isle_stage_hint">Each linked band flashes its own color when that frequency hits.</string>
+    <string name="isle_sonic_tuning_summary">%1$d bands linked</string>
+    <string name="isle_sonic_hint">Every peak of a linked band sends one wave up and one wave down, in that band\'s color.</string>
+    <string name="isle_palette_solid">Solid</string>
+    <string name="isle_solid_color">Solid color</string>
     <string name="isle_triband_tuning_summary">3-band colors</string>
     <string name="isle_triband_templates">3-color palettes</string>
     <string name="isle_rhythm_mode">Rhythm mode</string>

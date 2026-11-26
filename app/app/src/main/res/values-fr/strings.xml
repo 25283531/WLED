@@ -257,6 +257,10 @@
     <string name="isle_stage_band_mid">Médiums</string>
     <string name="isle_stage_band_high">Aigus</string>
     <string name="isle_stage_hint">Chaque bande liée flashe sa propre couleur lorsque sa fréquence est présente.</string>
+    <string name="isle_sonic_tuning_summary">%1$d bandes liées</string>
+    <string name="isle_sonic_hint">Chaque pic d\'une bande liée envoie une onde vers le haut et une vers le bas, dans sa couleur.</string>
+    <string name="isle_palette_solid">Uni</string>
+    <string name="isle_solid_color">Couleur unie</string>
     <string name="isle_triband_tuning_summary">Couleurs 3 bandes</string>
     <string name="isle_triband_templates">Palettes 3 couleurs</string>
     <string name="isle_rhythm_mode">Mode rythmique</string>

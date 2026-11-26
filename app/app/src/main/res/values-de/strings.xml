@@ -257,6 +257,10 @@
     <string name="isle_stage_band_mid">Mitten</string>
     <string name="isle_stage_band_high">Höhen</string>
     <string name="isle_stage_hint">Jedes verknüpfte Band blitzt bei passender Frequenz in seiner eigenen Farbe.</string>
+    <string name="isle_sonic_tuning_summary">%1$d Bänder verknüpft</string>
+    <string name="isle_sonic_hint">Jede Pegelspitze eines Bands sendet je eine Welle nach oben und unten in der Bandfarbe.</string>
+    <string name="isle_palette_solid">Einfarbig</string>
+    <string name="isle_solid_color">Farbe</string>
     <string name="isle_triband_tuning_summary">3-Band-Farben</string>
     <string name="isle_triband_templates">3-Farben-Paletten</string>
     <string name="isle_rhythm_mode">Rhythmusmodus</string>

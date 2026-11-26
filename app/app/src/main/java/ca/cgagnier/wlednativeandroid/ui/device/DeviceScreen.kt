@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -62,6 +63,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
+import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
@@ -113,12 +115,19 @@ private val FREQUENCY_BAND_LABELS = intArrayOf(
     R.string.isle_freq_band_high,
 )
 
-/** 舞台灯的 3 个频段显示名，顺序与固件一致（低 -> 中 -> 高）。 */
+/** 舞台灯与声波脉冲共用的 3 个频段显示名，顺序与固件一致（低 -> 中 -> 高）。 */
 private val STAGE_BAND_LABELS = intArrayOf(
     R.string.isle_stage_band_low,
     R.string.isle_stage_band_mid,
     R.string.isle_stage_band_high,
 )
+
+/**
+ * 固件调色板 2「* Color 1」：整条灯带只取 segment 的第一个颜色。
+ * App 把它包装成「单色」模板放进调色板列表，选中后即可在上方色块里换色，
+ * 对任何依赖调色板的灯效都生效。
+ */
+private const val SOLID_PALETTE_ID = 2
 
 /** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
 private fun packedToColor(packed: Int): Color = Color(
@@ -126,6 +135,9 @@ private fun packedToColor(packed: Int): Color = Color(
     green = (packed shr 8) and 0xFF,
     blue = packed and 0xFF,
 )
+
+/** Compose 颜色压回 `0xRRGGBB`，与 `col[]` 协议字段一致。 */
+private fun packedRgb(color: Color): Int = color.toArgb() and 0xFFFFFF
 
 /**
  * 首页（设备）：高频日常主控台。
@@ -158,6 +170,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     var frequencyColorBand by remember { mutableStateOf<Int?>(null) }
     var stageColorBand by remember { mutableStateOf<Int?>(null) }
     var triBreathColorBand by remember { mutableStateOf<Int?>(null) }
+    var sonicColorBand by remember { mutableStateOf<Int?>(null) }
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
@@ -179,6 +192,11 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val triBreathId = remember { TriBreath.effectId }
     val triBreathActive = currentEffect != null && currentEffect == triBreathId
     val triBreathColors = remember(segment) { TriBreath.currentColors(segment) }
+    // 声波脉冲：关联频段与配色由 App 参数面板管理，速度只影响声波推进速度（保留滑块）
+    val sonicPulseId = remember { SonicPulse.effectId }
+    val sonicPulseActive = currentEffect != null && currentEffect == sonicPulseId
+    val sonicMask = remember(segment) { SonicPulse.currentMask(segment) }
+    val sonicColors = remember(segment) { SonicPulse.currentColors(segment) }
 
     val nightlight = state?.nightlight
     val nightlightActive = nightlight?.isOn == true
@@ -253,11 +271,15 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     frequencyMode = frequencyPixelsActive,
                     stageMode = stageLightActive,
                     triBreathMode = triBreathActive,
-                    slidersHidden = linearSpectrumActive || stageLightActive || triBreathActive,
+                    sonicMode = sonicPulseActive,
+                    slidersHidden = linearSpectrumActive || stageLightActive ||
+                        triBreathActive || sonicPulseActive,
                     frequencyColors = frequencyColors,
                     stageMask = stageMask,
                     stageColors = stageColors,
                     triBreathColors = triBreathColors,
+                    sonicMask = sonicMask,
+                    sonicColors = sonicColors,
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
                         device?.let { viewModel.setSpeed(it, channel) }
@@ -283,6 +305,10 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                         device?.let { viewModel.applyTriBreathPalette(it, palette) }
                     },
                     onEditTriBreathColor = { band -> triBreathColorBand = band },
+                    onSonicBand = { band ->
+                        device?.let { viewModel.setSonicBands(it, SonicPulse.toggleBand(sonicMask, band)) }
+                    },
+                    onEditSonicColor = { band -> sonicColorBand = band },
                 )
             }
 
@@ -466,6 +492,20 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
             },
         )
     }
+
+    sonicColorBand?.let { band ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(STAGE_BAND_LABELS[band]),
+            ),
+            initial = sonicColors.getOrElse(band) { SonicPulse.DEFAULT_COLORS[band] },
+            onDismiss = { sonicColorBand = null },
+            onPick = { packed ->
+                device?.let { viewModel.setSonicBandColor(it, band, packed) }
+            },
+        )
+    }
 }
 
 private fun Device.displayName(): String = customName.ifBlank { originalName.ifBlank { address } }
@@ -632,11 +672,14 @@ private fun EffectTuning(
     frequencyMode: Boolean,
     stageMode: Boolean,
     triBreathMode: Boolean,
+    sonicMode: Boolean,
     slidersHidden: Boolean,
     frequencyColors: List<Int>,
     stageMask: Int,
     stageColors: List<Int>,
     triBreathColors: List<Int>,
+    sonicMask: Int,
+    sonicColors: List<Int>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
     onIntensity: (Int) -> Unit,
@@ -648,6 +691,8 @@ private fun EffectTuning(
     onEditStageColor: (Int) -> Unit,
     onTriBreathPalette: (TriColorPalette) -> Unit,
     onEditTriBreathColor: (Int) -> Unit,
+    onSonicBand: (Int) -> Unit,
+    onEditSonicColor: (Int) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
@@ -672,6 +717,7 @@ private fun EffectTuning(
                     expanded -> stringResource(R.string.isle_effect_tuning_collapse)
                     frequencyMode -> stringResource(R.string.isle_freq_tuning_summary)
                     triBreathMode -> stringResource(R.string.isle_triband_tuning_summary)
+                    sonicMode -> stringResource(R.string.isle_sonic_tuning_summary, sonicMask.countOneBits())
                     stageMode -> stringResource(R.string.isle_stage_tuning_summary, stageMask.countOneBits())
                     slidersHidden -> stringResource(R.string.isle_color_tuning_summary)
                     else -> stringResource(
@@ -701,11 +747,22 @@ private fun EffectTuning(
                             onPalette = onTriBreathPalette,
                         )
                     } else if (stageMode) {
-                        StageLightEditor(
+                        BandColorEditor(
                             mask = stageMask,
                             colors = stageColors,
+                            defaultColors = List(StageLight.BAND_COUNT) { StageLight.DEFAULT_COLOR },
+                            hintRes = R.string.isle_stage_hint,
                             onToggleBand = onStageBand,
                             onEditColor = onEditStageColor,
+                        )
+                    } else if (sonicMode) {
+                        BandColorEditor(
+                            mask = sonicMask,
+                            colors = sonicColors,
+                            defaultColors = SonicPulse.DEFAULT_COLORS,
+                            hintRes = R.string.isle_sonic_hint,
+                            onToggleBand = onSonicBand,
+                            onEditColor = onEditSonicColor,
                         )
                     } else {
                         if (!slidersHidden) {
@@ -728,7 +785,13 @@ private fun EffectTuning(
                         }
 
                         Text(
-                            text = stringResource(R.string.isle_effect_color),
+                            text = stringResource(
+                                if (palette == SOLID_PALETTE_ID) {
+                                    R.string.isle_solid_color
+                                } else {
+                                    R.string.isle_effect_color
+                                },
+                            ),
                             color = IsleColors.TextSecondary,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
@@ -760,6 +823,7 @@ private fun EffectTuning(
 
                         PalettePicker(
                             selected = palette,
+                            primaryPacked = colors.firstOrNull()?.let { packedRgb(it) } ?: 0xFFFFFF,
                             onSelect = onPalette,
                             modifier = Modifier.padding(top = 14.dp),
                         )
@@ -781,11 +845,23 @@ private fun EffectTuning(
 @Composable
 private fun PalettePicker(
     selected: Int,
+    primaryPacked: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palettes = remember { PaletteCatalog.all }
-    val current = palettes.firstOrNull { it.id == selected }
+    val solidName = stringResource(R.string.isle_palette_solid)
+    // 单色模板：取固件的「* Color 1」，色块直接用当前主色渲染，选中后在上方换色
+    val solid = remember(primaryPacked, solidName) {
+        PaletteInfo(
+            id = SOLID_PALETTE_ID,
+            name = solidName,
+            isStatic = true,
+            colors = listOf(primaryPacked, primaryPacked),
+        )
+    }
+    val current = if (selected == SOLID_PALETTE_ID) solid else palettes.firstOrNull { it.id == selected }
+    val visiblePalettes = remember(palettes) { palettes.filterNot { it.id == SOLID_PALETTE_ID } }
     Column(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -812,7 +888,12 @@ private fun PalettePicker(
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            palettes.forEach { palette ->
+            PaletteSwatch(
+                palette = solid,
+                selected = selected == SOLID_PALETTE_ID,
+                onClick = { onSelect(SOLID_PALETTE_ID) },
+            )
+            visiblePalettes.forEach { palette ->
                 PaletteSwatch(
                     palette = palette,
                     selected = palette.id == selected,
@@ -1052,15 +1133,17 @@ private fun TriColorPaletteSwatch(
 }
 
 /**
- * 舞台灯参数：选择关联的频段（至少一个），再为每个关联频段单独取色。
+ * 多频段参数面板：选择关联的频段（至少一个），再为每个关联频段单独取色。
  *
- * 频段顺序与固件一致（低 / 中 / 高），颜色分别写进 `col[0..2]`；
- * 未设置时按白色显示，固件侧同样回落为白色。
+ * 舞台灯与声波脉冲共用这套交互；频段顺序与固件一致（低 / 中 / 高），
+ * 颜色分别写进 `col[0..2]`，未设置时按 [defaultColors] 展示。
  */
 @Composable
-private fun StageLightEditor(
+private fun BandColorEditor(
     mask: Int,
     colors: List<Int>,
+    defaultColors: List<Int>,
+    hintRes: Int,
     onToggleBand: (Int) -> Unit,
     onEditColor: (Int) -> Unit,
 ) {
@@ -1085,7 +1168,7 @@ private fun StageLightEditor(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
-            val selected = StageLight.isLinked(mask, band)
+            val selected = (mask and (1 shl band)) != 0
             val shape = RoundedCornerShape(9.dp)
             Box(
                 modifier = Modifier
@@ -1115,8 +1198,8 @@ private fun StageLightEditor(
         modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
     )
     STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
-        if (!StageLight.isLinked(mask, band)) return@forEachIndexed
-        val packed = colors.getOrElse(band) { StageLight.DEFAULT_COLOR }
+        if ((mask and (1 shl band)) == 0) return@forEachIndexed
+        val packed = colors.getOrElse(band) { defaultColors.getOrElse(band) { 0xFFFFFF } }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -1148,7 +1231,7 @@ private fun StageLightEditor(
     }
 
     Text(
-        text = stringResource(R.string.isle_stage_hint),
+        text = stringResource(hintRes),
         color = IsleColors.TextMuted,
         fontSize = 11.sp,
         modifier = Modifier.padding(top = 10.dp),

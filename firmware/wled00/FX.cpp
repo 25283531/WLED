@@ -6032,48 +6032,111 @@ void mode_audiospiral(void) {
   }
 }
 static const char _data_FX_MODE_AUDIOSPIRAL[] PROGMEM = "Audio Spiral@速度,强度;;!;;";
+// 声波脉冲：每检测到一个频段波峰，就从灯柱中心向上下两侧各发出一条声波。
+// custom1 bit0..2 选择关联频段（低/中/高），col[0..2] 为各频段颜色，默认蓝 + 青、只关联低频。
+// 波峰判定用各频段自身的自适应参考做相对归一化，安静段的重拍同样会触发。
 void mode_sonicpulse(void) {
 
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct Pulse { uint8_t h; int8_t dir; uint8_t life; };
-  struct SPData { Pulse p[6]; uint8_t bassS; uint32_t lastPeak; uint8_t lastPeak8; };
-  if (!SEGENV.allocateData(sizeof(SPData))) FX_FALLBACK_STATIC;
-  SPData *d = (SPData*)SEGENV.data;
-  um_data_t *um_data = getAudioData();
-  SEGMENT.fill(BLACK);
-  uint8_t bassS = d->bassS;
-  if (um_data){
-    uint8_t *fft=(uint8_t*)um_data->u_data[2];
-    uint8_t peak=*(uint8_t*)um_data->u_data[3];
-    if (fft){ uint8_t b=fft[0]; for(int i=1;i<3;i++) if(fft[i]>b) b=fft[i]; bassS=b; }
-    d->bassS = bassS;                 // 统一层已平滑，效果内不再重复
-    bool hit = (peak != 0);           // 节拍由统一层检测
-    if (hit){
-      for (int i=0;i<6;i+=2){
-        if (d->p[i].life==0){ d->p[i].h=128; d->p[i].dir=+1; d->p[i].life=255; d->p[i+1].h=128; d->p[i+1].dir=-1; d->p[i+1].life=255; break; }
-      }
+  struct Wave { uint8_t pos; int8_t dir; uint8_t life; uint8_t band; };
+  struct SonicData {
+    Wave wave[8];        // 同时最多 4 个波峰 x 上下两侧
+    uint8_t ref[3];      // 每频段自适应峰值参考
+    uint8_t prev[3];     // 上一帧原始能量，用于上升沿检测
+    uint8_t energy[3];   // 归一化能量，驱动中心余晖
+    uint32_t coolMs[3];  // 每频段触发冷却，避免一次鼓点连发多条
+  };
+  if (!SEGENV.allocateData(sizeof(SonicData))) FX_FALLBACK_STATIC;
+  SonicData *d = (SonicData*)SEGENV.data;
+  if (SEGENV.call == 0) {
+    for (uint8_t i = 0; i < 8; i++) d->wave[i].life = 0;
+    for (uint8_t b = 0; b < 3; b++) {
+      d->ref[b] = 96; d->prev[b] = 0; d->energy[b] = 0; d->coolMs[b] = 0;
     }
   }
-  // 中心常驻微光
+
+  // 至少关联一个频段，掩码为 0 时回落到默认的低频
+  const uint8_t mask = (SEGMENT.custom1 & 0x07) ? (SEGMENT.custom1 & 0x07) : 0x01;
+  static const uint32_t kDefaultCol[3] = {0x2060FF, 0x00E5FF, 0x66FFFF};   // 蓝 / 青 / 青白
+  auto bandColor = [](uint8_t b) -> uint32_t {
+    uint32_t c = SEGCOLOR(b) & 0xFFFFFF;
+    return (c == 0 || c == 0xFFFFFF) ? kDefaultCol[b] : c;
+  };
+
+  SEGMENT.fill(BLACK);
+
+  // 频段划分与其它音律灯效一致：低频 bin 0..2、中频 3..7、高频 8..15，各取最大值。
+  uint8_t raw[3] = {0, 0, 0};
+  bool haveAudio = false;
+  if (um_data_t *um_data = getAudioData()) {
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    if (fft) {
+      raw[0] = fft[0]; for (uint8_t i = 1; i < 3; i++)  if (fft[i] > raw[0]) raw[0] = fft[i];
+      raw[1] = fft[3]; for (uint8_t i = 4; i < 8; i++)  if (fft[i] > raw[1]) raw[1] = fft[i];
+      raw[2] = fft[8]; for (uint8_t i = 9; i < 16; i++) if (fft[i] > raw[2]) raw[2] = fft[i];
+      haveAudio = true;
+    }
+    // AGC 前原始响度：静音时不要把噪声放大成假波峰
+    if (um_data->u_size > 8 && um_data->u_data[8] && *(uint8_t*)um_data->u_data[8] < 3) haveAudio = false;
+  }
+
+  const uint32_t now = strip.now;
+  for (uint8_t b = 0; b < 3; b++) {
+    // 自适应参考：上行立即跟随、下行缓慢回落，归一化能量与手机音量、链路 AGC 无关
+    if (raw[b] > d->ref[b]) d->ref[b] = raw[b];
+    else if (d->ref[b] > 40) d->ref[b] = (uint8_t)(d->ref[b] - ((d->ref[b] >> 6) + 1));
+    if (d->ref[b] < 96) d->ref[b] = 96;
+    uint16_t n = ((uint16_t)raw[b] * 255) / d->ref[b];
+    uint8_t norm = n > 255 ? 255 : (uint8_t)n;
+    d->energy[b] = norm;
+
+    bool peakHit = haveAudio && (mask & (1 << b))
+                && raw[b] > d->prev[b] + 6 && norm > 110
+                && (uint32_t)(now - d->coolMs[b]) > 120;
+    if (peakHit) {
+      d->coolMs[b] = now;
+      // 一次波峰向上下两侧各发一条，颜色取触发频段的颜色
+      uint8_t spawned = 0;
+      for (uint8_t i = 0; i < 8 && spawned < 2; i++) {
+        if (d->wave[i].life) continue;
+        d->wave[i].pos  = 128;
+        d->wave[i].dir  = spawned ? -1 : +1;
+        d->wave[i].life = 255;
+        d->wave[i].band = b;
+        spawned++;
+      }
+    }
+    d->prev[b] = raw[b];
+  }
+
+  // 中心余晖：标出即将发波的起点，亮度跟随已关联频段里最强的那个
+  uint8_t maxE = 0, dom = 0;
+  for (uint8_t b = 0; b < 3; b++) {
+    if ((mask & (1 << b)) && d->energy[b] > maxE) { maxE = d->energy[b]; dom = b; }
+  }
   uint16_t cy = lumiRow(128, rows);
-  CRGB core(0x6090FF); core.nscale8((uint8_t)(30 + (d->bassS>>3)));
-  for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,cy,core);
-  // 双环推进
-  uint8_t speed = 5 + (SEGMENT.speed>>6);
-  for (int i=0;i<6;i++){
-    if (d->p[i].life==0) continue;
-    d->p[i].h = (uint8_t)((int)d->p[i].h + d->p[i].dir*speed);
-    d->p[i].life = scale8(d->p[i].life, 222);
-    if (d->p[i].life < 14 || d->p[i].h < 6 || d->p[i].h > 249){ d->p[i].life=0; continue; }
-    uint16_t yy = lumiRow(d->p[i].h, rows);
-    uint16_t br16 = (uint16_t)d->p[i].life + (d->bassS>>2); uint8_t br = br16 > 255 ? 255 : (uint8_t)br16;
-    CRGB c(0x80C0FF); c.nscale8(br);
-    for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,yy,c);
+  CRGB core(bandColor(dom));
+  core.nscale8((uint8_t)(8 + (maxE >> 3)));
+  for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, cy, core);
+
+  // 双环推进：越接近灯柱两端越暗，形成向外扩散的拖尾
+  uint8_t step = 3 + (SEGMENT.speed >> 5);   // 3..10，约 12~40 帧走完半根灯柱
+  for (uint8_t i = 0; i < 8; i++) {
+    Wave &w = d->wave[i];
+    if (!w.life) continue;
+    int16_t np = (int16_t)w.pos + w.dir * (int16_t)step;
+    w.life = scale8(w.life, 232);
+    if (np < 4 || np > 251 || w.life < 16) { w.life = 0; continue; }
+    w.pos = (uint8_t)np;
+    uint16_t y = lumiRow(w.pos, rows);
+    CRGB fc(bandColor(w.band));
+    fc.nscale8(w.life);
+    for (uint16_t x = 0; x < cols; x++) SEGMENT.addPixelColorXY(x, y, fc);
   }
 }
-static const char _data_FX_MODE_SONICPULSE[] PROGMEM = "Sonic Pulse@速度,强度;;!;;";
+static const char _data_FX_MODE_SONICPULSE[] PROGMEM = "Sonic Pulse@,,,;;!;2f;sx=32,c1=1";
 static CRGB sampleLavaColor(float energy) {
   struct LS { float p; uint32_t c; };
   static const LS LAVA[5] = {

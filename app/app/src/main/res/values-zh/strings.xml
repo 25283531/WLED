@@ -255,6 +255,10 @@
     <string name="isle_stage_band_mid">中频</string>
     <string name="isle_stage_band_high">高频</string>
     <string name="isle_stage_hint">每个关联频段在对应声音出现时闪自己的颜色，可同时关联多个频段。</string>
+    <string name="isle_sonic_tuning_summary">关联 %1$d 个频段</string>
+    <string name="isle_sonic_hint">关联频段每出现一次波峰，就从灯柱中心向上下两侧各发一条该频段颜色的声波。</string>
+    <string name="isle_palette_solid">单色</string>
+    <string name="isle_solid_color">单色颜色</string>
     <string name="isle_triband_tuning_summary">3 段配色</string>
     <string name="isle_triband_templates">3 色配色</string>
     <string name="isle_rhythm_mode">律动模式</string>

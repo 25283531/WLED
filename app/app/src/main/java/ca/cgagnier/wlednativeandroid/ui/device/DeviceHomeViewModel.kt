@@ -15,6 +15,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
 import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
+import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
@@ -272,6 +273,42 @@ class DeviceHomeViewModel(
      */
     fun setStageBandColor(device: DeviceWithState, band: Int, packedRgb: Int) {
         if (band !in 0 until StageLight.BAND_COUNT) return
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                val colors = List(COLOR_SLOT_COUNT) { slot ->
+                    if (slot == band) {
+                        packedRgb.unpackRgb()
+                    } else {
+                        segment.colors?.getOrNull(slot) ?: listOf(0, 0, 0)
+                    }
+                }
+                segment.copy(colors = colors)
+            }
+        }
+    }
+
+    /**
+     * 声波脉冲：设置关联的频段掩码（`custom1` 的 bit0..2，至少保留一个频段）。
+     *
+     * 固件只对已关联频段做波峰检测，掩码为 0 时回落为默认低频。
+     */
+    fun setSonicBands(device: DeviceWithState, mask: Int) {
+        val normalized = mask and SonicPulse.ALL_BANDS_MASK
+        if (normalized == 0) return
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) {
+                it.copy(custom1 = normalized)
+            }
+        }
+    }
+
+    /**
+     * 声波脉冲：设置第 [band] 个频段（0=低频，1=中频，2=高频）的声波颜色。
+     *
+     * 颜色写入 `col[0..2]`，与固件 `mode_sonicpulse()` 的取色顺序一致。
+     */
+    fun setSonicBandColor(device: DeviceWithState, band: Int, packedRgb: Int) {
+        if (band !in 0 until SonicPulse.BAND_COUNT) return
         broadcast(device) { mac ->
             deviceConnectionManager.sendSegmentPatch(mac) { segment ->
                 val colors = List(COLOR_SLOT_COUNT) { slot ->

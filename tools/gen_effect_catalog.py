@@ -34,25 +34,23 @@ ART_EFFECT_NAMES = {"Image", "Scrolling Text"}
 
 # 「常用」：按实际使用频率人工挑选，覆盖开关灯之外最常触碰的效果
 POPULAR_NAMES = {
-    "Blink", "Breathe", "Wipe", "Colorloop", "Rainbow", "Twinkle", "Chase",
-    "Scanner", "Fireworks", "Meteor", "Ripple", "Lighthouse", "Fire 2012",
-    "Solid Glitter", "Multi Comet", "Bouncing Balls", "Sinelon", "Plasma",
-    "PacMan", "Rotozoomer", "Scrolling Text", "Matrix", "Image",
-    "Solid Pattern", "Aurora", "Candle", "极光之舞",
-    "Lumi Dusk", "Lumi Polar", "Lumi Hearth", "Lumi Spectrum Fountain",
+    "Blink", "Breathe", "Colorloop", "Rainbow", "Chase",
+    "Fireworks", "Meteor", "Ripple",
+    "Bouncing Balls", "Plasma",
+    "PacMan", "Scrolling Text", "Matrix", "Image",
+    "极光之舞",
 }
 
 # 「音乐律动」：由音频频谱驱动的效果
 MUSIC_IDS = {
     "FX_MODE_FREQPIXELS", "FX_MODE_PS1DGEQ",
-    "FX_MODE_LUMI_FOUNTAIN",
     "FX_MODE_STAGELIGHT", "FX_MODE_TRIBREATH", "FX_MODE_AUDIOSPIRAL",
     "FX_MODE_SONICPULSE", "FX_MODE_BASSLAVA", "FX_MODE_SPECTRUMLAMP",
 }
 
 # 「动态字幕」：直接显示用户内容（文字、图片、时钟、数字雨）
 TEXT_IDS = {
-    "FX_MODE_IMAGE", "FX_MODE_2DSCROLLTEXT", "FX_MODE_2DMATRIX", "FX_MODE_2DANALOGCLOCK",
+    "FX_MODE_IMAGE", "FX_MODE_2DSCROLLTEXT", "FX_MODE_2DMATRIX",
 }
 
 # 中文显示名。没收录的灯效直接用固件英文名，不做机器翻译。
@@ -89,7 +87,6 @@ NAME_ZH = {
     'FX_MODE_LARSON_SCANNER': '巡航', 'FX_MODE_LIGHTNING': '闪电', 'FX_MODE_LUMI_AURORA': '极光之舞',
     'FX_MODE_LUMI_FOREST': '林间萤光', 'FX_MODE_LUMI_DUSK': '暮色晚霞', 'FX_MODE_LUMI_POLAR': '极地冰川',
     'FX_MODE_LUMI_HEARTH': '壁炉火焰', 'FX_MODE_LUMI_LAVA': '熔岩灯', 'FX_MODE_LUMI_CAUSTICS': '深海波光',
-    'FX_MODE_LUMI_FOUNTAIN': '环形频谱喷泉',
     'FX_MODE_MATRIPIX': '矩阵像素', 'FX_MODE_METEOR': '流星', 'FX_MODE_MIDNOISE': '中段噪声',
     'FX_MODE_MULTI_COMET': '多重彗尾', 'FX_MODE_MULTI_STROBE': '疾速频闪', 'FX_MODE_NOISE16_1': '噪声 I',
     'FX_MODE_NOISE16_4': '噪声 IV', 'FX_MODE_NOISEFIRE': '噪声之火',

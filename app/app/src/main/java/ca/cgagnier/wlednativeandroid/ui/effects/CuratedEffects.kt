@@ -28,7 +28,7 @@ data class CuratedEffect(
 /**
  * 精选灯效配方表。
  *
- * 只收录**少数几个**灯效，而不是给全部 189 个灯效都编一套参数：
+ * 只收录**少数几个**灯效，而不是给全部 117 个灯效都编一套参数：
  * 参数编多了没有依据，反倒会误导（用户点「壁炉篝火」时不该担心它跑成什么颜色）。
  * 收录标准是 —— 效果本身有代表性、参数调出来确实好看、覆盖四个 mood。
  *
@@ -58,24 +58,6 @@ object CuratedEffects {
     private val specs = listOf(
         // ── 幻彩极光 ──────────────────────────────────────────────
         Spec(
-            effectName = "Aurora",
-            paletteName = "Party",
-            speed = 110,
-            intensity = 140,
-            title = "流光溢彩",
-            tagline = "Flowing Colors",
-            gradient = listOf(0x00E5FF, 0xE040FB),
-        ),
-        Spec(
-            effectName = "Pacifica",
-            paletteName = "Ocean",
-            speed = 85,
-            intensity = 120,
-            title = "深海探秘",
-            tagline = "Deep Ocean",
-            gradient = listOf(0x006064, 0x1A237E),
-        ),
-        Spec(
             effectName = "Polar Lights",
             paletteName = "Aurora",
             speed = 95,
@@ -94,7 +76,7 @@ object CuratedEffects {
             gradient = listOf(0x311B92, 0x80DEEA),
         ),
 
-        // 光屿的招牌灯效：固件自带的「极光之舞」（当前槽位 176，按英文名反查，槽位变化自动跟随）。
+        // 光屿的招牌灯效：固件自带的「极光之舞」（按英文名反查，槽位变化自动跟随）。
         // 调色板给 Aurora 只是因为它自带完整渐变、不依赖调色板，留一个不冲突的默认值。
         Spec(
             effectName = "极光之舞",
