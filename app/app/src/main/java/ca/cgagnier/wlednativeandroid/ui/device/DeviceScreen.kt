@@ -907,8 +907,8 @@ private fun FrequencyColorSheet(
             value = hue,
             track = Brush.horizontalGradient(
                 listOf(
-                    0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
-                    0xFF0000FF, 0xFFFF00FF, 0xFFFF0000,
+                    0xFFFF0000.toInt(), 0xFFFFFF00.toInt(), 0xFF00FF00.toInt(), 0xFF00FFFF.toInt(),
+                    0xFF0000FF.toInt(), 0xFFFF00FF.toInt(), 0xFFFF0000.toInt(),
                 ).map { packedToColor(it) },
             ),
             onValueChange = { hue = it },
