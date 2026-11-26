@@ -261,6 +261,12 @@
     <string name="isle_solid_color">单色颜色</string>
     <string name="isle_triband_tuning_summary">3 段配色</string>
     <string name="isle_triband_templates">3 色配色</string>
+    <string name="isle_spectrum_tuning_summary">3 段配色</string>
+    <string name="isle_spiral_tuning_summary">双链配色 · 转速</string>
+    <string name="isle_spiral_colors">主链配色</string>
+    <string name="isle_spiral_chain_a">主链 A</string>
+    <string name="isle_spiral_chain_b">主链 B</string>
+    <string name="isle_basslava_hint">速度控制熔岩漂移快慢，强度控制低频鼓点的膨胀与提亮幅度。</string>
     <string name="isle_rhythm_mode">律动模式</string>
     <string name="isle_quick_effects">快捷灯效</string>
     <string name="isle_mood_aurora">幻彩极光</string>

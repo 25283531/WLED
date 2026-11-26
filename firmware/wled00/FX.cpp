@@ -5962,9 +5962,13 @@ void mode_audiospiral(void) {
   d->lastMs = now;
   if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
 
-  // 固定转速：与音频无关，约 6.3 秒转一圈
-  d->scroll += 0.16f * dt;
+  // 转速由速度滑杆决定（与音频无关）：默认 128 约 5 秒一圈
+  const float rotSpeed = 0.06f + (float)SEGMENT.speed / 255.0f * 0.26f;
+  d->scroll += rotSpeed * dt;
   if (d->scroll >= 1.0f) d->scroll -= 1.0f;
+
+  // 填充带亮度增益由强度滑杆决定：默认 128 约等于原观感
+  const float fillGain = 0.40f + (float)SEGMENT.intensity / 255.0f * 1.20f;
 
   // 节拍闪光
   if (peakHit) d->flash = 1.0f; else d->flash *= expf(-7.0f * dt);
@@ -6001,7 +6005,7 @@ void mode_audiospiral(void) {
         int bi = (int)(t * 6.0f); if (bi > 5) bi = 5; if (bi < 0) bi = 0;
         float e = (float)fftv[bi] / 255.0f;
         float osc = 0.5f + 0.5f * sin_approx(d->blink[bi]);
-        float v = (0.10f + 0.90f * e) * (0.40f + 0.60f * osc);
+        float v = (0.10f + 0.90f * e) * (0.40f + 0.60f * osc) * fillGain;
         v *= 1.0f + 0.35f * d->flash; if (v > 1.0f) v = 1.0f;
         int hue = 132 + bi * 18 + (int)(e * 24.0f) + (int)(d->flash * 18.0f);
         if (hue > 255) hue -= 256; if (hue < 0) hue += 256;
@@ -6196,6 +6200,9 @@ void mode_basslava(void) {
   d->lastMs = now;
   if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;   // 防止掉帧导致物理步长爆炸
   float timeSec = (float)now * 0.001f;
+  // 滑杆映射：速度控制熔岩球漂移快慢（默认 1.0x），强度控制低频泵浦的膨胀与提亮幅度
+  const float flowSpeed = 0.40f + (float)SEGMENT.speed / 255.0f * 1.20f;
+  const float pumpGain  = 0.55f + (float)SEGMENT.intensity / 255.0f * 0.90f;
   // A. 重低音包络直接取统一层输出 + 二阶弹簧阻尼(瞬间膨胀 + 弹性回弹)
   d->smoothBass = bassInput;      // 统一层已平滑，效果内不再重复
   float targetPump = (d->smoothBass > 0.15f) ? ((d->smoothBass - 0.15f) / 0.85f) : 0.0f;  // 0.15死区抑制底噪微颤
@@ -6208,21 +6215,21 @@ void mode_basslava(void) {
   // B. 熔岩球缓慢漂浮（音乐越强内部对流稍快）
   float flowBoost = 1.0f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.8f;
   for (uint8_t i=0;i<4;i++){
-    d->b[i].x += d->b[i].vx * dt * flowBoost;
-    d->b[i].y += d->b[i].vy * dt * flowBoost;
+    d->b[i].x += d->b[i].vx * dt * flowBoost * flowSpeed;
+    d->b[i].y += d->b[i].vy * dt * flowBoost * flowSpeed;
     if (d->b[i].x >= 1.0f) d->b[i].x -= 1.0f;             // 圆周无缝环绕
     if (d->b[i].x < 0.0f)  d->b[i].x += 1.0f;
     if (d->b[i].y > 0.88f){ d->b[i].y = 0.88f; d->b[i].vy = -fabsf(d->b[i].vy); }  // 上下端盖留12%边距平滑折返
     else if (d->b[i].y < 0.12f){ d->b[i].y = 0.12f; d->b[i].vy = fabsf(d->b[i].vy); }
   }
   // C. 预计算动态半径（静态微呼吸 + 低频泵浦膨胀；每帧仅4次sin，避免逐像素开销）
-  float audioScale = 1.0f + d->pumpPos * 0.55f;
+  float audioScale = 1.0f + d->pumpPos * 0.55f * pumpGain;
   float rad[4];
   for (uint8_t i=0;i<4;i++){
     float idleBreath = 1.0f + 0.06f * sin_approx(timeSec * 1.5f + d->b[i].phase);
     rad[i] = d->b[i].baseRadius * idleBreath * audioScale;
   }
-  float brightnessBoost = 0.72f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.35f;
+  float brightnessBoost = 0.72f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.35f * pumpGain;
   // D. Metaball 等势面渲染（本项目矩阵 y=0 在物理顶部，写入时翻转）
   for (uint16_t y=0;y<rows;y++){
     float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;  // 0=底部, 1=顶部
@@ -6266,22 +6273,30 @@ void mode_spectrumlamp(void) {
   }
   // 三频段能量直接取统一层输出（已完成 AGC 与平滑）
   d->lowS = low; d->midS = mid; d->highS = high;
+  // 三频配色：col[0..2] 依次为低/中/高；未设置（黑或纯白）时回落默认色
+  static const uint32_t kDefaultCol[3] = {0xFF4020, 0x20FF80, 0x4060FF};
+  uint32_t bandCol[3];
+  for (uint8_t b=0;b<3;b++){
+    uint32_t c = SEGCOLOR(b) & 0xFFFFFF;
+    bandCol[b] = (c && c != 0xFFFFFF) ? c : kDefaultCol[b];
+  }
+  // 列宽按百分比镜像分配，与灯珠数量无关：
+  // 外缘低频各占 12.5%（合计 25%）、中频各占 25%（合计 50%）、中心高频占 25%。
+  const float center = (float)(cols - 1) * 0.5f;
+  const float span = (float)(cols - 1);
   for (uint16_t x=0;x<cols;x++){
-    // 镜像：到中心距离 -> 频段 低-中-高-中-低
-    int16_t cx = (int16_t)(cols-1)/2;
-    int16_t dist = (int16_t)x - cx; if (dist<0) dist=-dist;
-    int16_t maxD = cx; if (maxD<1) maxD=1;
+    float u = fabsf((float)x - center) / span;   // 0=灯柱中心, 0.5=左右边缘
     uint8_t band; uint8_t level;
-    if (dist <= maxD/3)        { band=2; level=d->highS; }   // 中心 ~33%
-    else if (dist <= (maxD*3)/4){ band=1; level=d->midS; }    // 中部 ~42%
-    else                        { band=0; level=d->lowS; }    // 外缘 ~25%
+    if (u <= 0.125f)      { band=2; level=d->highS; }
+    else if (u <= 0.375f) { band=1; level=d->midS; }
+    else                  { band=0; level=d->lowS; }
     uint8_t fillH = level; // 0..255 posY
-    uint32_t col = (band==0)?0xFF4020:(band==1?0x20FF80:0x4060FF);
+    CRGB bandColor(bandCol[band]);
     for (uint16_t y=0;y<rows;y++){
       uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1));
       if (posY <= fillH){
         uint8_t t = (fillH>0)?(uint8_t)(((uint32_t)posY*255)/fillH):0;
-        CRGB c(col); c.nscale8((uint8_t)(120 + (255-t)/2));
+        CRGB c = bandColor; c.nscale8((uint8_t)(120 + (255-t)/2));
         SEGMENT.setPixelColorXY(x,y,c);
       }
     }

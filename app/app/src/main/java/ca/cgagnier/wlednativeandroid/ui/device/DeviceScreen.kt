@@ -55,6 +55,8 @@ import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
+import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
+import ca.cgagnier.wlednativeandroid.ui.effects.BassLava
 import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
@@ -64,6 +66,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
+import ca.cgagnier.wlednativeandroid.ui.effects.SpectrumLamp
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
@@ -171,6 +174,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     var stageColorBand by remember { mutableStateOf<Int?>(null) }
     var triBreathColorBand by remember { mutableStateOf<Int?>(null) }
     var sonicColorBand by remember { mutableStateOf<Int?>(null) }
+    var audioSpiralColorChain by remember { mutableStateOf<Int?>(null) }
+    var spectrumColorBand by remember { mutableStateOf<Int?>(null) }
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
@@ -197,6 +202,22 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val sonicPulseActive = currentEffect != null && currentEffect == sonicPulseId
     val sonicMask = remember(segment) { SonicPulse.currentMask(segment) }
     val sonicColors = remember(segment) { SonicPulse.currentColors(segment) }
+    // 音频螺旋：两条主链颜色由 App 参数面板管理；速度控制转速、强度控制填充带亮度
+    val audioSpiralId = remember { AudioSpiral.effectId }
+    val audioSpiralActive = currentEffect != null && currentEffect == audioSpiralId
+    val audioSpiralColors = remember(segment) { AudioSpiral.currentColors(segment) }
+    // 低频熔岩：内部使用固定熔岩色带，只暴露速度（漂移）与强度（泵浦增益）
+    val bassLavaId = remember { BassLava.effectId }
+    val bassLavaActive = currentEffect != null && currentEffect == bassLavaId
+    // 频谱灯：三频配色由 App 参数面板管理，列宽由固件按百分比镜像分配
+    val spectrumLampId = remember { SpectrumLamp.effectId }
+    val spectrumLampActive = currentEffect != null && currentEffect == spectrumLampId
+    val spectrumLampColors = remember(segment) { SpectrumLamp.currentColors(segment) }
+
+    // 律动模式跟随当前灯效：从灯效库或快捷卡片切到音律灯效时，胶囊同步高亮「音乐律动」
+    LaunchedEffect(currentEffect) {
+        viewModel.syncMoodWithEffect(currentEffect)
+    }
 
     val nightlight = state?.nightlight
     val nightlightActive = nightlight?.isOn == true
@@ -272,14 +293,19 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     stageMode = stageLightActive,
                     triBreathMode = triBreathActive,
                     sonicMode = sonicPulseActive,
+                    audioSpiralMode = audioSpiralActive,
+                    bassLavaMode = bassLavaActive,
+                    spectrumLampMode = spectrumLampActive,
                     slidersHidden = linearSpectrumActive || stageLightActive ||
-                        triBreathActive || sonicPulseActive,
+                        triBreathActive || sonicPulseActive || spectrumLampActive,
                     frequencyColors = frequencyColors,
                     stageMask = stageMask,
                     stageColors = stageColors,
                     triBreathColors = triBreathColors,
                     sonicMask = sonicMask,
                     sonicColors = sonicColors,
+                    audioSpiralColors = audioSpiralColors,
+                    spectrumLampColors = spectrumLampColors,
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
                         device?.let { viewModel.setSpeed(it, channel) }
@@ -309,6 +335,11 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                         device?.let { viewModel.setSonicBands(it, SonicPulse.toggleBand(sonicMask, band)) }
                     },
                     onEditSonicColor = { band -> sonicColorBand = band },
+                    onEditAudioSpiralColor = { chain -> audioSpiralColorChain = chain },
+                    onSpectrumPalette = { palette ->
+                        device?.let { viewModel.applyTriBreathPalette(it, palette) }
+                    },
+                    onEditSpectrumColor = { band -> spectrumColorBand = band },
                 )
             }
 
@@ -506,6 +537,36 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
             },
         )
     }
+
+    audioSpiralColorChain?.let { chain ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(
+                    if (chain == 0) R.string.isle_spiral_chain_a else R.string.isle_spiral_chain_b,
+                ),
+            ),
+            initial = audioSpiralColors.getOrElse(chain) { AudioSpiral.DEFAULT_COLORS[chain] },
+            onDismiss = { audioSpiralColorChain = null },
+            onPick = { packed ->
+                device?.let { viewModel.setAudioSpiralColor(it, chain, packed) }
+            },
+        )
+    }
+
+    spectrumColorBand?.let { band ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(STAGE_BAND_LABELS[band]),
+            ),
+            initial = spectrumLampColors.getOrElse(band) { SpectrumLamp.DEFAULT_COLORS[band] },
+            onDismiss = { spectrumColorBand = null },
+            onPick = { packed ->
+                device?.let { viewModel.setSpectrumLampColor(it, band, packed) }
+            },
+        )
+    }
 }
 
 private fun Device.displayName(): String = customName.ifBlank { originalName.ifBlank { address } }
@@ -673,6 +734,9 @@ private fun EffectTuning(
     stageMode: Boolean,
     triBreathMode: Boolean,
     sonicMode: Boolean,
+    audioSpiralMode: Boolean,
+    bassLavaMode: Boolean,
+    spectrumLampMode: Boolean,
     slidersHidden: Boolean,
     frequencyColors: List<Int>,
     stageMask: Int,
@@ -680,6 +744,8 @@ private fun EffectTuning(
     triBreathColors: List<Int>,
     sonicMask: Int,
     sonicColors: List<Int>,
+    audioSpiralColors: List<Int>,
+    spectrumLampColors: List<Int>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
     onIntensity: (Int) -> Unit,
@@ -693,6 +759,9 @@ private fun EffectTuning(
     onEditTriBreathColor: (Int) -> Unit,
     onSonicBand: (Int) -> Unit,
     onEditSonicColor: (Int) -> Unit,
+    onEditAudioSpiralColor: (Int) -> Unit,
+    onSpectrumPalette: (TriColorPalette) -> Unit,
+    onEditSpectrumColor: (Int) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
@@ -717,8 +786,10 @@ private fun EffectTuning(
                     expanded -> stringResource(R.string.isle_effect_tuning_collapse)
                     frequencyMode -> stringResource(R.string.isle_freq_tuning_summary)
                     triBreathMode -> stringResource(R.string.isle_triband_tuning_summary)
+                    spectrumLampMode -> stringResource(R.string.isle_spectrum_tuning_summary)
                     sonicMode -> stringResource(R.string.isle_sonic_tuning_summary, sonicMask.countOneBits())
                     stageMode -> stringResource(R.string.isle_stage_tuning_summary, stageMask.countOneBits())
+                    audioSpiralMode -> stringResource(R.string.isle_spiral_tuning_summary)
                     slidersHidden -> stringResource(R.string.isle_color_tuning_summary)
                     else -> stringResource(
                         R.string.isle_effect_tuning_summary,
@@ -741,10 +812,26 @@ private fun EffectTuning(
                             onPalette = onFrequencyPalette,
                         )
                     } else if (triBreathMode) {
-                        TriBreathColorEditor(
+                        TriBandColorEditor(
                             colors = triBreathColors,
+                            defaultColors = TriBreath.DEFAULT_COLORS,
+                            palettes = TriBreath.palettes,
+                            matched = remember(triBreathColors) {
+                                TriBreath.matchPalette(triBreathColors)
+                            },
                             onEdit = onEditTriBreathColor,
                             onPalette = onTriBreathPalette,
+                        )
+                    } else if (spectrumLampMode) {
+                        TriBandColorEditor(
+                            colors = spectrumLampColors,
+                            defaultColors = SpectrumLamp.DEFAULT_COLORS,
+                            palettes = SpectrumLamp.palettes,
+                            matched = remember(spectrumLampColors) {
+                                SpectrumLamp.matchPalette(spectrumLampColors)
+                            },
+                            onEdit = onEditSpectrumColor,
+                            onPalette = onSpectrumPalette,
                         )
                     } else if (stageMode) {
                         BandColorEditor(
@@ -763,6 +850,42 @@ private fun EffectTuning(
                             hintRes = R.string.isle_sonic_hint,
                             onToggleBand = onSonicBand,
                             onEditColor = onEditSonicColor,
+                        )
+                    } else if (audioSpiralMode) {
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_speed),
+                            value = localSpeed,
+                            onValueChange = { localSpeed = it },
+                            onCommit = { onSpeed(normalizedToChannel(localSpeed)) },
+                        )
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_intensity),
+                            value = localIntensity,
+                            onValueChange = { localIntensity = it },
+                            onCommit = { onIntensity(normalizedToChannel(localIntensity)) },
+                        )
+                        SpiralColorEditor(
+                            colors = audioSpiralColors,
+                            onEdit = onEditAudioSpiralColor,
+                        )
+                    } else if (bassLavaMode) {
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_speed),
+                            value = localSpeed,
+                            onValueChange = { localSpeed = it },
+                            onCommit = { onSpeed(normalizedToChannel(localSpeed)) },
+                        )
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_intensity),
+                            value = localIntensity,
+                            onValueChange = { localIntensity = it },
+                            onCommit = { onIntensity(normalizedToChannel(localIntensity)) },
+                        )
+                        Text(
+                            text = stringResource(R.string.isle_basslava_hint),
+                            color = IsleColors.TextMuted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 10.dp),
                         )
                     } else {
                         if (!slidersHidden) {
@@ -1011,18 +1134,20 @@ private fun FrequencyColorEditor(
 }
 
 /**
- * 三频呼吸参数：为低频 / 中频 / 高频三段各取一色，或直接套用三色模板。
+ * 三频配色面板：为低频 / 中频 / 高频三段各取一色，或直接套用三色模板。
  *
- * 频段顺序与固件一致（低 / 中 / 高），颜色分别写进 `col[0..2]`；
- * 未设置时按默认色显示，固件侧同样回落为暖橙 / 薄荷 / 亮蓝。
+ * 三频呼吸与频谱灯共用这套交互；频段顺序与固件一致（低 / 中 / 高），
+ * 颜色分别写进 `col[0..2]`，未设置时按 [defaultColors] 显示。
  */
 @Composable
-private fun TriBreathColorEditor(
+private fun TriBandColorEditor(
     colors: List<Int>,
+    defaultColors: List<Int>,
+    palettes: List<TriColorPalette>,
+    matched: TriColorPalette?,
     onEdit: (Int) -> Unit,
     onPalette: (TriColorPalette) -> Unit,
 ) {
-    val matched = remember(colors) { TriBreath.matchPalette(colors) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
@@ -1041,7 +1166,7 @@ private fun TriBreathColorEditor(
         )
     }
     STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
-        val packed = colors.getOrElse(band) { TriBreath.DEFAULT_COLORS[band] }
+        val packed = colors.getOrElse(band) { defaultColors.getOrElse(band) { 0xFFFFFF } }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -1084,11 +1209,62 @@ private fun TriBreathColorEditor(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        TriBreath.palettes.forEach { palette ->
+        palettes.forEach { palette ->
             TriColorPaletteSwatch(
                 palette = palette,
                 selected = palette == matched,
                 onClick = { onPalette(palette) },
+            )
+        }
+    }
+}
+
+/**
+ * 音频螺旋参数：两条主链各取一色。
+ *
+ * `col[0]` 为 A 链、`col[1]` 为 B 链，与固件 `mode_audiospiral()` 一致；
+ * 中间的填充带颜色由音频实时决定，不需要用户配置。
+ */
+@Composable
+private fun SpiralColorEditor(
+    colors: List<Int>,
+    onEdit: (Int) -> Unit,
+) {
+    val labels = intArrayOf(R.string.isle_spiral_chain_a, R.string.isle_spiral_chain_b)
+    Text(
+        text = stringResource(R.string.isle_spiral_colors),
+        color = IsleColors.TextSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+    )
+    labels.forEachIndexed { chain, labelRes ->
+        val packed = colors.getOrElse(chain) { AudioSpiral.DEFAULT_COLORS[chain] }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onEdit(chain) }
+                .padding(vertical = 7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(packedToColor(packed), CircleShape)
+                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+            )
+            Text(
+                text = stringResource(labelRes),
+                color = IsleColors.TextPrimary,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            )
+            Text(
+                text = String.format("#%06X", packed and 0xFFFFFF),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
             )
         }
     }

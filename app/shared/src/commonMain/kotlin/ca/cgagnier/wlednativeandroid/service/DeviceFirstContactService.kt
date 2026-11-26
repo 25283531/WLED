@@ -139,7 +139,7 @@ class DeviceFirstContactService(
         val device = Device(
             macAddress = macAddress,
             address = address,
-            originalName = info.name,
+            originalName = resolveOriginalName(info),
             repositoryId = repoId,
         )
         repository.insert(device)
@@ -151,8 +151,9 @@ class DeviceFirstContactService(
         val deviceRepositoryStr = getRepositoryFromInfo(info)
         val repoId = repositoryDao.getOrCreateRepositoryId(deviceRepositoryStr)
 
+        val displayName = resolveOriginalName(info)
         val addressChanged = existingDevice.address != effectiveAddress
-        val nameChanged = existingDevice.originalName != info.name
+        val nameChanged = existingDevice.originalName != displayName
         val repoChanged = existingDevice.repositoryId != repoId
 
         if (!addressChanged && !nameChanged && !repoChanged) {
@@ -166,7 +167,7 @@ class DeviceFirstContactService(
             repository.updateAddress(mac, effectiveAddress)
         }
         if (nameChanged) {
-            repository.updateOriginalName(mac, info.name)
+            repository.updateOriginalName(mac, displayName)
         }
         if (repoChanged) {
             repository.updateRepositoryId(mac, repoId)
@@ -174,11 +175,25 @@ class DeviceFirstContactService(
 
         val updatedDevice = existingDevice.copy(
             address = effectiveAddress,
-            originalName = info.name,
+            originalName = displayName,
             repositoryId = repoId,
         )
         onDeviceAddressUpdated(updatedDevice)
         return updatedDevice
+    }
+
+    /**
+     * 设备显示名：优先用固件里用户自定义的设备名；默认的 "WLED" 没有信息量，
+     * 此时改用型号（`product`，如 C01），添加设备后能直接看出是哪款灯。
+     */
+    private fun resolveOriginalName(info: Info): String {
+        val name = info.name.trim()
+        val product = info.product?.trim().orEmpty()
+        return when {
+            name.isEmpty() -> product
+            name.equals("WLED", ignoreCase = true) && product.isNotEmpty() -> product
+            else -> name
+        }
     }
 
     /**

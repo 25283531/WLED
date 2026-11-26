@@ -9,6 +9,7 @@ import ca.cgagnier.wlednativeandroid.model.wledapi.State
 import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
+import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
@@ -16,6 +17,7 @@ import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
+import ca.cgagnier.wlednativeandroid.ui.effects.SpectrumLamp
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
@@ -121,6 +123,17 @@ class DeviceHomeViewModel(
 
     fun selectMood(mood: EffectMood) {
         _mood.value = mood
+    }
+
+    /**
+     * 让律动模式跟随设备当前灯效。
+     *
+     * 固件没有 mood 概念，分类由 [EffectCatalog] 决定；从灯效库或快捷卡片切到
+     * 音律灯效时，设备页的律动胶囊要同步高亮「音乐律动」，而不是停在幻彩极光。
+     */
+    fun syncMoodWithEffect(effectId: Int?) {
+        val target = effectId?.let { EffectCatalog.find(it)?.mood } ?: return
+        if (_mood.value != target) _mood.value = target
     }
 
     fun setSyncEnabled(enabled: Boolean) {
@@ -309,6 +322,48 @@ class DeviceHomeViewModel(
      */
     fun setSonicBandColor(device: DeviceWithState, band: Int, packedRgb: Int) {
         if (band !in 0 until SonicPulse.BAND_COUNT) return
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                val colors = List(COLOR_SLOT_COUNT) { slot ->
+                    if (slot == band) {
+                        packedRgb.unpackRgb()
+                    } else {
+                        segment.colors?.getOrNull(slot) ?: listOf(0, 0, 0)
+                    }
+                }
+                segment.copy(colors = colors)
+            }
+        }
+    }
+
+    /**
+     * 音频螺旋：设置第 [chain] 条主链（0=A，1=B）的颜色。
+     *
+     * 颜色写入 `col[0..1]`，与固件 `mode_audiospiral()` 的取色顺序一致。
+     */
+    fun setAudioSpiralColor(device: DeviceWithState, chain: Int, packedRgb: Int) {
+        if (chain !in 0 until AudioSpiral.CHAIN_COUNT) return
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                val colors = List(COLOR_SLOT_COUNT) { slot ->
+                    if (slot == chain) {
+                        packedRgb.unpackRgb()
+                    } else {
+                        segment.colors?.getOrNull(slot) ?: listOf(0, 0, 0)
+                    }
+                }
+                segment.copy(colors = colors)
+            }
+        }
+    }
+
+    /**
+     * 频谱灯：设置第 [band] 个频段（0=低频，1=中频，2=高频）的颜色。
+     *
+     * 颜色写入 `col[0..2]`，与固件 `mode_spectrumlamp()` 的取色顺序一致。
+     */
+    fun setSpectrumLampColor(device: DeviceWithState, band: Int, packedRgb: Int) {
+        if (band !in 0 until SpectrumLamp.BAND_COUNT) return
         broadcast(device) { mac ->
             deviceConnectionManager.sendSegmentPatch(mac) { segment ->
                 val colors = List(COLOR_SLOT_COUNT) { slot ->
