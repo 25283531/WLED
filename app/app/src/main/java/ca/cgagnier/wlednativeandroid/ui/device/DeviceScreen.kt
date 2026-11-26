@@ -1800,7 +1800,9 @@ private fun QuickCard(
                 width = if (isActive) 1.6.dp else 1.dp,
                 brush = if (isActive) {
                     // 精选色板是 6 位 RGB，补上不透明通道，否则 Color(int) 会变成透明色
-                    Brush.linearGradient(curated?.gradient?.map { Color(it or 0xFF000000) } ?: IsleColors.Accent)
+                    Brush.linearGradient(
+                        curated?.gradient?.map { Color(it or 0xFF000000.toInt()) } ?: IsleColors.Accent,
+                    )
                 } else {
                     Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke))
                 },

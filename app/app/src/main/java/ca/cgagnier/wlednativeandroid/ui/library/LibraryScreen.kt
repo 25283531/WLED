@@ -250,7 +250,7 @@ private fun LibraryCard(
                         Brush.linearGradient(
                             // 精选色板写的是 6 位 RGB，直接 Color(int) 会被当成 alpha=0 透明色，
                             // 这里补上不透明通道，底衬才真正带上该灯效的色调。
-                            curated.gradient.map { Color(it or 0xFF000000).copy(alpha = 0.38f) },
+                            curated.gradient.map { Color(it or 0xFF000000.toInt()).copy(alpha = 0.38f) },
                         ),
                     ),
             )
