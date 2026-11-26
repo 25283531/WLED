@@ -21,6 +21,13 @@ data class AudioFrame(
     val magnitude: Float,
     /** 能量最大频点，Hz（`FFT_MajorPeak`）。 */
     val majorPeak: Float,
+    /**
+     * AGC 之前的原始响度 0-255（-60~0 dBFS 线性映射，写入包内 offset 6 的 reserved1[0]）。
+     *
+     * `sampleRaw`/`geq` 都经过 AGC，音量信息已被抹平；只有这个字段能表达"声量等级"，
+     * 供固件的音量条型灯效使用。
+     */
+    val rawLevel: Int = 0,
 )
 
 /**
@@ -61,6 +68,7 @@ class FftAnalyzer(
     private val fftAvg = FloatArray(BAND_COUNT)
 
     private var smoothedLevel = 0f
+    private var smoothedRawLevel = 0f
     private var lastPeakMs = -PEAK_MIN_INTERVAL_MS
 
     // region AGC 状态
@@ -86,6 +94,13 @@ class FftAnalyzer(
         // 电平（RMS，未加 AGC）—— 噪声门用
         val rawRms = computeRms(window)
         val rawPeak = computePeak(window)
+
+        // 原始响度（AGC 之前，dBFS 线性映射）—— 保留真实音量等级，写入 reserved1[0]
+        val rawDbfs = 20f * log10(rawRms.coerceAtLeast(SILENCE_FLOOR))
+        val rawLevel = ((rawDbfs - LEVEL_FLOOR_DB) / -LEVEL_FLOOR_DB * MAX_BYTE)
+            .coerceIn(0f, MAX_BYTE.toFloat())
+        smoothedRawLevel += (rawLevel - smoothedRawLevel) *
+            if (rawLevel > smoothedRawLevel) RAW_ATTACK else RAW_RELEASE
 
         for (index in 0 until windowSize) {
             real[index] = window[index] * hann[index]
@@ -186,6 +201,7 @@ class FftAnalyzer(
             geq = geq.copyOf(),
             magnitude = (loudestMag * gain).coerceAtLeast(0f) * MAGNITUDE_SCALE,
             majorPeak = majorPeak,
+            rawLevel = smoothedRawLevel.toInt(),
         )
     }
 
@@ -277,6 +293,10 @@ class FftAnalyzer(
         const val LEVEL_FLOOR_DB = -60f
         const val ATTACK = 0.6f
         const val RELEASE = 0.22f
+
+        // 原始响度平滑（不参与 AGC，仅抑制帧间抖动）
+        const val RAW_ATTACK = 0.55f
+        const val RAW_RELEASE = 0.15f
 
         // 瞬态检测
         const val PEAK_MIN_LEVEL = 40f

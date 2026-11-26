@@ -692,6 +692,12 @@ struct AudioNormState {
 };
 static AudioNormState audioNorm;
 
+// 绝对音量等级：远程包 reserved1[0]（offset 6）携带 App 侧 AGC 之前的原始响度 0~255。
+// 设备端 AGC 只归一化频谱形状，音量信息在那里被抹平；这个字节不进归一化层，
+// 供"声量条"型灯效使用。老版本 App 不填该字节时回退到频谱均值（保持旧观感）。
+uint8_t audioLoudness = 0;
+static bool audioLoudnessValid = false;
+
 static void audioNormUpdate(const float *lin) {
   uint32_t now = millis();
   audioNorm.lastFeedMs = now;                     // 看门狗计时：有数据流入
@@ -735,14 +741,20 @@ static void audioNormUpdate(const float *lin) {
     if (i < 4) lowSum += out;                     // 前 4 段 = 低频
   }
 
-  // 3) 统一音量：16 段均值抬升，供音量型灯效使用
+  // 3) 绝对音量等级：优先用远程包携带的原始响度；老版本 App 未发送时回退到频谱均值
+  if (!audioLoudnessValid) {
+    float fb = sum * (1.9f / (float)NUM_GEQ_CHANNELS);
+    audioLoudness = (uint8_t)(fb > 255.0f ? 255.0f : fb);
+  }
+
+  // 4) 统一音量：16 段均值抬升，供音量型灯效使用
   float volTarget = sum * (1.9f / (float)NUM_GEQ_CHANNELS);
   if (volTarget > 255.0f) volTarget = 255.0f;
   audioNorm.volSmth += (volTarget - audioNorm.volSmth) * (1.0f - expf(-dt / ((volTarget > audioNorm.volSmth) ? 0.045f : 0.22f)));
   audioNormVol = audioNorm.volSmth;
   multAgc      = 1.0f;
 
-  // 4) 统一节拍检测：低频能量相对包络的突变 + 冷却时间
+  // 5) 统一节拍检测：低频能量相对包络的突变 + 冷却时间
   float low = lowSum * 0.25f;
   audioNorm.lowEnv += (low - audioNorm.lowEnv) * (1.0f - expf(-dt / 0.35f));
   autoResetPeak();
@@ -775,6 +787,9 @@ static void audioNormIdle() {
   audioNorm.volSmth -= audioNorm.volSmth * k;
   if (audioNorm.volSmth < 1.0f) audioNorm.volSmth = 0.0f;
   audioNormVol = audioNorm.volSmth;
+  // 绝对音量等级同步衰减；归零后重新进入"未标定"状态，恢复发送时重新判定来源
+  audioLoudness = (uint8_t)((float)audioLoudness * (1.0f - k));
+  if (audioLoudness < 2u) { audioLoudness = 0; audioLoudnessValid = false; }
   samplePeak = false;
 }
 ////////////////////
@@ -1352,6 +1367,12 @@ class AudioReactive : public Usermod {
       memset(&receivedPacket, 0, sizeof(receivedPacket));                                  // start clean
       memcpy(&receivedPacket, fftBuff, min((unsigned)packetSize, (unsigned)sizeof(receivedPacket))); // don't violate alignment - thanks @willmmiles#
 
+      // reserved1[0]（offset 6）= App 侧 AGC 之前的原始响度 0~255（-60~0 dBFS 线性映射）。
+      // 只有新版本 App 会填该字节；保持未标定状态时由 audioNormUpdate() 回退到频谱均值。
+      uint8_t rawLoud = receivedPacket.reserved1[0];
+      audioLoudness = rawLoud;
+      if (rawLoud > 0) audioLoudnessValid = true;
+
       // 远程包只当作线性幅度输入：反 sqrt 还原后交给统一归一化层，
       // 与本地麦克风走完全相同的 AGC / 平滑 / 缩放 / 节拍处理。
       float lin[NUM_GEQ_CHANNELS];
@@ -1514,7 +1535,7 @@ class AudioReactive : public Usermod {
         // usermod exchangeable data
         // we will assign all usermod exportable data here as pointers to original variables or arrays and allocate memory for pointers
         um_data = new um_data_t;
-        um_data->u_size = 8;
+        um_data->u_size = 9;
         um_data->u_type = new um_types_t[um_data->u_size];
         um_data->u_data = new void*[um_data->u_size];
         um_data->u_data[0] = &volumeSmth;      //*used (New)
@@ -1533,6 +1554,8 @@ class AudioReactive : public Usermod {
         um_data->u_type[6] = UMT_BYTE;
         um_data->u_data[7] = &binNum;          // assigned in effect function from UI element!!! (Puddlepeak, Ripplepeak, Waterfall)
         um_data->u_type[7] = UMT_BYTE;
+        um_data->u_data[8] = &audioLoudness;   // absolute loudness (pre-AGC), for volume-bar effects
+        um_data->u_type[8] = UMT_BYTE;
       }
 
 

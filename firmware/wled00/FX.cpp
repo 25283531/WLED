@@ -11088,24 +11088,19 @@ void mode_particle1DGEQ(void) {
   struct VUData { uint8_t volS; };
   if (!SEGENV.allocateData(sizeof(VUData))) FX_FALLBACK_STATIC;
   VUData *d = (VUData*)SEGENV.data;
-  // 音量等级取 16 段频谱平均值：volumeSmth 是 sum*1.9 且音乐一响就饱和到 255，
-  // 直接映射会让音量条长期顶到最上方；平均值保留了真实动态范围
-  uint8_t level = 0;
+  // 高度由"绝对音量等级"驱动：audioLoudness 来自音频包携带的 App 侧 AGC 前原始响度，
+  // 不过设备端 AGC（AGC 只归一化频谱形状，会让任何音乐都顶满）。
+  uint8_t loud = 0;
   if (um_data_t *um_data = getAudioData()){
-    uint8_t *fft = (uint8_t*)um_data->u_data[2];
-    if (fft){
-      uint16_t sum = 0;
-      for (uint8_t i=0;i<16;i++) sum += fft[i];
-      level = (uint8_t)(sum >> 4);
-    }
+    if (um_data->u_size > 8 && um_data->u_data[8]) loud = *(uint8_t*)um_data->u_data[8];
   }
-  // 噪声门 + 音量曲线：160 = 实测音乐在 AGC 后 16 段平均值的满幅参考
-  // （常规段落约 70~120，只有最响的峰值才接近 160）；安静时（<8）完全熄灭
-  float lvl = (level > 8) ? ((float)level / 160.0f) : 0.0f;
-  if (lvl > 1.0f) lvl = 1.0f;
+  // 噪声门 + 感知曲线：常规音量约 40~70%，音量最高时才亮到顶；静音（<4）完全熄灭
+  float lvl = (loud > 4) ? ((float)loud / 255.0f) : 0.0f;
   uint8_t target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
   int16_t dv = (int16_t)target - d->volS;
-  int16_t nv = (int16_t)d->volS + (dv * (dv>0?5:1)) / 8; // 快攻慢放
+  // 快攻慢放；上升至少 1 级，否则整数截断会让目标 255 永远停在 254（顶行不亮）
+  int16_t step = (dv > 0) ? (int16_t)((dv * 5 + 7) / 8) : (int16_t)(dv / 8);
+  int16_t nv = (int16_t)d->volS + step;
   d->volS = (uint8_t)(nv < 0 ? 0 : nv);
   SEGMENT.fill(BLACK);
   uint8_t fillH = d->volS; // 0..255 posY

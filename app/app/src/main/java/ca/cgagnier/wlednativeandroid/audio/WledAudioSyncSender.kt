@@ -14,7 +14,8 @@ import java.nio.ByteOrder
  *
  * ```
  * offset 0  char[6]  "00002\0"
- * offset 6  uint8[2] reserved
+ * offset 6  uint8    reserved1[0] = AGC 前原始响度 0-255（固件 audioLoudness）
+ * offset 7  uint8    reserved1[1] 保留
  * offset 8  float    sampleRaw
  * offset 12 float    sampleSmth
  * offset 16 uint8    samplePeak
@@ -36,13 +37,14 @@ object WledAudioSyncPacket {
     private const val PEAK_OFF: Byte = 0
     private const val RESERVED_SHORT: Short = 0
     private val HEADER = "00002".toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
-    private val RESERVED = ByteArray(2)
     private const val RESERVED_ONE: Byte = 0
 
     fun encode(frame: AudioFrame): ByteArray {
         val buffer = ByteBuffer.allocate(SIZE).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put(HEADER)
-        buffer.put(RESERVED)
+        // reserved1[0]：AGC 前的原始响度，供固件的音量条型灯效还原"声量等级"
+        buffer.put(frame.rawLevel.coerceIn(0, 255).toByte())
+        buffer.put(RESERVED_ONE)
         buffer.putFloat(frame.sampleRaw)
         buffer.putFloat(frame.sampleSmth)
         buffer.put(if (frame.peak) PEAK_ON else PEAK_OFF)
