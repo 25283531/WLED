@@ -5938,85 +5938,126 @@ void mode_audiospiral(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct SpirData { float wavePhase, bassEnv, mhEnv; uint32_t lastMs; };
-  if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
-  SpirData *d = (SpirData*)SEGENV.data;
-  if (d->lastMs == 0){ d->wavePhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = strip.now ? strip.now : 1; }
-  // 取色：主/副色覆盖默认螺旋色（用户色卡）
-  uint8_t hueA = 135, hueB = 235;
-  uint32_t cA = SEGCOLOR(0), cB = SEGCOLOR(1);
-  if (cA) hueA = rgb2hsv(CRGB(cA)).hue;
-  if (cB) hueB = rgb2hsv(CRGB(cB)).hue;
-  // 双频段音频输入
-  float bassInput = 0.0f, mhInput = 0.0f;
+  // DNA 双螺旋 + 金色横档（参考 CylinderDnaLadderEffect 移植，全比例参数，与行列数无关）
+  struct DnaData {
+    float scrollPhase;   // 螺旋滚动相位（rad）
+    float smoothVol;     // 平滑总音量 0~1
+    float smoothBass;    // 平滑重低音 0~1
+    float smoothMidHigh; // 平滑中高频 0~1
+    float pitchOffset;   // 螺距弹簧位移（圈数增量）
+    float pitchVel;      // 螺距弹簧速度
+    float rungHueShift;  // 横档色相漂移
+    float peakFlash;     // 节拍闪光 0~1
+    uint32_t lastMs;
+  };
+  if (!SEGENV.allocateData(sizeof(DnaData))) FX_FALLBACK_STATIC;
+  DnaData *d = (DnaData*)SEGENV.data;
+  if (d->lastMs == 0){
+    d->scrollPhase = 0.0f; d->smoothVol = 0.0f; d->smoothBass = 0.0f; d->smoothMidHigh = 0.0f;
+    d->pitchOffset = 0.0f; d->pitchVel = 0.0f; d->rungHueShift = 0.0f; d->peakFlash = 0.0f;
+    d->lastMs = strip.now ? strip.now : 1;
+  }
+  const float fPI = 3.14159265f;
+  const float fTWO_PI = 6.2831853f;
+
+  // 主链配色：默认暖橙 + 亮蓝；用户改了段色卡（非纯白）则跟随用户
+  CRGB strandA(245, 110, 15), strandB(20, 145, 255);
+  uint32_t userA = SEGCOLOR(0), userB = SEGCOLOR(1);
+  if (userA && userA != 0xFFFFFF) strandA = CRGB(userA);
+  if (userB && userB != 0xFFFFFF) strandB = CRGB(userB);
+
+  // 三路音频特征：总音量 / 重低音(43~216Hz) / 中高频(301~3704Hz) / 节拍
+  float volRaw = 0.0f, bassRaw = 0.0f, mhRaw = 0.0f;
+  uint8_t peakHit = 0;
   if (um_data_t *um_data = getAudioData()){
+    if (um_data->u_data[0]) volRaw = (*(float*)um_data->u_data[0]) / 255.0f;
     uint8_t *fft = (uint8_t*)um_data->u_data[2];
     if (fft){
-      uint8_t b = fft[0]; for (int i=1;i<3;i++) if (fft[i]>b) b=fft[i];
-      bassInput = (float)b / 255.0f;
+      bassRaw = (fft[0] * 0.45f + fft[1] * 0.35f + fft[2] * 0.20f) / 255.0f;
       uint16_t sum = 0; for (int i=4;i<=12;i++) sum += fft[i];
-      mhInput = ((float)sum / 9.0f) / 255.0f;
+      mhRaw = ((float)sum / 9.0f) / 255.0f;
     }
+    if (um_data->u_data[3]) peakHit = *(uint8_t*)um_data->u_data[3];
   }
+  if (volRaw < 0.0f) volRaw = 0.0f; else if (volRaw > 1.0f) volRaw = 1.0f;
   uint32_t now = strip.now;
   float dt = (float)(now - d->lastMs) * 0.001f;
   d->lastMs = now;
   if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
-  // 低频包络：快攻慢放（一踩鼓点就加速甩动）
-  float bassClean = (bassInput > 0.14f) ? ((bassInput - 0.14f) / 0.86f) : 0.0f;
-  bassClean = (bassClean < 0.0f) ? 0.0f : (bassClean > 1.0f ? 1.0f : bassClean);
-  bassClean = powf(bassClean, 1.4f);
-  if (bassClean > d->bassEnv) d->bassEnv += (bassClean - d->bassEnv) * 0.70f;
-  else d->bassEnv += (bassClean - d->bassEnv) * 0.14f;
-  // 中高频包络：控制两条链之间的间距与饱和度
-  float mhClean = (mhInput > 0.10f) ? ((mhInput - 0.10f) / 0.90f) : 0.0f;
-  mhClean = (mhClean < 0.0f) ? 0.0f : (mhClean > 1.0f ? 1.0f : mhClean);
-  if (mhClean > d->mhEnv) d->mhEnv += (mhClean - d->mhEnv) * 0.45f;
-  else d->mhEnv += (mhClean - d->mhEnv) * 0.16f;
-  // 行波相位：低频控制 DNA 沿轴向行进的速度（单向积分，绝不倒转），单位=圈
-  d->wavePhase += (0.1353f + d->bassEnv * 1.0345f) * dt;
-  if (d->wavePhase >= 1.0f) d->wavePhase -= 1.0f;
-  // 螺旋宽度 = 两条链在正面视图里的间距（屏幕归一化 ±1），中高频把双链撑开
-  const float turns  = 1.35f;                     // 全高约 1.35 个螺旋周期（3 次交叉）
-  const float amp    = 0.72f + d->mhEnv * 0.23f;  // 摆幅 0.72~0.95（±1 为正面边缘）
-  const float lineW  = 0.42f;                     // 单条链的半宽（屏幕归一化）
-  uint8_t sat = (uint8_t)(190.0f + d->mhEnv * 65.0f);
-  uint8_t val = (uint8_t)(200.0f + d->mhEnv * 55.0f);
+
+  // 平滑（音量快攻慢放、低频快攻慢放、中高频温和跟随）
+  float volClean = (volRaw > 0.04f) ? ((volRaw - 0.04f) / 0.96f) : 0.0f;
+  d->smoothVol += (volClean - d->smoothVol) * ((volClean > d->smoothVol) ? 0.45f : 0.14f);
+  float bassClean = (bassRaw > 0.08f) ? ((bassRaw - 0.08f) / 0.92f) : 0.0f;
+  d->smoothBass += (bassClean - d->smoothBass) * ((bassClean > d->smoothBass) ? 0.60f : 0.15f);
+  d->smoothMidHigh += (mhRaw - d->smoothMidHigh) * 0.25f;
+  if (peakHit) d->peakFlash = 1.0f;
+  else d->peakFlash *= expf(-8.0f * dt);
+
+  // 螺旋滚动：音量+低频实时加速
+  float moveFreq = 0.65f + (d->smoothVol * 0.6f + d->smoothBass * 0.4f) * 4.80f;
+  d->scrollPhase += moveFreq * dt;
+  if (d->scrollPhase >= fTWO_PI) d->scrollPhase -= fTWO_PI;
+
+  // 螺距：重低音把螺旋压紧（弹簧阻尼，避免生硬抖动）
+  float targetPitch = powf(d->smoothBass, 1.2f) * 0.45f;
+  float springForce = (targetPitch - d->pitchOffset) * 110.0f - d->pitchVel * 13.0f;
+  d->pitchVel += springForce * dt;
+  d->pitchOffset += d->pitchVel * dt;
+  float pitchTurns = 1.15f + d->pitchOffset;
+  if (pitchTurns < 0.55f) pitchTurns = 0.55f;
+
+  // 横档配色：金黄为底，中高频偏色流动 + 节拍瞬间提亮
+  float targetHueShift = d->smoothMidHigh * 145.0f + d->peakFlash * 25.0f;
+  d->rungHueShift += (targetHueShift - d->rungHueShift) * 0.18f;
+  uint8_t rungHue = (uint8_t)(38.0f + d->rungHueShift);
+  int rungSat = 210 + (int)(d->smoothMidHigh * 45.0f) - (int)(d->peakFlash * 35.0f);
+  if (rungSat < 160) rungSat = 160; else if (rungSat > 255) rungSat = 255;
+  int rungVal = 175 + (int)(d->smoothMidHigh * 60.0f) + (int)(d->peakFlash * 50.0f);
+  if (rungVal < 150) rungVal = 150; else if (rungVal > 255) rungVal = 255;
+  CRGB rungColor = CHSV(rungHue, (uint8_t)rungSat, (uint8_t)rungVal);
+
+  // 主链角宽自适应：至少覆盖约 1.2 个灯珠列，9 列布局也不会断线
+  float halfW = 1.24f / (float)cols;
+  if (halfW < 0.085f) halfW = 0.085f;
+  const float rungThick = 0.24f;
+  const float rungsPerTurn = 6.5f;
+
   for (uint16_t y=0;y<rows;y++){
-    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;  // 0=底部, 1=顶部
+    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.0f;  // 0=底部, 1=顶部
     uint16_t sy = rows - 1 - y;                                   // 本项目矩阵 y=0 在物理顶部，写入时翻转
-    float edgeFade = 1.0f;
-    if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
-    else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
-    // 三角波：两链的横向目标位置匀速对扫（两端不停留），交叉点即两链重叠处
-    float u = ny * turns + d->wavePhase;
-    u -= (float)((int)u);
-    float tri = (u < 0.5f) ? (u * 4.0f - 1.0f) : (3.0f - u * 4.0f);
-    float posA = amp * tri;        // 链 A 的屏幕横向位置
-    float posB = -posA;            // 链 B 与之镜像 → 必然交叉
+    // A、B 两链相位差 180°（真实双螺旋），随高度扭转
+    float thetaA = ny * pitchTurns * fTWO_PI - d->scrollPhase;
+    if (thetaA < 0.0f) thetaA += fTWO_PI;
+    if (thetaA >= fTWO_PI) thetaA -= fTWO_PI;
+    if (thetaA < 0.0f) thetaA += fTWO_PI;
+    float thetaB = thetaA + fPI; if (thetaB >= fTWO_PI) thetaB -= fTWO_PI;
+    // 横档沿螺旋同步上移（与主链焊死，不打滑）
+    float rungCoord = (ny * pitchTurns - d->scrollPhase / fTWO_PI) * rungsPerTurn;
+    rungCoord -= (float)((int)rungCoord);
+    if (rungCoord < 0.0f) rungCoord += 1.0f;
+    float distRung = fabsf(rungCoord - 0.5f) * 2.0f;
+    float rungAlpha = (distRung < rungThick) ? sqrtf(1.0f - distRung / rungThick) : 0.0f;
     for (uint16_t x=0;x<cols;x++){
-      // 方位折叠到 [-0.25,0.25]（圆周 180° 两份对称，任意观察角度都能看到完整双螺旋）
-      float nx = (float)x / (float)cols;
-      if (nx > 0.5f) nx -= 1.0f;
-      if (nx > 0.25f) nx -= 0.5f;
-      else if (nx < -0.25f) nx += 0.5f;
-      float p = nx * 4.0f;         // 线性屏幕坐标：灯珠列等距铺满正面 [-1,1]
-      float nA = fabsf(p - posA) / lineW;
-      float nB = fabsf(p - posB) / lineW;
-      float iA = (nA < 2.0f) ? expf(-2.2f * nA * nA) : 0.0f;   // 细线钟形衰减
-      float iB = (nB < 2.0f) ? expf(-2.2f * nB * nB) : 0.0f;
-      CRGB fc(0, 0, 0);                                        // 无常亮底色
-      if (iA > 0.01f){
-        uint8_t coreA = (uint8_t)(iA * iA * 55.0f); // 线心去饱和成高光
-        uint8_t satA = (sat > coreA) ? (sat - coreA) : 0;
-        uint8_t vA = (uint8_t)(iA * val * edgeFade);
-        fc += CRGB(CHSV(hueA, satA, vA));
+      float theta = ((float)x / (float)cols) * fTWO_PI;
+      CRGB fc(2, 3, 6);   // 近黑底色，衬托双螺旋轮廓
+      // 横档：只画 A→B 之间的半圈弧面（梯子结构）
+      float spanA = theta - thetaA; if (spanA < 0.0f) spanA += fTWO_PI;
+      if (rungAlpha > 0.0f && spanA > 0.0f && spanA < fPI){
+        CRGB rc = rungColor; rc.nscale8((uint8_t)(rungAlpha * 255.0f));
+        fc = rc;
       }
-      if (iB > 0.01f){
-        uint8_t coreB = (uint8_t)(iB * iB * 55.0f);
-        uint8_t satB = (sat > coreB) ? (sat - coreB) : 0;
-        uint8_t vB = (uint8_t)(iB * val * edgeFade);
-        fc += CRGB(CHSV(hueB, satB, vB));
+      // 两条主链：层级高于横档
+      float diffA = fabsf(theta - thetaA); if (diffA > fPI) diffA = fTWO_PI - diffA;
+      float diffB = fabsf(theta - thetaB); if (diffB > fPI) diffB = fTWO_PI - diffB;
+      float nA = diffA / fPI, nB = diffB / fPI;
+      if (nA < halfW){
+        float edge = 1.0f - powf(nA / halfW, 2.4f);   // 中心饱满、边缘抗锯齿
+        fc = color_blend(fc, strandA, (uint8_t)(edge * 255.0f));
+      }
+      if (nB < halfW){
+        float edge = 1.0f - powf(nB / halfW, 2.4f);
+        fc = color_blend(fc, strandB, (uint8_t)(edge * 255.0f));
       }
       SEGMENT.setPixelColorXY(x, sy, fc);
     }
