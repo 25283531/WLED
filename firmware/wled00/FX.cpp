@@ -6096,7 +6096,7 @@ void mode_basslava(void) {
   struct LVData { LavaBlob b[4]; float pumpPos, pumpVel, smoothBass; uint32_t lastMs; bool inited; };
   if (!SEGENV.allocateData(sizeof(LVData))) FX_FALLBACK_STATIC;
   LVData *d = (LVData*)SEGENV.data;
-  const float aspectRatio = 0.90f;
+  const float aspectRatio = 0.90f;   // 物理长宽比：内芯周长125.6mm / 发光高140mm
   if (!d->inited){
     d->b[0] = { 0.15f, 0.25f,  0.025f,  0.055f, 0.16f, 0.0f };
     d->b[1] = { 0.55f, 0.72f, -0.020f, -0.048f, 0.15f, 1.6f };
@@ -6105,63 +6105,70 @@ void mode_basslava(void) {
     d->pumpPos = 0.0f; d->pumpVel = 0.0f; d->smoothBass = 0.0f;
     d->lastMs = strip.now; d->inited = true;
   }
-  um_data_t *um_data = getAudioData();
+  // 低频输入：前3个重低音FFT频段(约40~150Hz)取最大值，归一化 0~1
   float bassInput = 0.0f;
+  um_data_t *um_data = getAudioData();
   if (um_data){
     uint8_t *fft = (uint8_t*)um_data->u_data[2];
-    if (fft){ uint8_t bv=fft[0]; for(int i=1;i<3;i++) if(fft[i]>bv) bv=fft[i]; bassInput=(float)bv/255.0f; }
+    if (fft){
+      uint8_t bv = fft[0];
+      if (fft[1] > bv) bv = fft[1];
+      if (fft[2] > bv) bv = fft[2];
+      bassInput = (float)bv / 255.0f;
+    }
   }
   if (bassInput < 0.0f) bassInput = 0.0f; if (bassInput > 1.0f) bassInput = 1.0f;
   uint32_t now = strip.now;
   float dt = (float)(now - d->lastMs) * 0.001f;
   d->lastMs = now;
-  if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
+  if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;   // 防止掉帧导致物理步长爆炸
   float timeSec = (float)now * 0.001f;
-  // A. 重低音包络 + 弹簧阻尼物理（瞬间膨胀 + 弹性收缩）
+  // A. 重低音包络(快攻慢放) + 二阶弹簧阻尼(瞬间膨胀 + 弹性回弹)
   if (bassInput > d->smoothBass) d->smoothBass += (bassInput - d->smoothBass) * 0.65f;
   else d->smoothBass += (bassInput - d->smoothBass) * 0.12f;
-  float targetPump = (d->smoothBass > 0.15f) ? ((d->smoothBass - 0.15f) / 0.85f) : 0.0f;
-  targetPump = powf(targetPump, 1.3f);
-  const float stiffness = 180.0f, damping = 14.0f;
+  float targetPump = (d->smoothBass > 0.15f) ? ((d->smoothBass - 0.15f) / 0.85f) : 0.0f;  // 0.15死区抑制底噪微颤
+  targetPump = powf(targetPump, 1.3f);                    // 增强重低音动态对比
+  const float stiffness = 180.0f, damping = 14.0f;        // 阻尼略低于临界，收缩时Q弹回弹
   float force = (targetPump - d->pumpPos) * stiffness - d->pumpVel * damping;
   d->pumpVel += force * dt;
   d->pumpPos += d->pumpVel * dt;
-  if (d->pumpPos < -0.15f) d->pumpPos = -0.15f; // 收缩时轻微内缩过冲
-  // B. 熔岩球缓慢漂浮（音乐越强对流稍快）
+  if (d->pumpPos < -0.15f) d->pumpPos = -0.15f;           // 允许内缩过冲，强化心脏搏动感
+  // B. 熔岩球缓慢漂浮（音乐越强内部对流稍快）
   float flowBoost = 1.0f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.8f;
   for (uint8_t i=0;i<4;i++){
     d->b[i].x += d->b[i].vx * dt * flowBoost;
     d->b[i].y += d->b[i].vy * dt * flowBoost;
-    if (d->b[i].x >= 1.0f) d->b[i].x -= 1.0f;
-    if (d->b[i].x < 0.0f) d->b[i].x += 1.0f;
-    if (d->b[i].y > 0.88f){ d->b[i].y = 0.88f; float v=d->b[i].vy; d->b[i].vy = (v<0? -v : v); }
-    else if (d->b[i].y < 0.12f){ d->b[i].y = 0.12f; float v=d->b[i].vy; d->b[i].vy = (v<0? -v : v); }
+    if (d->b[i].x >= 1.0f) d->b[i].x -= 1.0f;             // 圆周无缝环绕
+    if (d->b[i].x < 0.0f)  d->b[i].x += 1.0f;
+    if (d->b[i].y > 0.88f){ d->b[i].y = 0.88f; d->b[i].vy = -fabsf(d->b[i].vy); }  // 上下端盖留12%边距平滑折返
+    else if (d->b[i].y < 0.12f){ d->b[i].y = 0.12f; d->b[i].vy = fabsf(d->b[i].vy); }
   }
-  // 预计算每团色块的动态半径（不依赖 x/y，每帧一次 sin_approx）
-  float audioScale = 1.0f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.55f;
+  // C. 预计算动态半径（静态微呼吸 + 低频泵浦膨胀；每帧仅4次sin，避免逐像素开销）
+  float audioScale = 1.0f + d->pumpPos * 0.55f;
   float rad[4];
   for (uint8_t i=0;i<4;i++){
     float idleBreath = 1.0f + 0.06f * sin_approx(timeSec * 1.5f + d->b[i].phase);
     rad[i] = d->b[i].baseRadius * idleBreath * audioScale;
   }
   float brightnessBoost = 0.72f + (d->pumpPos > 0.0f ? d->pumpPos : 0.0f) * 0.35f;
-  // C. Metaball 等势面渲染
+  // D. Metaball 等势面渲染（本项目矩阵 y=0 在物理顶部，写入时翻转）
   for (uint16_t y=0;y<rows;y++){
-    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;
+    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;  // 0=底部, 1=顶部
+    uint16_t sy = rows - 1 - y;
     for (uint16_t x=0;x<cols;x++){
       float nx = (float)x / (float)cols;
       float fieldSum = 0.0f;
       for (uint8_t i=0;i<4;i++){
-        float dx = nx - d->b[i].x; if (dx < 0) dx = -dx;
-        if (dx > 0.5f) dx = 1.0f - dx;       // 柱面最短环绕距离，消除拼缝
-        dx *= aspectRatio;
+        float dx = fabsf(nx - d->b[i].x);
+        if (dx > 0.5f) dx = 1.0f - dx;       // 柱面最短环绕距离，消除背面拼缝
+        dx *= aspectRatio;                   // 长宽比校正，光团呈正圆
         float dy = ny - d->b[i].y;
-        float distSq = dx*dx + dy*dy + 0.0025f;
-        fieldSum += (rad[i]*rad[i]) / distSq; // 势能叠加，靠近时自动粘连融合
+        float distSq = dx*dx + dy*dy + 0.0025f;  // 防除零过曝
+        fieldSum += (rad[i]*rad[i]) / distSq;    // 势能叠加，靠近时自动粘连融合
       }
       float energy = (fieldSum - 0.35f) * 0.52f * brightnessBoost;
-      if (energy < 0.0f) energy = 0.0f; if (energy > 1.0f) energy = 1.0f;
-      SEGMENT.setPixelColorXY(x, y, sampleLavaColor(energy));
+      if (energy < 0.0f) energy = 0.0f; else if (energy > 1.0f) energy = 1.0f;
+      SEGMENT.setPixelColorXY(x, sy, sampleLavaColor(energy));
     }
   }
 }
