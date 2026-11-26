@@ -110,6 +110,7 @@ static bool samplePeak = false;      // Boolean flag for peak - used in effects.
 static bool udpSamplePeak = false;   // Boolean flag for peak. Set at the same time as samplePeak, but reset by transmitAudioData
 static unsigned long timeOfPeak = 0; // time of last sample peak detection.
 static uint8_t fftResult[NUM_GEQ_CHANNELS]= {0};// Our calculated freq. channel result table to be used by effects
+static float   audioNormVol = 0.0f;  // 统一归一化层输出音量（本地麦克风 / 蓝牙 / WiFi 直通同一口径）
 
 // TODO: probably best not used by receive nodes
 //static float agcSensitivity = 128;            // AGC sensitivity estimation, based on agc gain (multAgc). calculated by getSensitivity(). range 0..255
@@ -223,6 +224,7 @@ static float fftAddAvg(int from, int to);   // average of several FFT result bin
 void FFTcode(void * parameter);      // audio processing task: read samples, run FFT, fill GEQ channels from FFT results
 static void runMicFilter(uint16_t numSamples, FFTsampleType *sampleBuffer);
 static void postProcessFFTResults(bool noiseGateOpen, int numberOfChannels); // post-processing and post-amp of GEQ channels
+static void audioNormUpdate(const float *lin);                               // 统一音频归一化层（三通道唯一出口）
 
 static TaskHandle_t FFT_Task = nullptr;
 
@@ -559,8 +561,9 @@ void FFTcode(void * parameter)
       }
     }
 
-    // post-processing of frequency channels (pink noise adjustment, AGC, smoothing, scaling)
+    // 粉噪补偿 + 手动增益；平滑 / AGC / 缩放 / 节拍检测统一交给归一化层
     postProcessFFTResults((fabsf(sampleAvg) > 0.25f)? true : false , NUM_GEQ_CHANNELS);
+    audioNormUpdate(fftCalc);
 
 #if defined(WLED_DEBUG) || defined(SR_DEBUG)
     if (haveDoneFFT && (start < esp_timer_get_time())) { // filter out overflows
@@ -568,9 +571,7 @@ void FFTcode(void * parameter)
       fftTime  = (fftTimeInMillis*3 + fftTime*7)/10; // smooth
     }
 #endif
-    // run peak detection
-    autoResetPeak();
-    detectSamplePeak();
+    // 节拍检测已由 audioNormUpdate() 统一处理（autoResetPeak + 低频突变检测）
 
     #if !defined(I2S_GRAB_ADC1_COMPLETELY) && (ESP_IDF_VERSION_MAJOR < 5)
     if ((audioSource == nullptr) || (audioSource->getType() != AudioSource::Type_I2SAdc))  // the "delay trick" does not help for analog ADC
@@ -652,80 +653,100 @@ static void runMicFilter(uint16_t numSamples, FFTsampleType *sampleBuffer)      
 #endif
 }
 
-static void postProcessFFTResults(bool noiseGateOpen, int numberOfChannels) // post-processing and post-amp of GEQ channels
+static void postProcessFFTResults(bool noiseGateOpen, int numberOfChannels) // 只做粉噪补偿与手动增益，平滑/AGC/缩放统一交给 audioNormUpdate
 {
     for (int i=0; i < numberOfChannels; i++) {
-
       if (noiseGateOpen) { // noise gate open
-        // Adjustment for frequency curves.
-        fftCalc[i] *= fftResultPink[i];
-        if (FFTScalingMode > 0) fftCalc[i] *= FFT_DOWNSCALE;  // adjustment related to FFT windowing function
-        // Manual linear adjustment of gain using sampleGain adjustment for different input types.
-        fftCalc[i] *= soundAgc ? multAgc : ((float)sampleGain/40.0f * (float)inputLevel/128.0f + 1.0f/16.0f); //apply gain, with inputLevel adjustment
-        if(fftCalc[i] < 0) fftCalc[i] = 0;
+        fftCalc[i] *= fftResultPink[i];                        // 粉噪曲线补偿
+        if (FFTScalingMode > 0) fftCalc[i] *= FFT_DOWNSCALE;   // 窗函数下缩放
+        // 手动灵敏度改为统一层全局增益，这里只保留输入类型相关的固定增益
+        fftCalc[i] *= ((float)sampleGain/40.0f + 1.0f/16.0f);
+        if (fftCalc[i] < 0) fftCalc[i] = 0;
+      } else {
+        fftCalc[i] *= 0.85f;                                   // 噪声门关闭：衰减到零
+        if (fftCalc[i] < 4.0f) fftCalc[i] = 0.0f;
       }
-
-      // smooth results - rise fast, fall slower
-      if(fftCalc[i] > fftAvg[i])   // rise fast 
-        fftAvg[i] = fftCalc[i] *0.75f + 0.25f*fftAvg[i];  // will need approx 2 cycles (50ms) for converging against fftCalc[i]
-      else {                       // fall slow
-        if (decayTime < 1000) fftAvg[i] = fftCalc[i]*0.22f + 0.78f*fftAvg[i];       // approx  5 cycles (225ms) for falling to zero
-        else if (decayTime < 2000) fftAvg[i] = fftCalc[i]*0.17f + 0.83f*fftAvg[i];  // default - approx  9 cycles (225ms) for falling to zero
-        else if (decayTime < 3000) fftAvg[i] = fftCalc[i]*0.14f + 0.86f*fftAvg[i];  // approx 14 cycles (350ms) for falling to zero
-        else fftAvg[i] = fftCalc[i]*0.1f  + 0.9f*fftAvg[i];                         // approx 20 cycles (500ms) for falling to zero
-      }
-      // constrain internal vars - just to be sure
       fftCalc[i] = constrain(fftCalc[i], 0.0f, 1023.0f);
-      fftAvg[i] = constrain(fftAvg[i], 0.0f, 1023.0f);
-
-      float currentResult;
-      if(limiterOn == true)
-        currentResult = fftAvg[i];
-      else
-        currentResult = fftCalc[i];
-
-      switch (FFTScalingMode) {
-        case 1:
-            // Logarithmic scaling
-            currentResult *= 0.42f;                      // 42 is the answer ;-)
-            currentResult -= 8.0f;                       // this skips the lowest row, giving some room for peaks
-            if (currentResult > 1.0f) currentResult = logf(currentResult); // log to base "e", which is the fastest log() function
-            else currentResult = 0.0f;                   // special handling, because log(1) = 0; log(0) = undefined
-            currentResult *= 0.85f + (float(i)/18.0f);  // extra up-scaling for high frequencies
-            currentResult = mapf(currentResult, 0, LOG_256, 0, 255); // map [log(1) ... log(255)] to [0 ... 255]
-        break;
-        case 2:
-            // Linear scaling
-            currentResult *= 0.30f;                     // needs a bit more damping, get stay below 255
-            currentResult -= 4.0f;                       // giving a bit more room for peaks
-            if (currentResult < 1.0f) currentResult = 0.0f;
-            currentResult *= 0.85f + (float(i)/1.8f);   // extra up-scaling for high frequencies
-        break;
-        case 3:
-            // square root scaling
-            currentResult *= 0.38f;
-            currentResult -= 6.0f;
-            if (currentResult > 1.0f) currentResult = sqrtf(currentResult);
-            else currentResult = 0.0f;                   // special handling, because sqrt(0) = undefined
-            currentResult *= 0.85f + (float(i)/4.5f);   // extra up-scaling for high frequencies
-            currentResult = mapf(currentResult, 0.0, 16.0, 0.0, 255.0); // map [sqrt(1) ... sqrt(256)] to [0 ... 255]
-        break;
-
-        case 0:
-        default:
-            // no scaling - leave freq bins as-is
-            currentResult -= 4; // just a bit more room for peaks
-        break;
-      }
-
-      // Now, let's dump it all into fftResult. Need to do this, otherwise other routines might grab fftResult values prematurely.
-      if (soundAgc > 0) {  // apply extra "GEQ Gain" if set by user
-        float post_gain = (float)inputLevel/128.0f;
-        if (post_gain < 1.0f) post_gain = ((post_gain -1.0f) * 0.8f) +1.0f;
-        currentResult *= post_gain;
-      }
-      fftResult[i] = constrain((int)currentResult, 0, 255);
     }
+}
+
+//////////////////////////////
+// 统一音频归一化层 Unified audio normalization
+//////////////////////////////
+// 本地麦克风 / 蓝牙 / WiFi 直通三通道的频谱输入都在这里收敛成唯一口径。
+// 所有音律灯效只消费 fftResult / volumeSmth / samplePeak，不再各自做
+// 增益、平滑、归一化或节拍检测，保证三通道观感一致、灯效只需调一套参数。
+#define AUDIO_NORM_TARGET       200.0f    // AGC 目标峰值（线性域）
+#define AUDIO_NORM_REMOTE_SCALE 300.0f    // 远程包 0~255 还原成线性幅度的标定系数
+
+struct AudioNormState {
+  float smth[NUM_GEQ_CHANNELS];   // 平滑后的 16 段线性幅度
+  float agc;                      // 当前 AGC 增益
+  float volSmth;                  // 统一音量 0~255
+  float lowEnv;                   // 低频包络（供节拍检测）
+  uint32_t lastMs;
+  uint32_t lastPeakMs;
+  bool primed;
+};
+static AudioNormState audioNorm;
+
+static void audioNormUpdate(const float *lin) {
+  uint32_t now = millis();
+  if (!audioNorm.primed) {                        // 首帧只初始化，避免 dt 异常
+    for (int i=0;i<NUM_GEQ_CHANNELS;i++) audioNorm.smth[i] = 0.0f;
+    audioNorm.agc = 1.0f; audioNorm.volSmth = 0.0f; audioNorm.lowEnv = 0.0f;
+    audioNorm.lastMs = now; audioNorm.lastPeakMs = 0; audioNorm.primed = true;
+    return;
+  }
+  float dt = (float)(now - audioNorm.lastMs) * 0.001f;
+  audioNorm.lastMs = now;
+  if (dt <= 0.0f) return;
+  if (dt > 0.1f) dt = 0.1f;                       // 卡顿后不放大过冲
+
+  // 1) 本帧峰值 → AGC（快攻慢放，消除三通道之间的电平差）
+  float peak = 0.0f;
+  for (int i=0;i<NUM_GEQ_CHANNELS;i++) if (lin[i] > peak) peak = lin[i];
+  float target = (peak > 1.0f) ? (AUDIO_NORM_TARGET / peak) : audioNorm.agc;
+  if (target < 0.25f) target = 0.25f; else if (target > 24.0f) target = 24.0f;
+  audioNorm.agc += (target - audioNorm.agc) * (1.0f - expf(-dt / ((target > audioNorm.agc) ? 0.05f : 0.70f)));
+
+  // 2) 快升慢降平滑（按 dt 归一化，22fps 蓝牙与 43fps 本地表现一致）
+  const float aRise = 1.0f - expf(-dt / 0.016f);
+  const float aFall = 1.0f - expf(-dt / 0.120f);
+  float inGain = (float)inputLevel / 128.0f;      // 三通道共用的手动灵敏度
+  if (inGain < 0.10f) inGain = 0.10f; else if (inGain > 2.0f) inGain = 2.0f;
+  float sum = 0.0f, lowSum = 0.0f;
+  for (int i=0;i<NUM_GEQ_CHANNELS;i++) {
+    float v = lin[i] * audioNorm.agc * inGain;
+    if (v < 0.0f) v = 0.0f; else if (v > 1023.0f) v = 1023.0f;
+    audioNorm.smth[i] += (v - audioNorm.smth[i]) * ((v > audioNorm.smth[i]) ? aRise : aFall);
+    float s = audioNorm.smth[i];
+    float out = 0.0f;
+    if (s > 6.0f) {                               // 软噪声门
+      out = sqrtf(s / AUDIO_NORM_TARGET) * (200.0f + 4.0f * (float)i);
+      if (out > 255.0f) out = 255.0f;
+    }
+    fftResult[i] = (uint8_t)out;
+    sum += out;
+    if (i < 4) lowSum += out;                     // 前 4 段 = 低频
+  }
+
+  // 3) 统一音量：16 段均值抬升，供音量型灯效使用
+  float volTarget = sum * (1.9f / (float)NUM_GEQ_CHANNELS);
+  if (volTarget > 255.0f) volTarget = 255.0f;
+  audioNorm.volSmth += (volTarget - audioNorm.volSmth) * (1.0f - expf(-dt / ((volTarget > audioNorm.volSmth) ? 0.045f : 0.22f)));
+  audioNormVol = audioNorm.volSmth;
+  multAgc      = 1.0f;
+
+  // 4) 统一节拍检测：低频能量相对包络的突变 + 冷却时间
+  float low = lowSum * 0.25f;
+  audioNorm.lowEnv += (low - audioNorm.lowEnv) * (1.0f - expf(-dt / 0.35f));
+  autoResetPeak();
+  if (!samplePeak && low > 60.0f && (low - audioNorm.lowEnv) > 18.0f && (now - audioNorm.lastPeakMs) > 200u) {
+    samplePeak = true;
+    timeOfPeak = now;
+    audioNorm.lastPeakMs = now;
+  }
 }
 ////////////////////
 // Peak detection //
@@ -1302,27 +1323,24 @@ class AudioReactive : public Usermod {
       memset(&receivedPacket, 0, sizeof(receivedPacket));                                  // start clean
       memcpy(&receivedPacket, fftBuff, min((unsigned)packetSize, (unsigned)sizeof(receivedPacket))); // don't violate alignment - thanks @willmmiles#
 
-      // update samples for effects
-      volumeSmth   = fmaxf(receivedPacket.sampleSmth, 0.0f);
-      volumeRaw    = fmaxf(receivedPacket.sampleRaw, 0.0f);
-#ifdef ARDUINO_ARCH_ESP32
-      // update internal samples
-      sampleRaw    = volumeRaw;
-      sampleAvg    = volumeSmth;
-      rawSampleAgc = volumeRaw;
-      sampleAgc    = volumeSmth;
-      multAgc      = 1.0f;   
-#endif
-      // Only change samplePeak IF it's currently false.
-      // If it's true already, then the animation still needs to respond.
-      autoResetPeak();
-      if (!samplePeak) {
-            samplePeak = receivedPacket.samplePeak >0 ? true:false;
-            if (samplePeak) timeOfPeak = millis();
-            //userVar1 = samplePeak;
+      // 远程包只当作线性幅度输入：反 sqrt 还原后交给统一归一化层，
+      // 与本地麦克风走完全相同的 AGC / 平滑 / 缩放 / 节拍处理。
+      float lin[NUM_GEQ_CHANNELS];
+      for (int i = 0; i < NUM_GEQ_CHANNELS; i++) {
+        float v = (float)receivedPacket.fftResult[i] * (1.0f/255.0f);
+        lin[i] = v * v * AUDIO_NORM_REMOTE_SCALE;
       }
+      audioNormUpdate(lin);
+      volumeSmth = audioNormVol;
+      volumeRaw  = audioNormVol;
+#ifdef ARDUINO_ARCH_ESP32
+      // 保持内部样本量与统一音量同步，避免其它模块读到陈旧值
+      sampleRaw    = audioNormVol;
+      sampleAvg    = audioNormVol;
+      rawSampleAgc = audioNormVol;
+      sampleAgc    = audioNormVol;
+#endif
       //These values are only computed by ESP32
-      for (int i = 0; i < NUM_GEQ_CHANNELS; i++) fftResult[i] = receivedPacket.fftResult[i];
       my_magnitude  = fmaxf(receivedPacket.FFT_Magnitude, 0.0f);
       FFT_Magnitude = my_magnitude;
       FFT_MajorPeak = constrain(receivedPacket.FFT_MajorPeak, 1.0f, 11025.0f);  // restrict value to range expected by effects
@@ -1330,27 +1348,21 @@ class AudioReactive : public Usermod {
 
     void decodeAudioData_v1(int packetSize, uint8_t *fftBuff) {
       audioSyncPacket_v1 *receivedPacket = reinterpret_cast<audioSyncPacket_v1*>(fftBuff);
-      // update samples for effects
-      volumeSmth   = fmaxf(receivedPacket->sampleAgc, 0.0f);
-      volumeRaw    = volumeSmth;   // V1 format does not have "raw" AGC sample
-#ifdef ARDUINO_ARCH_ESP32
-      // update internal samples
-      sampleRaw    = fmaxf(receivedPacket->sampleRaw, 0.0f);
-      sampleAvg    = fmaxf(receivedPacket->sampleAvg, 0.0f);;
-      sampleAgc    = volumeSmth;
-      rawSampleAgc = volumeRaw;
-      multAgc      = 1.0f;
-#endif 
-      // Only change samplePeak IF it's currently false.
-      // If it's true already, then the animation still needs to respond.
-      autoResetPeak();
-      if (!samplePeak) {
-            samplePeak = receivedPacket->samplePeak >0 ? true:false;
-            if (samplePeak) timeOfPeak = millis();
-            //userVar1 = samplePeak;
+      // 与 v2 包一致：只在设备端统一归一化层出结果
+      float lin[NUM_GEQ_CHANNELS];
+      for (int i = 0; i < NUM_GEQ_CHANNELS; i++) {
+        float v = (float)receivedPacket->fftResult[i] * (1.0f/255.0f);
+        lin[i] = v * v * AUDIO_NORM_REMOTE_SCALE;
       }
-      //These values are only available on the ESP32
-      for (int i = 0; i < NUM_GEQ_CHANNELS; i++) fftResult[i] = receivedPacket->fftResult[i];
+      audioNormUpdate(lin);
+      volumeSmth = audioNormVol;
+      volumeRaw  = audioNormVol;
+#ifdef ARDUINO_ARCH_ESP32
+      sampleRaw    = audioNormVol;
+      sampleAvg    = audioNormVol;
+      rawSampleAgc = audioNormVol;
+      sampleAgc    = audioNormVol;
+#endif
       my_magnitude  = fmaxf(receivedPacket->FFT_Magnitude, 0.0);
       FFT_Magnitude = my_magnitude;
       FFT_MajorPeak = constrain(receivedPacket->FFT_MajorPeak, 1.0, 11025.0);  // restrict value to range expected by effects
@@ -1739,9 +1751,9 @@ class AudioReactive : public Usermod {
         } while (userloopDelay > 0);
         lastUMRun = t_now;                    // update time keeping
 
-        // update samples for effects (raw, smooth) 
-        volumeSmth = (soundAgc) ? sampleAgc   : sampleAvg;
-        volumeRaw  = (soundAgc) ? rawSampleAgc: sampleRaw;
+        // 统一归一化层输出：三通道同一口径，灯效无需再做通道补偿
+        volumeSmth = audioNormVol;
+        volumeRaw  = audioNormVol;
         // update FFTMagnitude, taking into account AGC amplification
         my_magnitude = FFT_Magnitude; // / 16.0f, 8.0f, 4.0f done in effects
         if (soundAgc) my_magnitude *= multAgc;
