@@ -11111,19 +11111,20 @@ void mode_particle1DGEQ(void) {
   const uint8_t ref = d->ref;
   const bool    silent = (loud <= 8 || ref <= 16);
 
-  // 实测真实音乐（手机直通）响度集中在参考峰值的 85%~100%：
-  // 以当前素材峰值 ref 的 85% 作为熄灭线（约 2.5dB 的显示窗口），
-  // 安静段压到接近熄灭，只有最响段才到顶；gamma 1.3 让中段层次更明显。
+  // 实测真实音乐（手机直通）响度集中在参考峰值的 88%~100%（约 26 单位 / 1.8dB）：
+  // 以当前素材峰值 ref 的 88% 作为熄灭线，安静段压到接近熄灭，只有最响段才到顶；
+  // gamma 1.3 让中段层次更明显。
   uint8_t target = 0;
   if (!silent) {
-    const float floorL = (float)ref * 0.85f;
+    const float floorL = (float)ref * 0.88f;
     float lvl = ((float)loud - floorL) / ((float)ref - floorL);
     if (lvl > 1.0f) lvl = 1.0f;
     if (lvl > 0.0f) target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
   }
   int16_t dv = (int16_t)target - d->volS;
-  // 快攻慢放；上升至少 1 级，否则整数截断会让目标 255 永远停在 254（顶行不亮）
-  int16_t step = (dv > 0) ? (int16_t)((dv * 5 + 7) / 8) : (int16_t)(dv / 8);
+  // 上升快、回落也快（1/4 帧差）：避免显示长期贴着近期峰值，声量一降就跟着落；
+  // 上升项 +7 保证 dv=1 时也至少升 1 级，否则目标 255 会永远停在 254（顶行不亮）
+  int16_t step = (dv > 0) ? (int16_t)((dv * 5 + 7) / 8) : (int16_t)(dv / 4);
   int16_t nv = (int16_t)d->volS + step;
   d->volS = (uint8_t)(nv < 0 ? 0 : nv);
   SEGMENT.fill(BLACK);
