@@ -263,6 +263,12 @@
     <string name="isle_solid_color">Couleur unie</string>
     <string name="isle_triband_tuning_summary">Couleurs 3 bandes</string>
     <string name="isle_triband_templates">Palettes 3 couleurs</string>
+    <string name="isle_spectrum_tuning_summary">Couleurs 3 bandes</string>
+    <string name="isle_spiral_tuning_summary">Couleurs des doubles chaînes · vitesse</string>
+    <string name="isle_spiral_colors">Couleurs des chaînes</string>
+    <string name="isle_spiral_chain_a">Chaîne A</string>
+    <string name="isle_spiral_chain_b">Chaîne B</string>
+    <string name="isle_basslava_hint">La vitesse règle la dérive de la lave. L\'intensité règle l\'amplitude et l\'éclat donnés par les basses.</string>
     <string name="isle_rhythm_mode">Mode rythmique</string>
     <string name="isle_quick_effects">Effets rapides</string>
     <string name="isle_mood_aurora">Aurore</string>

@@ -263,6 +263,12 @@
     <string name="isle_solid_color">Farbe</string>
     <string name="isle_triband_tuning_summary">3-Band-Farben</string>
     <string name="isle_triband_templates">3-Farben-Paletten</string>
+    <string name="isle_spectrum_tuning_summary">3-Band-Farben</string>
+    <string name="isle_spiral_tuning_summary">Doppelketten-Farben · Tempo</string>
+    <string name="isle_spiral_colors">Kettenfarben</string>
+    <string name="isle_spiral_chain_a">Kette A</string>
+    <string name="isle_spiral_chain_b">Kette B</string>
+    <string name="isle_basslava_hint">Tempo bestimmt die Driftgeschwindigkeit der Lava. Intensität bestimmt, wie stark der Bass sie wölbt und aufhellt.</string>
     <string name="isle_rhythm_mode">Rhythmusmodus</string>
     <string name="isle_quick_effects">Schnelleffekte</string>
     <string name="isle_mood_aurora">Aurora</string>
