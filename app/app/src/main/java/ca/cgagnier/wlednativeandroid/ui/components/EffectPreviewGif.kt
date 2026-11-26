@@ -82,13 +82,18 @@ fun EffectPreviewGif(
 /**
  * 加载预览图。API 28+ 用 [AnimatedImageDrawable] 播放动图；更低版本退回首帧静态图。
  * 素材缺失或格式异常时返回 null，由调用方显示占位块。
+ *
+ * 设备页的灯体外观也要播放同一套预览动图，因此对该模块内可见。
  */
-private fun loadPreviewDrawable(context: Context, assetName: String): Drawable? {
+internal fun loadPreviewDrawable(context: Context, assetName: String): Drawable? {
     val path = "$PREVIEW_ASSET_DIR/$assetName.gif"
     return runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val source = android.graphics.ImageDecoder.createSource(context.assets, path)
-            val decoderDrawable = android.graphics.ImageDecoder.decodeDrawable(source)
+            // 设备页要把每一帧画到离屏软件位图上做模糊，这里固定用软件分配
+            val decoderDrawable = android.graphics.ImageDecoder.decodeDrawable(source) { decoder, _, _ ->
+                decoder.setAllocator(android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE)
+            }
             (decoderDrawable as? AnimatedImageDrawable)?.apply {
                 repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
                 start()

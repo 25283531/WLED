@@ -213,6 +213,7 @@ fun IsleSlider(
     onValueChangeFinished: () -> Unit,
     modifier: Modifier = Modifier,
     accent: List<Color> = IsleColors.Accent,
+    trackBrush: Brush? = null,
 ) {
     // pointerInput(Unit) 的协程以 key 为重启依据，key 恒为 Unit 时它永不重启，
     // 会永久捕获「首次组合」那一刻的回调。上层若用 remember(key) 持有本地状态，
@@ -245,20 +246,30 @@ fun IsleSlider(
             val trackHeight = 4.dp.toPx()
             val cy = size.height / 2f
             val radius = trackHeight / 2f
-            drawRoundRect(
-                color = Color(0x1FFFFFFF),
-                topLeft = Offset(0f, cy - radius),
-                size = Size(size.width, trackHeight),
-                cornerRadius = CornerRadius(radius, radius),
-            )
             val filled = size.width * value.coerceIn(0f, 1f)
-            if (filled > 0f) {
+            if (trackBrush != null) {
+                // 取色滑条：整条轨道直接显示目标渐变，圆头只表示当前取值。
                 drawRoundRect(
-                    brush = Brush.horizontalGradient(accent),
+                    brush = trackBrush,
                     topLeft = Offset(0f, cy - radius),
-                    size = Size(filled, trackHeight),
+                    size = Size(size.width, trackHeight),
                     cornerRadius = CornerRadius(radius, radius),
                 )
+            } else {
+                drawRoundRect(
+                    color = Color(0x1FFFFFFF),
+                    topLeft = Offset(0f, cy - radius),
+                    size = Size(size.width, trackHeight),
+                    cornerRadius = CornerRadius(radius, radius),
+                )
+                if (filled > 0f) {
+                    drawRoundRect(
+                        brush = Brush.horizontalGradient(accent),
+                        topLeft = Offset(0f, cy - radius),
+                        size = Size(filled, trackHeight),
+                        cornerRadius = CornerRadius(radius, radius),
+                    )
+                }
             }
             val thumbRadius = 8.dp.toPx()
             val thumbCenter = Offset(filled.coerceIn(thumbRadius, size.width - thumbRadius), cy)

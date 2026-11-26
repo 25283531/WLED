@@ -1,0 +1,18 @@
+{
+  "product": "C01",
+  "image": "lamp.webp",
+  "width": 479,
+  "height": 1200,
+  "glass": {
+    "left": 0.00661,
+    "top": 0.02691,
+    "right": 0.99472,
+    "bottom": 0.74617
+  },
+  "glow": {
+    "left": 0.04491,
+    "top": 0.04697,
+    "right": 0.95641,
+    "bottom": 0.74512
+  }
+}

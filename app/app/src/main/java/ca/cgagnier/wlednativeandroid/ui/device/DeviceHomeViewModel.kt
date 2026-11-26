@@ -12,6 +12,8 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
+import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.buildEffectSegment
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
@@ -171,6 +173,45 @@ class DeviceHomeViewModel(
         }
         broadcast(device) { mac ->
             deviceConnectionManager.sendSegmentPatch(mac) { it.copy(colors = rebuilt) }
+        }
+    }
+
+    /**
+     * 频谱像素：设置第 [band] 个频段的颜色。
+     *
+     * 前 3 个频段写入 `col[0..2]`；第 4 个频段写入 `c1/c2/c3`（RGB777），
+     * 与固件 `mode_freqpixels()` 的解包约定保持一致。
+     */
+    fun setFrequencyColor(device: DeviceWithState, band: Int, packedRgb: Int) {
+        if (band !in 0 until FrequencyPixels.BAND_COUNT) return
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                if (band >= COLOR_SLOT_COUNT) {
+                    val (c1, c2, c3) = FrequencyPixels.packBand4(packedRgb)
+                    segment.copy(custom1 = c1, custom2 = c2, custom3 = c3)
+                } else {
+                    val colors = List(COLOR_SLOT_COUNT) { slot ->
+                        if (slot == band) {
+                            packedRgb.unpackRgb()
+                        } else {
+                            segment.colors?.getOrNull(slot) ?: listOf(0, 0, 0)
+                        }
+                    }
+                    segment.copy(colors = colors)
+                }
+            }
+        }
+    }
+
+    /** 频谱像素：应用一套四色模板。 */
+    fun applyFrequencyPalette(device: DeviceWithState, palette: FourColorPalette) {
+        if (palette.colors.size != FrequencyPixels.BAND_COUNT) return
+        val colors = palette.colors.take(COLOR_SLOT_COUNT).map { it.unpackRgb() }
+        val (c1, c2, c3) = FrequencyPixels.packBand4(palette.colors[3])
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) {
+                it.copy(colors = colors, custom1 = c1, custom2 = c2, custom3 = c3)
+            }
         }
     }
 

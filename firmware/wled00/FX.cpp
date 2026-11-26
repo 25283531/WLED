@@ -8315,82 +8315,78 @@ static const char _data_FX_MODE_FREQMATRIX[] PROGMEM = "Freqmatrix@Speed,Sound e
 //////////////////////
 //   ** Freqpixels  //
 //////////////////////
-// Start frequency = 60 Hz and log10(60) = 1.78
-// End frequency = 5120 Hz and lo10(5120) = 3.71
-//  SEGMENT.speed select faderate
-//  SEGMENT.intensity select colour index
-void mode_freqpixels(void) {                // Freqpixel. By Andrew Tuline.
-
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
-  const uint16_t cols = SEG_W, rows = SEG_H;
-  if (cols < 2 || rows < 2) return;
-  struct FPx { uint8_t x, y; };
-  struct FPData { uint8_t bassS, midS, highS; FPx blob[2]; FPx midPix[12]; };
-  if (!SEGENV.allocateData(sizeof(FPData))) FX_FALLBACK_STATIC;
-  FPData *d = (FPData*)SEGENV.data;
-  um_data_t *um_data = getAudioData();
+// 频谱像素：FFT 16 个 bin 划分为 4 个频段（低 -> 高，3/4/4/5），每个频段对应一种颜色。
+// 频段能量越大，该颜色点亮的灯珠数量越多；灯珠位置随机散开，不做同类聚合。
+// 颜色来源（WLED 每段仅 3 个颜色槽，因此第 4 色使用 21bit RGB777 打包在 c1/c2/c3）：
+//   band0 = col[0], band1 = col[1], band2 = col[2]
+//   band3 = v = c1 | (c2 << 8) | ((c3 & 0x1F) << 16)，r = (v >> 14) & 0x7F，g/b 依次 7bit
+// 布局自适应：1D 灯带直接按灯珠索引，2D 矩阵按逻辑坐标映射，不写死行列数。
+// fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处不再重复平滑。
+struct FreqpixelData {
+  uint32_t nextShuffle;   // 下次重排时间
+  uint16_t n;             // 随机排列长度
+  uint16_t order[1];      // 0..n-1 的随机排列（变长）
+};
+void mode_freqpixels(void) {
+  const bool is2D = strip.isMatrix && SEGMENT.is2D() && SEG_W > 1 && SEG_H > 1;
+  const uint16_t n = is2D ? SEG_W * SEG_H : SEGLEN;
   SEGMENT.fill(BLACK);
+  if (n < 2) return;
+  if (!SEGENV.allocateData(sizeof(FreqpixelData) + n * sizeof(uint16_t))) FX_FALLBACK_STATIC;
+  FreqpixelData *d = (FreqpixelData*)SEGENV.data;
+  um_data_t *um_data = getAudioData();
   if (!um_data) return;
   uint8_t *fft = (uint8_t*)um_data->u_data[2];
   if (!fft) return;
   float vol = *(float*)um_data->u_data[0];
-  uint8_t bass = fft[0]; for (int i=1;i<3;i++) if (fft[i]>bass) bass=fft[i];
-  uint8_t mid  = fft[3]; for (int i=4;i<8;i++) if (fft[i]>mid)  mid=fft[i];
-  uint8_t high = fft[8]; for (int i=9;i<16;i++) if (fft[i]>high) high=fft[i];
-  int16_t dv;
-  dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
-  dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
-  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
-  if (vol < 6 && d->bassS < 10 && d->midS < 10 && d->highS < 10) return; // 静音全灭
-  if (SEGENV.call == 0) {
-    for (int i=0;i<2;i++){d->blob[i].x=prng.random8();d->blob[i].y=prng.random8();}
-    for (int i=0;i<12;i++){d->midPix[i].x=prng.random8();d->midPix[i].y=prng.random8();}
+
+  static const uint8_t bandStart[4] = {  0,  3,  7, 11 };
+  static const uint8_t bandEnd[4]   = {  2,  6, 10, 15 };
+  uint8_t energy[4];
+  bool silent = vol < 6.0f;
+  for (uint8_t b = 0; b < 4; b++) {
+    uint8_t e = fft[bandStart[b]];
+    for (uint8_t i = bandStart[b] + 1; i <= bandEnd[b]; i++) if (fft[i] > e) e = fft[i];
+    energy[b] = e;
+    if (e >= 10) silent = false;
   }
-  // 低频：2 团暖琥珀光斑，匀速环绕 + 正弦上下漂浮（平滑，无抖动）
-  uint8_t bRad = scale8(d->bassS, 72);
-  for (int i=0;i<2;i++){
-    d->blob[i].x = (uint8_t)(d->blob[i].x + 1);
-    int8_t dy = (int8_t)(sin8_t((uint8_t)(strip.now/50 + i*80)) >> 6) - 1; // -1..2
-    d->blob[i].y = (uint8_t)(d->blob[i].y + dy);
-    uint16_t cx = (uint16_t)(((uint32_t)d->blob[i].x*cols)>>8) % cols;
-    uint16_t cy = lumiRow(d->blob[i].y, rows);
-    int16_t rad = (int16_t)((uint32_t)bRad*rows/255); if (rad<1) rad=1;
-    for (int16_t yy=-rad; yy<=rad; yy++){
-      int16_t y2 = (int16_t)cy+yy; if (y2<0||y2>=(int16_t)rows) continue;
-      int16_t xr = rad - (yy<0?-yy:yy); if (xr<0) xr=0;
-      uint8_t br = (uint8_t)(210 - ((yy<0?-yy:yy)*190)/rad);
-      CRGB c(0xFFE090); c.nscale8(br);
-      for (int16_t dx=-xr; dx<=xr; dx++){
-        int32_t sx = (int32_t)cx + dx;
-        sx = ((sx % (int32_t)cols) + cols) % cols; // 柱面环绕
-        SEGMENT.addPixelColorXY((uint16_t)sx, (uint16_t)y2, c);
-      }
+  if (silent) return;                         // 静音全灭
+
+  // 随机排列：每 140~200ms 重排一次，让数量变化表现为随机位置亮灭而非固定区块
+  if (SEGENV.call == 0 || d->n != n) {
+    d->n = n;
+    for (uint16_t i = 0; i < n; i++) d->order[i] = i;
+    d->nextShuffle = strip.now;
+  }
+  if ((int32_t)(strip.now - d->nextShuffle) >= 0) {
+    for (uint16_t i = n - 1; i > 0; i--) {
+      uint16_t j = prng.random16() % (i + 1);
+      uint16_t t = d->order[i]; d->order[i] = d->order[j]; d->order[j] = t;
     }
+    d->nextShuffle = strip.now + 140 + (prng.random8() & 63);
   }
-  // 中频：一族青色灯珠，数量随 mid，平滑漂移
-  uint8_t midN = (uint8_t)(((uint16_t)d->midS*12)>>8);
-  for (int i=0;i<12;i++){
-    d->midPix[i].x = (uint8_t)(d->midPix[i].x + 2 + (sin8_t((uint8_t)(strip.now/30 + i*20))>>6));
-    d->midPix[i].y = (uint8_t)(d->midPix[i].y + 1);
-    if (i < midN){
-      uint16_t xx=(uint16_t)(((uint32_t)d->midPix[i].x*cols)>>8)%cols;
-      uint16_t yy=lumiRow(d->midPix[i].y,rows);
-      CRGB c(0x40FFD0); c.nscale8((uint8_t)(130+(d->midS>>1)));
-      SEGMENT.addPixelColorXY(xx,yy,c);
-    }
-  }
-  // 高频：仅在 high 较强时稀疏品红闪点，位置随机但数量稳定
-  if (d->highS > 30){
-    uint8_t highN = (uint8_t)(1 + (((uint16_t)d->highS*5)>>8));
-    for (uint8_t i=0;i<highN;i++){
-      uint16_t xx = (uint16_t)prng.random8()*cols>>8;
-      uint16_t yy = lumiRow(prng.random8(), rows);
-      CRGB c(0xFF70E0); c.nscale8((uint8_t)(180+(d->highS>>2)));
-      SEGMENT.addPixelColorXY(xx,yy,c);
+
+  // 第 4 色：RGB777 从 c1/c2/c3 解包（c3 只有 5bit，因此低位在前）
+  uint32_t v = (uint32_t)SEGMENT.custom1 | ((uint32_t)SEGMENT.custom2 << 8) | ((uint32_t)(SEGMENT.custom3 & 0x1F) << 16);
+  uint8_t r7 = (v >> 14) & 0x7F, g7 = (v >> 7) & 0x7F, b7 = v & 0x7F;
+  CRGB colors[4] = {
+    SEGCOLOR(0), SEGCOLOR(1), SEGCOLOR(2),
+    CRGB((r7 << 1) | (r7 >> 6), (g7 << 1) | (g7 >> 6), (b7 << 1) | (b7 >> 6))
+  };
+
+  // 每个频段最多占 1/4 灯珠，数量与能量线性相关；互不抢占，避免低频盖掉高频
+  uint16_t idx = 0;
+  for (uint8_t b = 0; b < 4; b++) {
+    uint16_t e = energy[b] > 10 ? energy[b] - 10 : 0;
+    uint16_t count = (uint32_t)n * e / (4 * 245);
+    for (uint16_t k = 0; k < count && idx < n; k++) {
+      uint16_t p = d->order[idx++];
+      if (is2D) SEGMENT.setPixelColorXY(p % SEG_W, p / SEG_W, colors[b]);
+      else      SEGMENT.setPixelColor(p, colors[b]);
     }
   }
 }
-static const char _data_FX_MODE_FREQPIXELS[] PROGMEM = "Freqpixels@速度,强度;;!;;"; // Pixels, Beatsin
+static const char _data_FX_MODE_FREQPIXELS[] PROGMEM = "Freqpixels@;!,!,!;;"; // 4-band random pixels, colors from col[0..2] + c1/c2/c3
 
 
 //////////////////////

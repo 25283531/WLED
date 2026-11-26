@@ -55,11 +55,13 @@ import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
+import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
-import ca.cgagnier.wlednativeandroid.ui.isle.DeviceTube
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.GlowCircleButton
@@ -70,11 +72,13 @@ import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleSlider
 import ca.cgagnier.wlednativeandroid.ui.isle.SectionLabel
 import ca.cgagnier.wlednativeandroid.ui.isle.StarButton
+import ca.cgagnier.wlednativeandroid.ui.isle.device.DeviceAppearance
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAdd
 import ca.cgagnier.wlednativeandroid.util.CHANNEL_MAX
 import ca.cgagnier.wlednativeandroid.util.channelToNormalized
 import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
 import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
@@ -96,6 +100,14 @@ private val PRESET_COLORS = listOf(
     0x3CFF8A,         // 翠绿
     0xFFE9D7,         // 暖白
     0xFFB46B,         // 暖黄（约 2700K，睡眠夜灯的基准色）
+)
+
+/** 频谱像素的 4 个频段显示名，顺序与固件 FFT 分组一致（低 -> 高）。 */
+private val FREQUENCY_BAND_LABELS = intArrayOf(
+    R.string.isle_freq_band_low,
+    R.string.isle_freq_band_low_mid,
+    R.string.isle_freq_band_high_mid,
+    R.string.isle_freq_band_high,
 )
 
 /** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
@@ -133,12 +145,16 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     var showDeviceSheet by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var tuningExpanded by remember { mutableStateOf(false) }
+    var frequencyColorBand by remember { mutableStateOf<Int?>(null) }
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
     val brightness = (state?.brightness ?: 128).coerceIn(0, CHANNEL_MAX)
     val segment = state?.segment?.firstOrNull()
     val currentEffect = segment?.effect
+    val frequencyEffectId = remember { FrequencyPixels.effectId }
+    val frequencyPixelsActive = currentEffect != null && currentEffect == frequencyEffectId
+    val frequencyColors = remember(segment) { FrequencyPixels.currentColors(segment) }
 
     val nightlight = state?.nightlight
     val nightlightActive = nightlight?.isOn == true
@@ -181,13 +197,15 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
             }
 
             item {
-                DeviceTube(
+                DeviceAppearance(
+                    product = device?.stateInfo?.info?.product,
+                    effectPreview = remember(currentEffect) { EffectCatalog.find(currentEffect)?.preview },
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     isOn = isOn,
                     brightness = channelToNormalized(brightness),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(250.dp)
+                        .height(300.dp)
                         .padding(top = 4.dp),
                 )
             }
@@ -208,6 +226,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     intensity = segment?.effectIntensity ?: 0,
                     palette = segment?.palette ?: 0,
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
+                    frequencyMode = frequencyPixelsActive,
+                    frequencyColors = frequencyColors,
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
                         device?.let { viewModel.setSpeed(it, channel) }
@@ -221,6 +241,10 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     onColor = { packed ->
                         device?.let { viewModel.setPrimaryColor(it, packed) }
                     },
+                    onFrequencyPalette = { palette ->
+                        device?.let { viewModel.applyFrequencyPalette(it, palette) }
+                    },
+                    onEditFrequencyColor = { band -> frequencyColorBand = band },
                 )
             }
 
@@ -361,6 +385,20 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
 
     if (showAddDialog) {
         DeviceAdd(onDismissRequest = { showAddDialog = false })
+    }
+
+    frequencyColorBand?.let { band ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(FREQUENCY_BAND_LABELS[band]),
+            ),
+            initial = frequencyColors.getOrElse(band) { 0xFFFFFF },
+            onDismiss = { frequencyColorBand = null },
+            onPick = { packed ->
+                device?.let { viewModel.setFrequencyColor(it, band, packed) }
+            },
+        )
     }
 }
 
@@ -525,11 +563,15 @@ private fun EffectTuning(
     intensity: Int,
     palette: Int,
     colors: List<Color>,
+    frequencyMode: Boolean,
+    frequencyColors: List<Int>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
     onIntensity: (Int) -> Unit,
     onPalette: (Int) -> Unit,
     onColor: (Int) -> Unit,
+    onFrequencyPalette: (FourColorPalette) -> Unit,
+    onEditFrequencyColor: (Int) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
@@ -550,10 +592,10 @@ private fun EffectTuning(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = if (expanded) {
-                    stringResource(R.string.isle_effect_tuning_collapse)
-                } else {
-                    stringResource(
+                text = when {
+                    expanded -> stringResource(R.string.isle_effect_tuning_collapse)
+                    frequencyMode -> stringResource(R.string.isle_freq_tuning_summary)
+                    else -> stringResource(
                         R.string.isle_effect_tuning_summary,
                         normalizedToPercent(localSpeed),
                         normalizedToPercent(localIntensity),
@@ -567,59 +609,67 @@ private fun EffectTuning(
         if (expanded) {
             GlassCard(modifier = Modifier.padding(top = 10.dp)) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                    TuningSlider(
-                        label = stringResource(R.string.isle_effect_speed),
-                        value = localSpeed,
-                        onValueChange = { localSpeed = it },
-                        onCommit = {
-                            onSpeed(normalizedToChannel(localSpeed))
-                        },
-                    )
-                    TuningSlider(
-                        label = stringResource(R.string.isle_effect_intensity),
-                        value = localIntensity,
-                        onValueChange = { localIntensity = it },
-                        onCommit = {
-                            onIntensity(normalizedToChannel(localIntensity))
-                        },
-                    )
+                    if (frequencyMode) {
+                        FrequencyColorEditor(
+                            colors = frequencyColors,
+                            onEdit = onEditFrequencyColor,
+                            onPalette = onFrequencyPalette,
+                        )
+                    } else {
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_speed),
+                            value = localSpeed,
+                            onValueChange = { localSpeed = it },
+                            onCommit = {
+                                onSpeed(normalizedToChannel(localSpeed))
+                            },
+                        )
+                        TuningSlider(
+                            label = stringResource(R.string.isle_effect_intensity),
+                            value = localIntensity,
+                            onValueChange = { localIntensity = it },
+                            onCommit = {
+                                onIntensity(normalizedToChannel(localIntensity))
+                            },
+                        )
 
-                    Text(
-                        text = stringResource(R.string.isle_effect_color),
-                        color = IsleColors.TextSecondary,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        colors.take(3).forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .background(color, CircleShape)
-                                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
-                            )
+                        Text(
+                            text = stringResource(R.string.isle_effect_color),
+                            color = IsleColors.TextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            colors.take(3).forEach { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .background(color, CircleShape)
+                                        .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            PRESET_COLORS.forEach { packed ->
+                                val rgb = packedToColor(packed)
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .background(rgb, CircleShape)
+                                        .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                                        .clickable { onColor(packed) },
+                                )
+                            }
                         }
-                        Spacer(Modifier.width(4.dp))
-                        PRESET_COLORS.forEach { packed ->
-                            val rgb = packedToColor(packed)
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .background(rgb, CircleShape)
-                                    .border(1.dp, IsleColors.StrokeStrong, CircleShape)
-                                    .clickable { onColor(packed) },
-                            )
-                        }
+
+                        PalettePicker(
+                            selected = palette,
+                            onSelect = onPalette,
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
                     }
-
-                    PalettePicker(
-                        selected = palette,
-                        onSelect = onPalette,
-                        modifier = Modifier.padding(top = 14.dp),
-                    )
                 }
             }
         }
@@ -706,6 +756,253 @@ private fun PaletteSwatch(
             .clickable(onClick = onClick),
     )
 }
+
+@Composable
+private fun FrequencyColorEditor(
+    colors: List<Int>,
+    onEdit: (Int) -> Unit,
+    onPalette: (FourColorPalette) -> Unit,
+) {
+    val matched = remember(colors) { FrequencyPixels.matchPalette(colors) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.isle_freq_colors),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = matched?.let { stringResource(it.nameRes) }
+                ?: stringResource(R.string.isle_freq_custom),
+            color = IsleColors.TextMuted,
+            fontSize = 11.5.sp,
+        )
+    }
+    FREQUENCY_BAND_LABELS.forEachIndexed { band, labelRes ->
+        val packed = colors.getOrElse(band) { 0 }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onEdit(band) }
+                .padding(vertical = 7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(packedToColor(packed), CircleShape)
+                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+            )
+            Text(
+                text = stringResource(labelRes),
+                color = IsleColors.TextPrimary,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            )
+            Text(
+                text = String.format("#%06X", packed and 0xFFFFFF),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
+            )
+        }
+    }
+
+    Text(
+        text = stringResource(R.string.isle_freq_templates),
+        color = IsleColors.TextSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        FrequencyPixels.palettes.forEach { palette ->
+            FrequencyPaletteSwatch(
+                palette = palette,
+                selected = palette == matched,
+                onClick = { onPalette(palette) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FrequencyPaletteSwatch(
+    palette: FourColorPalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(7.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(shape)
+                .border(
+                    width = if (selected) 1.8.dp else 1.dp,
+                    color = if (selected) IsleColors.Cyan else IsleColors.StrokeStrong,
+                    shape = shape,
+                ),
+        ) {
+            palette.colors.forEach { packed ->
+                Box(
+                    modifier = Modifier
+                        .size(width = 15.dp, height = 28.dp)
+                        .background(packedToColor(packed)),
+                )
+            }
+        }
+        Text(
+            text = stringResource(palette.nameRes),
+            color = if (selected) IsleColors.Cyan else IsleColors.TextMuted,
+            fontSize = 10.5.sp,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * 频谱像素的单频段取色弹层。
+ *
+ * 用 HSV 三个滑条覆盖任意颜色，同时保留一排产品预设色方便快速选择；
+ * 滑条松手与预设点按都会立即下发，拖动过程中只更新本地预览。
+ */
+@Composable
+private fun FrequencyColorSheet(
+    title: String,
+    initial: Int,
+    onDismiss: () -> Unit,
+    onPick: (Int) -> Unit,
+) {
+    val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(initial, it) } }
+    var hue by remember { mutableFloatStateOf(hsv[0] / 360f) }
+    var saturation by remember { mutableFloatStateOf(hsv[1]) }
+    var brightness by remember { mutableFloatStateOf(if (hsv[2] < 0.05f) 1f else hsv[2]) }
+    val current = hsvToPacked(hue, saturation, brightness)
+
+    BottomSheet(onDismiss = onDismiss) {
+        SheetTitle(title)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(packedToColor(current))
+                .border(1.dp, IsleColors.StrokeStrong, RoundedCornerShape(12.dp)),
+        )
+        FrequencyColorSlider(
+            label = stringResource(R.string.isle_freq_hue),
+            value = hue,
+            track = Brush.horizontalGradient(
+                listOf(
+                    0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
+                    0xFF0000FF, 0xFFFF00FF, 0xFFFF0000,
+                ).map { packedToColor(it) },
+            ),
+            onValueChange = { hue = it },
+            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
+        )
+        FrequencyColorSlider(
+            label = stringResource(R.string.isle_freq_saturation),
+            value = saturation,
+            track = Brush.horizontalGradient(
+                listOf(Color.White, packedToColor(hsvToPacked(hue, 1f, brightness))),
+            ),
+            onValueChange = { saturation = it },
+            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
+        )
+        FrequencyColorSlider(
+            label = stringResource(R.string.isle_freq_brightness),
+            value = brightness,
+            track = Brush.horizontalGradient(
+                listOf(Color.Black, packedToColor(hsvToPacked(hue, saturation, 1f))),
+            ),
+            onValueChange = { brightness = it },
+            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
+        )
+
+        Text(
+            text = stringResource(R.string.isle_freq_preset_colors),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            PRESET_COLORS.forEach { packed ->
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(packedToColor(packed), CircleShape)
+                        .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                        .clickable {
+                            onPick(packed)
+                            onDismiss()
+                        },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FrequencyColorSlider(
+    label: String,
+    value: Float,
+    track: Brush,
+    onValueChange: (Float) -> Unit,
+    onCommit: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                color = IsleColors.TextSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${(value * 100).roundToInt()}%",
+                color = IsleColors.TextPrimary,
+                fontSize = 12.sp,
+                modifier = Modifier.width(40.dp),
+            )
+        }
+        IsleSlider(
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onCommit,
+            trackBrush = track,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+        )
+    }
+}
+
+private fun hsvToPacked(hue: Float, saturation: Float, brightness: Float): Int =
+    android.graphics.Color.HSVToColor(
+        floatArrayOf(
+            hue.coerceIn(0f, 1f) * 360f,
+            saturation.coerceIn(0f, 1f),
+            brightness.coerceIn(0f, 1f),
+        ),
+    ) and 0xFFFFFF
 
 @Composable
 private fun TuningSlider(

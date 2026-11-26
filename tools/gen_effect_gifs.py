@@ -281,6 +281,30 @@ def r_bars_2d(t, seed=1.0):
     return grid
 
 
+def r_freq_pixels(t):
+    """频谱像素：4 个频段各一种颜色，数量随能量变化，位置随机散开。"""
+    colors = [(0x00, 0xF5, 0xFF), (0x1E, 0x78, 0xFF), (0xAF, 0x28, 0xFF), (0x3C, 0xFF, 0xB0)]
+    energies = [
+        0.55 + 0.45 * math.sin(t * 2 * math.pi * 0.9),
+        0.45 + 0.35 * math.sin(t * 2 * math.pi * 1.4 + 1.1),
+        0.40 + 0.35 * math.sin(t * 2 * math.pi * 1.9 + 2.2),
+        0.30 + 0.40 * math.sin(t * 2 * math.pi * 2.6 + 3.0),
+    ]
+    cells = [(x, y) for y in range(H) for x in range(W)]
+    block = int(t * FRAMES) // 4   # 与固件一致：随机排列每几帧重排一次
+    rnd = random.Random(block * 97 + 11)
+    rnd.shuffle(cells)
+    grid = empty()
+    idx = 0
+    for color, energy in zip(colors, energies):
+        count = int(len(cells) * max(0.0, energy) * 0.25)
+        for _ in range(count):
+            x, y = cells[idx % len(cells)]
+            idx += 1
+            grid[y][x] = color
+    return grid
+
+
 def r_dots(t, colors, count=5, seed=6.0, tail=3):
     rnd = random.Random(int(seed * 89))
     dots = [(rnd.uniform(0, 1), rnd.uniform(0.3, 1.2), rnd.choice(colors)) for _ in range(count)]
@@ -887,7 +911,7 @@ def build_effects() -> dict:
         108: lambda t: r_noise_flow(t, [0.0, (10, 4, 30), 0.5, (120, 40, 200), 1.0, (200, 240, 255)], 0.1, 1.4, 45),
         109: lambda t: r_noise_flow(t, OCEAN_STOPS, 0.07, 0.9, 46),
         110: lambda t: r_noise_flow(t, AURORA_STOPS, 0.2, 1.4, 47),
-        111: lambda t: r_bars_2d(t, 48),
+        111: lambda t: r_freq_pixels(t),
         112: lambda t: r_bars_2d(t, 49),
         114: lambda t: r_rain(t, (120, 200, 255), 16, 50),
         115: lambda t: r_bars_2d(t, 51),
