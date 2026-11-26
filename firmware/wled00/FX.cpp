@@ -5765,15 +5765,10 @@ void mode_lumi_fountain(void) {
   uint8_t high = fft[8];
   for (uint8_t i = 9; i < 16; i++) if (fft[i] > high) high = fft[i];
 
-  // 快攻慢放
-  int16_t dv = (int16_t)bass - d->bassS; d->bassS += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
-  dv = (int16_t)mid  - d->midS;  d->midS  += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
-  dv = (int16_t)high - d->highS; d->highS += (uint8_t)((dv * (dv > 0 ? 3 : 1)) / 8);
+  // 三频段能量直接取统一层输出（已完成 AGC 与平滑，效果内不再重复处理）
+  d->bassS = bass; d->midS = mid; d->highS = high;
 
-  bool transient = false;
-  if (peak && (strip.now - d->lastPeak) > 120) { d->lastPeak = strip.now; transient = true; }
-  if ((uint8_t)vol > d->prevVol + 30) transient = true;   // 音量上升沿
-  d->prevVol = (uint8_t)vol;
+  bool transient = (peak != 0);   // 节拍由统一层检测（含冷却窗口）
   // 瞬态灵敏度
   if (transient && (uint8_t)vol < (256 - SEGMENT.custom2)) transient = false;
 
@@ -5865,11 +5860,11 @@ void mode_stagelight(void) {
     h=fft[8]; for(int i=9;i<16;i++) if(fft[i]>h) h=fft[i];
   }
   uint8_t band = (SEGMENT.custom1 < 128) ? b : h;
-  int16_t dv=(int16_t)band-d->bandS; d->bandS+=(uint8_t)((dv*(dv>0?4:1))/8);
+  d->bandS = band;   // 统一层已平滑，效果内不再重复
   uint8_t dominant = (b>=m && b>=h) ? 0 : (m>=h ? 1 : 2); // 主频段，多色时选色
   uint8_t thr = SEGMENT.custom2; // 阈值，越大越不敏感
   bool hit = (d->bandS > thr) && (d->bandS > d->strobe);
-  if (hit || (peak && (strip.now - d->lastPeak) > 90)){
+  if (hit || peak){
     uint8_t tier = 0;
     if (d->bandS > (uint8_t)(thr+30)) tier = 1;
     if (d->bandS > (uint8_t)(thr+60)) tier = 2;
@@ -5878,7 +5873,6 @@ void mode_stagelight(void) {
     uint8_t target = kTierBri[tier];
     if (target > d->strobe) d->strobe = target;
     d->colIdx = dominant;
-    d->lastPeak = strip.now;
   }
   d->strobe = scale8(d->strobe, 200);
   if (d->strobe < 8) return; // 全黑，无常亮底
@@ -5903,18 +5897,13 @@ void mode_tribreath(void) {
   SEGMENT.fill(BLACK);
   if (!um_data) return;
   uint8_t *fft = (uint8_t*)um_data->u_data[2]; if (!fft) return;
-  float vol = *(float*)um_data->u_data[0];
   uint8_t peak = *(uint8_t*)um_data->u_data[3];
   uint8_t bass = fft[0]; for (int i=1;i<3;i++) if (fft[i]>bass) bass=fft[i];
   uint8_t mid  = fft[3]; for (int i=4;i<8;i++) if (fft[i]>mid)  mid=fft[i];
   uint8_t high = fft[8]; for (int i=9;i<16;i++) if (fft[i]>high) high=fft[i];
-  int16_t dv;
-  dv=(int16_t)bass-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?3:1))/8);
-  dv=(int16_t)mid -d->midS;  d->midS +=(uint8_t)((dv*(dv>0?3:1))/8);
-  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?3:1))/8);
-  bool transient = (peak && (strip.now - d->lastPeak) > 120);
-  if ((uint8_t)vol > d->prevVol + 25) transient = true;
-  d->prevVol = (uint8_t)vol; if (transient) d->lastPeak = strip.now;
+  // 三频段能量直接取统一层输出（已完成 AGC 与平滑）
+  d->bassS = bass; d->midS = mid; d->highS = high;
+  bool transient = (peak != 0);   // 节拍由统一层检测
   uint8_t bassBoost = transient ? 80 : 0;
   for (uint16_t y=0;y<rows;y++){
     uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
@@ -5941,7 +5930,6 @@ void mode_audiospiral(void) {
   // 音频螺旋：两条主链之间夹一条 6 列宽的音频响应填充带，整体按固定转速螺旋上升
   struct SpiralData {
     float scroll;      // 螺旋滚动（圈，0~1）
-    float smooth[6];   // 6 个子列能量平滑 0~1
     float blink[6];    // 6 个子列闪烁相位（rad）
     float flash;       // 节拍闪光 0~1
     uint32_t lastMs;
@@ -5951,7 +5939,6 @@ void mode_audiospiral(void) {
   if (d->lastMs == 0){
     d->scroll = 0.0f; d->flash = 0.0f;
     for (int i=0;i<6;i++){
-      d->smooth[i] = 0.0f;
       d->blink[i] = (float)i * 1.05f;
     }
     d->lastMs = strip.now ? strip.now : 1;
@@ -5992,11 +5979,10 @@ void mode_audiospiral(void) {
   // 节拍闪光
   if (peakHit) d->flash = 1.0f; else d->flash *= expf(-7.0f * dt);
 
-  // 每个子列：能量平滑 + 闪烁相位（能量越高闪得越快，0.5~5.5Hz）
+  // 每个子列：闪烁相位（能量越高闪得越快，0.5~5.5Hz；能量由统一层平滑）
   for (int i=0;i<6;i++){
     float e = (float)fftv[i] / 255.0f;
-    d->smooth[i] += (e - d->smooth[i]) * ((e > d->smooth[i]) ? 0.55f : 0.12f);
-    d->blink[i] += (0.5f + d->smooth[i] * 5.0f) * fTWO_PI * dt;
+    d->blink[i] += (0.5f + e * 5.0f) * fTWO_PI * dt;
     if (d->blink[i] >= fTWO_PI) d->blink[i] -= fTWO_PI;
   }
 
@@ -6023,7 +6009,7 @@ void mode_audiospiral(void) {
       if (dxx > 0.0f && dxx < bandW){
         float t = dxx / bandW;
         int bi = (int)(t * 6.0f); if (bi > 5) bi = 5; if (bi < 0) bi = 0;
-        float e = d->smooth[bi];
+        float e = (float)fftv[bi] / 255.0f;
         float osc = 0.5f + 0.5f * sin_approx(d->blink[bi]);
         float v = (0.10f + 0.90f * e) * (0.40f + 0.60f * osc);
         v *= 1.0f + 0.35f * d->flash; if (v > 1.0f) v = 1.0f;
@@ -6072,10 +6058,9 @@ void mode_sonicpulse(void) {
     uint8_t *fft=(uint8_t*)um_data->u_data[2];
     uint8_t peak=*(uint8_t*)um_data->u_data[3];
     if (fft){ uint8_t b=fft[0]; for(int i=1;i<3;i++) if(fft[i]>b) b=fft[i]; bassS=b; }
-    int16_t dv=(int16_t)bassS-d->bassS; d->bassS+=(uint8_t)((dv*(dv>0?4:1))/8);
-    bool hit = peak && (strip.now - d->lastPeak) > 110;
+    d->bassS = bassS;                 // 统一层已平滑，效果内不再重复
+    bool hit = (peak != 0);           // 节拍由统一层检测
     if (hit){
-      d->lastPeak = strip.now;
       for (int i=0;i<6;i+=2){
         if (d->p[i].life==0){ d->p[i].h=128; d->p[i].dir=+1; d->p[i].life=255; d->p[i+1].h=128; d->p[i+1].dir=-1; d->p[i+1].life=255; break; }
       }
@@ -6158,9 +6143,8 @@ void mode_basslava(void) {
   d->lastMs = now;
   if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;   // 防止掉帧导致物理步长爆炸
   float timeSec = (float)now * 0.001f;
-  // A. 重低音包络(快攻慢放) + 二阶弹簧阻尼(瞬间膨胀 + 弹性回弹)
-  if (bassInput > d->smoothBass) d->smoothBass += (bassInput - d->smoothBass) * 0.65f;
-  else d->smoothBass += (bassInput - d->smoothBass) * 0.12f;
+  // A. 重低音包络直接取统一层输出 + 二阶弹簧阻尼(瞬间膨胀 + 弹性回弹)
+  d->smoothBass = bassInput;      // 统一层已平滑，效果内不再重复
   float targetPump = (d->smoothBass > 0.15f) ? ((d->smoothBass - 0.15f) / 0.85f) : 0.0f;  // 0.15死区抑制底噪微颤
   targetPump = powf(targetPump, 1.3f);                    // 增强重低音动态对比
   const float stiffness = 180.0f, damping = 14.0f;        // 阻尼略低于临界，收缩时Q弹回弹
@@ -6227,10 +6211,8 @@ void mode_spectrumlamp(void) {
       high=fft[8]; for(int i=9;i<16;i++) if(fft[i]>high) high=fft[i];
     }
   }
-  int16_t dv;
-  dv=(int16_t)low -d->lowS; d->lowS +=(uint8_t)((dv*(dv>0?4:1))/8);
-  dv=(int16_t)mid -d->midS; d->midS +=(uint8_t)((dv*(dv>0?4:1))/8);
-  dv=(int16_t)high-d->highS; d->highS+=(uint8_t)((dv*(dv>0?4:1))/8);
+  // 三频段能量直接取统一层输出（已完成 AGC 与平滑）
+  d->lowS = low; d->midS = mid; d->highS = high;
   for (uint16_t x=0;x<cols;x++){
     // 镜像：到中心距离 -> 频段 低-中-高-中-低
     int16_t cx = (int16_t)(cols-1)/2;
@@ -11518,59 +11500,35 @@ void WS2812FX::setupEffectData() {
     _modeData.push_back(_data_RESERVED);
   }
   // now replace all pre-allocated effects
+  // NOTE: effects removed for the C01 product keep their FX_MODE_* IDs reserved (RSVD slots) until renumbering is scheduled.
   addEffect(FX_MODE_COPY, &mode_copy_segment, _data_FX_MODE_COPY);
   // --- 1D non-audio effects ---
   addEffect(FX_MODE_BLINK, &mode_blink, _data_FX_MODE_BLINK);
   addEffect(FX_MODE_BREATH, &mode_breath, _data_FX_MODE_BREATH);
-  addEffect(FX_MODE_COLOR_WIPE, &mode_color_wipe, _data_FX_MODE_COLOR_WIPE);
-  addEffect(FX_MODE_RANDOM_COLOR, &mode_random_color, _data_FX_MODE_RANDOM_COLOR);
-  addEffect(FX_MODE_COLOR_SWEEP, &mode_color_sweep, _data_FX_MODE_COLOR_SWEEP);
-  addEffect(FX_MODE_DYNAMIC, &mode_dynamic, _data_FX_MODE_DYNAMIC);
   addEffect(FX_MODE_RAINBOW, &mode_rainbow, _data_FX_MODE_RAINBOW);
   addEffect(FX_MODE_RAINBOW_CYCLE, &mode_rainbow_cycle, _data_FX_MODE_RAINBOW_CYCLE);
-  addEffect(FX_MODE_SCAN, &mode_scan, _data_FX_MODE_SCAN);
   addEffect(FX_MODE_FADE, &mode_fade, _data_FX_MODE_FADE);
   addEffect(FX_MODE_THEATER_CHASE, &mode_theater_chase, _data_FX_MODE_THEATER_CHASE);
   addEffect(FX_MODE_RUNNING_LIGHTS, &mode_running_lights, _data_FX_MODE_RUNNING_LIGHTS);
-  addEffect(FX_MODE_TWINKLE, &mode_twinkle, _data_FX_MODE_TWINKLE);
   addEffect(FX_MODE_DISSOLVE, &mode_dissolve, _data_FX_MODE_DISSOLVE);
-  addEffect(FX_MODE_FLASH_SPARKLE, &mode_flash_sparkle, _data_FX_MODE_FLASH_SPARKLE);
-  addEffect(FX_MODE_STROBE, &mode_strobe, _data_FX_MODE_STROBE);
   addEffect(FX_MODE_MULTI_STROBE, &mode_multi_strobe, _data_FX_MODE_MULTI_STROBE);
-  addEffect(FX_MODE_ANDROID, &mode_android, _data_FX_MODE_ANDROID);
   addEffect(FX_MODE_CHASE_COLOR, &mode_chase_color, _data_FX_MODE_CHASE_COLOR);
-  addEffect(FX_MODE_CHASE_FLASH, &mode_chase_flash, _data_FX_MODE_CHASE_FLASH);
   addEffect(FX_MODE_CHASE_FLASH_RANDOM, &mode_chase_flash_random, _data_FX_MODE_CHASE_FLASH_RANDOM);
-  addEffect(FX_MODE_CHASE_RAINBOW_WHITE, &mode_chase_rainbow_white, _data_FX_MODE_CHASE_RAINBOW_WHITE);
   addEffect(FX_MODE_COLORFUL, &mode_colorful, _data_FX_MODE_COLORFUL);
-  addEffect(FX_MODE_TRAFFIC_LIGHT, &mode_traffic_light, _data_FX_MODE_TRAFFIC_LIGHT);
-  addEffect(FX_MODE_AURORA, &mode_aurora, _data_FX_MODE_AURORA);
   addEffect(FX_MODE_COLORCLOUDS, &mode_ColorClouds, _data_FX_MODE_COLORCLOUDS);
-  addEffect(FX_MODE_RUNNING_RANDOM, &mode_running_random, _data_FX_MODE_RUNNING_RANDOM);
-  addEffect(FX_MODE_LARSON_SCANNER, &mode_larson_scanner, _data_FX_MODE_LARSON_SCANNER);
-  addEffect(FX_MODE_RAIN, &mode_rain, _data_FX_MODE_RAIN);
   addEffect(FX_MODE_COLORWAVES, &mode_colorwaves, _data_FX_MODE_COLORWAVES);
   addEffect(FX_MODE_FIREWORKS, &mode_fireworks, _data_FX_MODE_FIREWORKS);
-  addEffect(FX_MODE_TETRIX, &mode_tetrix, _data_FX_MODE_TETRIX);
   addEffect(FX_MODE_FIRE_FLICKER, &mode_fire_flicker, _data_FX_MODE_FIRE_FLICKER);
   addEffect(FX_MODE_GRADIENT, &mode_gradient, _data_FX_MODE_GRADIENT);
   addEffect(FX_MODE_FAIRY, &mode_fairy, _data_FX_MODE_FAIRY);
-  addEffect(FX_MODE_TWO_DOTS, &mode_two_dots, _data_FX_MODE_TWO_DOTS);
-  addEffect(FX_MODE_FAIRYTWINKLE, &mode_fairytwinkle, _data_FX_MODE_FAIRYTWINKLE);
   #ifdef WLED_ENABLE_GIF
   addEffect(FX_MODE_IMAGE, &mode_image, _data_FX_MODE_IMAGE);
   #endif
   addEffect(FX_MODE_TRICOLOR_CHASE, &mode_tricolor_chase, _data_FX_MODE_TRICOLOR_CHASE);
-  addEffect(FX_MODE_TRICOLOR_WIPE, &mode_tricolor_wipe, _data_FX_MODE_TRICOLOR_WIPE);
   addEffect(FX_MODE_TRICOLOR_FADE, &mode_tricolor_fade, _data_FX_MODE_TRICOLOR_FADE);
-  addEffect(FX_MODE_LIGHTNING, &mode_lightning, _data_FX_MODE_LIGHTNING);
-  addEffect(FX_MODE_ICU, &mode_icu, _data_FX_MODE_ICU);
-  addEffect(FX_MODE_RANDOM_CHASE, &mode_random_chase, _data_FX_MODE_RANDOM_CHASE);
-  addEffect(FX_MODE_OSCILLATE, &mode_oscillate, _data_FX_MODE_OSCILLATE);
   addEffect(FX_MODE_JUGGLE, &mode_juggle, _data_FX_MODE_JUGGLE);
   addEffect(FX_MODE_PALETTE, &mode_palette, _data_FX_MODE_PALETTE);
   addEffect(FX_MODE_FILLNOISE8, &mode_fillnoise8, _data_FX_MODE_FILLNOISE8);
-  addEffect(FX_MODE_NOISE16_1, &mode_noise16_1, _data_FX_MODE_NOISE16_1);
   addEffect(FX_MODE_NOISE16_4, &mode_noise16_4, _data_FX_MODE_NOISE16_4);
   addEffect(FX_MODE_COLORTWINKLE, &mode_colortwinkle, _data_FX_MODE_COLORTWINKLE);
   addEffect(FX_MODE_LAKE, &mode_lake, _data_FX_MODE_LAKE);
@@ -11579,46 +11537,24 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_RAILWAY, &mode_railway, _data_FX_MODE_RAILWAY);
   addEffect(FX_MODE_RIPPLE, &mode_ripple, _data_FX_MODE_RIPPLE);
   addEffect(FX_MODE_TWINKLEFOX, &mode_twinklefox, _data_FX_MODE_TWINKLEFOX);
-  addEffect(FX_MODE_HALLOWEEN_EYES, &mode_halloween_eyes, _data_FX_MODE_HALLOWEEN_EYES);
-  addEffect(FX_MODE_STATIC_PATTERN, &mode_static_pattern, _data_FX_MODE_STATIC_PATTERN);
-  addEffect(FX_MODE_TRI_STATIC_PATTERN, &mode_tri_static_pattern, _data_FX_MODE_TRI_STATIC_PATTERN);
-  addEffect(FX_MODE_SPOTS, &mode_spots, _data_FX_MODE_SPOTS);
-  addEffect(FX_MODE_COMET, &mode_comet, _data_FX_MODE_COMET);
-  #if defined(WLED_PS_DONT_REPLACE_1D_FX) || defined(WLED_PS_DONT_REPLACE_2D_FX)
-  addEffect(FX_MODE_FIRE_2012, &mode_fire_2012, _data_FX_MODE_FIRE_2012);
-  addEffect(FX_MODE_EXPLODING_FIREWORKS, &mode_exploding_fireworks, _data_FX_MODE_EXPLODING_FIREWORKS);
-  #endif
-  addEffect(FX_MODE_SPARKLE, &mode_sparkle, _data_FX_MODE_SPARKLE);
   addEffect(FX_MODE_GLITTER, &mode_glitter, _data_FX_MODE_GLITTER);
-  addEffect(FX_MODE_SOLID_GLITTER, &mode_solid_glitter, _data_FX_MODE_SOLID_GLITTER);
-  addEffect(FX_MODE_MULTI_COMET, &mode_multi_comet, _data_FX_MODE_MULTI_COMET);  
   #ifdef WLED_PS_DONT_REPLACE_1D_FX
   addEffect(FX_MODE_ROLLINGBALLS, &mode_rolling_balls, _data_FX_MODE_ROLLINGBALLS);
   addEffect(FX_MODE_STARBURST, &mode_starburst, _data_FX_MODE_STARBURST);
   addEffect(FX_MODE_DANCING_SHADOWS, &mode_dancing_shadows, _data_FX_MODE_DANCING_SHADOWS);
   #endif
-  addEffect(FX_MODE_CANDLE, &mode_candle, _data_FX_MODE_CANDLE);
   addEffect(FX_MODE_BOUNCINGBALLS, &mode_bouncing_balls, _data_FX_MODE_BOUNCINGBALLS);
   addEffect(FX_MODE_POPCORN, &mode_popcorn, _data_FX_MODE_POPCORN);
   addEffect(FX_MODE_DRIP, &mode_drip, _data_FX_MODE_DRIP);
-  addEffect(FX_MODE_SINELON, &mode_sinelon, _data_FX_MODE_SINELON);
   addEffect(FX_MODE_PLASMA, &mode_plasma, _data_FX_MODE_PLASMA);
-  addEffect(FX_MODE_PERCENT, &mode_percent, _data_FX_MODE_PERCENT);
-  addEffect(FX_MODE_HEARTBEAT, &mode_heartbeat, _data_FX_MODE_HEARTBEAT);
-  addEffect(FX_MODE_PACIFICA, &mode_pacifica, _data_FX_MODE_PACIFICA);
-  addEffect(FX_MODE_CANDLE_MULTI, &mode_candle_multi, _data_FX_MODE_CANDLE_MULTI);
   addEffect(FX_MODE_SUNRISE, &mode_sunrise, _data_FX_MODE_SUNRISE);
   addEffect(FX_MODE_PHASED, &mode_phased, _data_FX_MODE_PHASED);
-  addEffect(FX_MODE_TWINKLEUP, &mode_twinkleup, _data_FX_MODE_TWINKLEUP);
-  addEffect(FX_MODE_NOISEPAL, &mode_noisepal, _data_FX_MODE_NOISEPAL);
   addEffect(FX_MODE_SINEWAVE, &mode_sinewave, _data_FX_MODE_SINEWAVE);
   addEffect(FX_MODE_FLOW, &mode_flow, _data_FX_MODE_FLOW);
   addEffect(FX_MODE_CHUNCHUN, &mode_chunchun, _data_FX_MODE_CHUNCHUN);  
   addEffect(FX_MODE_WASHING_MACHINE, &mode_washing_machine, _data_FX_MODE_WASHING_MACHINE);
   addEffect(FX_MODE_BLENDS, &mode_blends, _data_FX_MODE_BLENDS);
-  addEffect(FX_MODE_TV_SIMULATOR, &mode_tv_simulator, _data_FX_MODE_TV_SIMULATOR);
   addEffect(FX_MODE_PACMAN, &mode_pacman, _data_FX_MODE_PACMAN);
-  addEffect(FX_MODE_SLOW_TRANSITION, &mode_slow_transition, _data_FX_MODE_SLOW_TRANSITION);
 
   // --- 1D audio effects ---
   addEffect(FX_MODE_PIXELS, &mode_pixels, _data_FX_MODE_PIXELS);
@@ -11633,18 +11569,14 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_FREQPIXELS, &mode_freqpixels, _data_FX_MODE_FREQPIXELS);
   addEffect(FX_MODE_NOISEFIRE, &mode_noisefire, _data_FX_MODE_NOISEFIRE);
   addEffect(FX_MODE_NOISEMOVE, &mode_noisemove, _data_FX_MODE_NOISEMOVE);
-  addEffect(FX_MODE_PERLINMOVE, &mode_perlinmove, _data_FX_MODE_PERLINMOVE);
   addEffect(FX_MODE_GRAVCENTER, &mode_gravcenter, _data_FX_MODE_GRAVCENTER);
   addEffect(FX_MODE_BLURZ, &mode_blurz, _data_FX_MODE_BLURZ);
   addEffect(FX_MODE_FLOWSTRIPE, &mode_FlowStripe, _data_FX_MODE_FLOWSTRIPE);
   addEffect(FX_MODE_WAVESINS, &mode_wavesins, _data_FX_MODE_WAVESINS);
   addEffect(FX_MODE_ROCKTAVES, &mode_rocktaves, _data_FX_MODE_ROCKTAVES);
-  addEffect(FX_MODE_SHIMMER, &mode_shimmer, _data_FX_MODE_SHIMMER);
 
   // --- 2D  effects ---
 #ifndef WLED_DISABLE_2D
-  addEffect(FX_MODE_2DPLASMAROTOZOOM, &mode_2Dplasmarotozoom, _data_FX_MODE_2DPLASMAROTOZOOM);
-  addEffect(FX_MODE_2DSPACESHIPS, &mode_2Dspaceships, _data_FX_MODE_2DSPACESHIPS);
   addEffect(FX_MODE_2DCRAZYBEES, &mode_2Dcrazybees, _data_FX_MODE_2DCRAZYBEES);
 
   #ifdef WLED_PS_DONT_REPLACE_2D_FX
@@ -11653,17 +11585,11 @@ void WS2812FX::setupEffectData() {
   #endif
 
   addEffect(FX_MODE_2DSCROLLTEXT, &mode_2Dscrollingtext, _data_FX_MODE_2DSCROLLTEXT);
-  addEffect(FX_MODE_2DDRIFTROSE, &mode_2Ddriftrose, _data_FX_MODE_2DDRIFTROSE);
   addEffect(FX_MODE_2DDISTORTIONWAVES, &mode_2Ddistortionwaves, _data_FX_MODE_2DDISTORTIONWAVES);
 
-  addEffect(FX_MODE_2DANALOGCLOCK, &mode_2DAnalogClock, _data_FX_MODE_2DANALOGCLOCK);
   addEffect(FX_MODE_LUMI_AURORA, &mode_lumi_aurora, _data_FX_MODE_LUMI_AURORA);
   // 光屿 Lumi 系列（M2，新增 10 个，只追加不移动 0..188）
   addEffect(FX_MODE_LUMI_FOREST,   &mode_lumi_forest,   _data_FX_MODE_LUMI_FOREST);
-  addEffect(FX_MODE_LUMI_DUSK,     &mode_lumi_dusk,     _data_FX_MODE_LUMI_DUSK);
-  addEffect(FX_MODE_LUMI_POLAR,    &mode_lumi_polar,    _data_FX_MODE_LUMI_POLAR);
-  addEffect(FX_MODE_LUMI_HEARTH,   &mode_lumi_hearth,   _data_FX_MODE_LUMI_HEARTH);
-  addEffect(FX_MODE_LUMI_LAVA,     &mode_lumi_lava,     _data_FX_MODE_LUMI_LAVA);
   addEffect(FX_MODE_LUMI_CAUSTICS, &mode_lumi_caustics, _data_FX_MODE_LUMI_CAUSTICS);
   addEffect(FX_MODE_LUMI_FOUNTAIN, &mode_lumi_fountain, _data_FX_MODE_LUMI_FOUNTAIN);
   addEffect(FX_MODE_STAGELIGHT, &mode_stagelight, _data_FX_MODE_STAGELIGHT);
@@ -11673,8 +11599,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_BASSLAVA, &mode_basslava, _data_FX_MODE_BASSLAVA);
   addEffect(FX_MODE_SPECTRUMLAMP, &mode_spectrumlamp, _data_FX_MODE_SPECTRUMLAMP); // audio
   addEffect(FX_MODE_2DNOISE, &mode_2Dnoise, _data_FX_MODE_2DNOISE);
-  addEffect(FX_MODE_2DFIRENOISE, &mode_2Dfirenoise, _data_FX_MODE_2DFIRENOISE);
-  addEffect(FX_MODE_2DSQUAREDSWIRL, &mode_2Dsquaredswirl, _data_FX_MODE_2DSQUAREDSWIRL);
 
   //non audio
   addEffect(FX_MODE_2DDNA, &mode_2Ddna, _data_FX_MODE_2DDNA);
@@ -11693,7 +11617,6 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DSWIRL, &mode_2DSwirl, _data_FX_MODE_2DSWIRL); // audio
   addEffect(FX_MODE_2DLISSAJOUS, &mode_2DLissajous, _data_FX_MODE_2DLISSAJOUS);
   addEffect(FX_MODE_2DFRIZZLES, &mode_2DFrizzles, _data_FX_MODE_2DFRIZZLES);
-  addEffect(FX_MODE_2DPLASMABALL, &mode_2DPlasmaball, _data_FX_MODE_2DPLASMABALL);
   addEffect(FX_MODE_2DHIPHOTIC, &mode_2DHiphotic, _data_FX_MODE_2DHIPHOTIC);
   addEffect(FX_MODE_2DSINDOTS, &mode_2DSindots, _data_FX_MODE_2DSINDOTS);
   addEffect(FX_MODE_2DDNASPIRAL, &mode_2DDNASpiral, _data_FX_MODE_2DDNASPIRAL);
@@ -11703,16 +11626,11 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DWAVINGCELL, &mode_2Dwavingcell, _data_FX_MODE_2DWAVINGCELL);
 
 #ifndef WLED_DISABLE_PARTICLESYSTEM2D
-  addEffect(FX_MODE_PARTICLEVOLCANO, &mode_particlevolcano, _data_FX_MODE_PARTICLEVOLCANO);
-  addEffect(FX_MODE_PARTICLEFIRE, &mode_particlefire, _data_FX_MODE_PARTICLEFIRE);
-  addEffect(FX_MODE_PARTICLEFIREWORKS, &mode_particlefireworks, _data_FX_MODE_PARTICLEFIREWORKS);
   addEffect(FX_MODE_PARTICLEVORTEX, &mode_particlevortex, _data_FX_MODE_PARTICLEVORTEX);
   addEffect(FX_MODE_PARTICLEPERLIN, &mode_particleperlin, _data_FX_MODE_PARTICLEPERLIN);
   addEffect(FX_MODE_PARTICLEPIT, &mode_particlepit, _data_FX_MODE_PARTICLEPIT);
   addEffect(FX_MODE_PARTICLEBOX, &mode_particlebox, _data_FX_MODE_PARTICLEBOX);
   addEffect(FX_MODE_PARTICLEATTRACTOR, &mode_particleattractor, _data_FX_MODE_PARTICLEATTRACTOR); // 872 bytes
-  addEffect(FX_MODE_PARTICLEIMPACT, &mode_particleimpact, _data_FX_MODE_PARTICLEIMPACT);
-  addEffect(FX_MODE_PARTICLEWATERFALL, &mode_particlewaterfall, _data_FX_MODE_PARTICLEWATERFALL);
   addEffect(FX_MODE_PARTICLESPRAY, &mode_particlespray, _data_FX_MODE_PARTICLESPRAY);
   addEffect(FX_MODE_PARTICLEGHOSTRIDER, &mode_particleghostrider, _data_FX_MODE_PARTICLEGHOSTRIDER);
   addEffect(FX_MODE_PARTICLEBLOBS, &mode_particleblobs, _data_FX_MODE_PARTICLEBLOBS);
@@ -11721,18 +11639,9 @@ void WS2812FX::setupEffectData() {
 #endif // WLED_DISABLE_2D
 
 #ifndef WLED_DISABLE_PARTICLESYSTEM1D
-addEffect(FX_MODE_PSDRIP, &mode_particleDrip, _data_FX_MODE_PARTICLEDRIP);
-addEffect(FX_MODE_PSPINBALL, &mode_particlePinball, _data_FX_MODE_PSPINBALL); //potential replacement for: bouncing balls, rollingballs, popcorn
 addEffect(FX_MODE_PSDANCINGSHADOWS, &mode_particleDancingShadows, _data_FX_MODE_PARTICLEDANCINGSHADOWS);
-addEffect(FX_MODE_PSFIREWORKS1D, &mode_particleFireworks1D, _data_FX_MODE_PS_FIREWORKS1D);
-addEffect(FX_MODE_PSSPARKLER, &mode_particleSparkler, _data_FX_MODE_PS_SPARKLER);
-addEffect(FX_MODE_PSHOURGLASS, &mode_particleHourglass, _data_FX_MODE_PS_HOURGLASS);
-addEffect(FX_MODE_PS1DSPRAY, &mode_particle1Dspray, _data_FX_MODE_PS_1DSPRAY);
-addEffect(FX_MODE_PSBALANCE, &mode_particleBalance, _data_FX_MODE_PS_BALANCE);
 addEffect(FX_MODE_PSCHASE, &mode_particleChase, _data_FX_MODE_PS_CHASE);
-addEffect(FX_MODE_PSSTARBURST, &mode_particleStarburst, _data_FX_MODE_PS_STARBURST);
 addEffect(FX_MODE_PS1DGEQ, &mode_particle1DGEQ, _data_FX_MODE_PS_1D_GEQ);
-addEffect(FX_MODE_PSFIRE1D, &mode_particleFire1D, _data_FX_MODE_PS_FIRE1D);
 addEffect(FX_MODE_PS1DSPRINGY, &mode_particleSpringy, _data_FX_MODE_PS_SPRINGY);
 #endif // WLED_DISABLE_PARTICLESYSTEM1D
 
