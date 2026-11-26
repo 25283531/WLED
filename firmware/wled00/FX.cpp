@@ -6053,11 +6053,17 @@ void mode_audiospiral(void) {
       float nA = diffA / fPI, nB = diffB / fPI;
       if (nA < halfW){
         float edge = 1.0f - powf(nA / halfW, 2.4f);   // 中心饱满、边缘抗锯齿
-        fc = CRGB(color_blend(fc, strandA, (uint8_t)(edge * 255.0f)));
+        uint8_t amt = (uint8_t)(edge * 255.0f), inv = 255U - amt;
+        fc.r = (uint8_t)((fc.r * inv + strandA.r * amt) / 255U);
+        fc.g = (uint8_t)((fc.g * inv + strandA.g * amt) / 255U);
+        fc.b = (uint8_t)((fc.b * inv + strandA.b * amt) / 255U);
       }
       if (nB < halfW){
         float edge = 1.0f - powf(nB / halfW, 2.4f);
-        fc = CRGB(color_blend(fc, strandB, (uint8_t)(edge * 255.0f)));
+        uint8_t amt = (uint8_t)(edge * 255.0f), inv = 255U - amt;
+        fc.r = (uint8_t)((fc.r * inv + strandB.r * amt) / 255U);
+        fc.g = (uint8_t)((fc.g * inv + strandB.g * amt) / 255U);
+        fc.b = (uint8_t)((fc.b * inv + strandB.b * amt) / 255U);
       }
       SEGMENT.setPixelColorXY(x, sy, fc);
     }
