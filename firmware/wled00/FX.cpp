@@ -8324,7 +8324,8 @@ static const char _data_FX_MODE_FREQMATRIX[] PROGMEM = "Freqmatrix@Speed,Sound e
 // fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处不再重复平滑。
 struct FreqpixelData {
   uint32_t lastShuffle;   // 上次重排时间
-  float bassAvg;          // 低频慢跟随均值，用于节拍检测
+  float accentAvg;        // 重拍能量慢基线
+  uint8_t prevFft[6];     // 上一帧低频 FFT，用于计算上升沿通量
   uint16_t n;             // 随机排列长度
   uint16_t order[1];      // 0..n-1 的随机排列（变长）
 };
@@ -8353,19 +8354,29 @@ void mode_freqpixels(void) {
   }
   if (silent) return;                         // 静音全灭
 
-  // 随机排列：由低频节拍驱动重排（低频明显超过慢跟随均值时视为一次鼓点），
-  // 并设 150ms 防抖，避免快速重排导致画面杂乱；长时间无节拍时每 1.8s 兜底重排一次。
-  uint8_t bass = energy[0];
+  // 随机排列：以鼓点/重拍的上升沿为触发。两条判据任一成立即视为一次重拍：
+  //   1) 低频 6 个 bin 的正向谱通量足够大（鼓点攻击瞬间最强，不受整体音量基线影响）
+  //   2) 低/中低频能量峰值超过慢基线一段距离（无鼓点的歌曲靠重音也能触发）
+  // 峰值达到阈值时立即重排（防抖 90ms，避免一次鼓点的尾巴触发多次）；
+  // 平缓歌曲长时间无重拍时每 2.2s 兜底缓慢跳变一次。
+  uint16_t flux = 0;
+  for (uint8_t i = 0; i < 6; i++) {
+    int16_t diff = (int16_t)fft[i] - (int16_t)d->prevFft[i];
+    if (diff > 0) flux += diff;
+    d->prevFft[i] = fft[i];
+  }
+  uint8_t accent = energy[0] > energy[1] ? energy[0] : energy[1];
   if (SEGENV.call == 0 || d->n != n) {
     d->n = n;
     for (uint16_t i = 0; i < n; i++) d->order[i] = i;
-    d->bassAvg = bass;
-    d->lastShuffle = strip.now - 2000;   // 首帧立即散开，避免按顺序点亮成一条
+    d->accentAvg = accent;
+    d->lastShuffle = strip.now - 3000;   // 首帧立即散开，避免按顺序点亮成一条
+    flux = 0;                            // 首帧不把整体上升当作鼓点
   }
   int32_t sinceShuffle = (int32_t)(strip.now - d->lastShuffle);
-  bool beat = bass > 18 && bass > d->bassAvg * 1.35f + 4.0f;
-  bool doShuffle = (beat && sinceShuffle > 150) || sinceShuffle > 1800;
-  d->bassAvg = d->bassAvg * 0.92f + bass * 0.08f;   // 约 0.3s 的慢跟随
+  bool hit = accent > 120 || flux > 110 || accent > d->accentAvg + 18.0f;
+  bool doShuffle = (hit && accent > 35 && sinceShuffle > 90) || sinceShuffle > 2200;
+  d->accentAvg = d->accentAvg * 0.96f + accent * 0.04f;   // 约 0.6s 慢基线
   if (doShuffle) {
     for (uint16_t i = n - 1; i > 0; i--) {
       uint16_t j = prng.random16() % (i + 1);
