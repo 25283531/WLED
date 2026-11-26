@@ -233,18 +233,11 @@ private fun LibraryCard(
     // 「流光溢彩」比「Aurora / 极光」好认得多，而点下去拿到的也正是那套推荐观感。
     val curated = CuratedEffects.find(effect.id)
     val shape = RoundedCornerShape(18.dp)
-    val accent = curated?.gradient?.map { Color(it) } ?: IsleColors.Accent
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1.32f)
             .background(Color(0xFF101218), shape)
-            .border(
-                width = if (isActive) 1.6.dp else 1.dp,
-                brush = if (isActive) Brush.linearGradient(accent)
-                else Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
-                shape = shape,
-            )
             .clickable(onClick = onClick),
     ) {
         // 精选灯效的渐变底衬：GIF 解码完成前不会闪出灰底，
@@ -255,7 +248,9 @@ private fun LibraryCard(
                     .fillMaxSize()
                     .background(
                         Brush.linearGradient(
-                            curated.gradient.map { Color(it).copy(alpha = 0.38f) },
+                            // 精选色板写的是 6 位 RGB，直接 Color(int) 会被当成 alpha=0 透明色，
+                            // 这里补上不透明通道，底衬才真正带上该灯效的色调。
+                            curated.gradient.map { Color(it or 0xFF000000).copy(alpha = 0.38f) },
                         ),
                     ),
             )
@@ -301,6 +296,19 @@ private fun LibraryCard(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(7.dp),
+        )
+        // 选中描边统一用主题蓝紫渐变，并画在所有内容之上。
+        // 以前精选卡片拿自己的暖色渐变当描边，又被卡片底衬盖住，
+        // 像「暖阳呼吸」这种暖色精选几乎看不出被选中。
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .border(
+                    width = if (isActive) 2.dp else 1.dp,
+                    brush = if (isActive) Brush.linearGradient(IsleColors.Accent)
+                    else Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
+                    shape = shape,
+                ),
         )
     }
 }

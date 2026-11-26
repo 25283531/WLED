@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ca.cgagnier.wlednativeandroid.R
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplate
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
+import ca.cgagnier.wlednativeandroid.ui.isle.ColorPickerSheet
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
 import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
@@ -60,6 +64,7 @@ import ca.cgagnier.wlednativeandroid.ui.isle.IsleCapsule
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleSlider
 import ca.cgagnier.wlednativeandroid.ui.isle.SectionLabel
+import ca.cgagnier.wlednativeandroid.ui.isle.packedToColor
 import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.atan2
@@ -93,6 +98,9 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
     val rows by viewModel.gridRows.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
+    val templateColors by viewModel.templateColors.collectAsStateWithLifecycle()
+    val paletteTemplates by viewModel.paletteTemplates.collectAsStateWithLifecycle()
+    var templateColorIndex by remember { mutableIntStateOf(-1) }
 
     val device = devices.firstOrNull { it.device.macAddress == selectedMac }
 
@@ -112,18 +120,19 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp),
         ) {
+            Text(
+                text = stringResource(R.string.isle_create_title),
+                style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Light, letterSpacing = 1.sp),
+                color = IsleColors.TextPrimary,
+                modifier = Modifier.padding(top = 6.dp),
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .horizontalScroll(rememberScrollState())
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = stringResource(R.string.isle_create_title),
-                    style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Light, letterSpacing = 1.sp),
-                    color = IsleColors.TextPrimary,
-                    modifier = Modifier.weight(1f),
-                )
                 IsleCapsule(
                     selected = mode == CreateMode.COLOR,
                     onClick = { viewModel.selectMode(CreateMode.COLOR) },
@@ -131,13 +140,23 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                 ) {
                     Text(stringResource(R.string.isle_create_color), fontSize = 11.5.sp, color = IsleColors.TextPrimary)
                 }
-                Spacer(Modifier.width(6.dp))
                 IsleCapsule(
                     selected = mode == CreateMode.PIXEL,
                     onClick = { viewModel.selectMode(CreateMode.PIXEL) },
                     contentPadding = 11.dp,
                 ) {
                     Text(stringResource(R.string.isle_create_pixel), fontSize = 11.5.sp, color = IsleColors.TextPrimary)
+                }
+                IsleCapsule(
+                    selected = mode == CreateMode.TEMPLATE,
+                    onClick = { viewModel.selectMode(CreateMode.TEMPLATE) },
+                    contentPadding = 11.dp,
+                ) {
+                    Text(
+                        stringResource(R.string.isle_create_template),
+                        fontSize = 11.5.sp,
+                        color = IsleColors.TextPrimary,
+                    )
                 }
             }
 
@@ -166,9 +185,11 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                     fontSize = 11.5.sp,
                     modifier = Modifier.weight(1f),
                 )
-                SaveButton(
-                    onClick = { device?.let { viewModel.saveFavorite(it) } },
-                )
+                if (mode != CreateMode.TEMPLATE) {
+                    SaveButton(
+                        onClick = { device?.let { viewModel.saveFavorite(it) } },
+                    )
+                }
             }
 
             when (mode) {
@@ -197,57 +218,91 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                     onSelectColor = viewModel::setBrushColor,
                     onClear = viewModel::clearGrid,
                 )
-            }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                ActionButton(
-                    label = if (mode == CreateMode.COLOR) {
-                        stringResource(R.string.isle_apply_colors)
-                    } else {
-                        stringResource(R.string.isle_send_text)
-                    },
-                    busy = busy,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        val target = device
-                        if (target == null) {
-                            Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
-                        } else if (mode == CreateMode.COLOR) {
-                            viewModel.applyColors(target)
-                        } else {
-                            viewModel.sendText(target)
+                CreateMode.TEMPLATE -> TemplatePanel(
+                    colors = templateColors,
+                    templates = paletteTemplates,
+                    onEditColor = { templateColorIndex = it },
+                    onAddColor = viewModel::addTemplateColor,
+                    onRemoveColor = viewModel::removeTemplateColor,
+                    onSave = {
+                        if (viewModel.saveTemplate()) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.isle_palette_template_saved),
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     },
+                    onDelete = viewModel::deleteTemplate,
                 )
-                if (mode == CreateMode.PIXEL) {
+            }
+
+            if (mode != CreateMode.TEMPLATE) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     ActionButton(
-                        label = stringResource(R.string.isle_upload_art),
+                        label = if (mode == CreateMode.COLOR) {
+                            stringResource(R.string.isle_apply_colors)
+                        } else {
+                            stringResource(R.string.isle_send_text)
+                        },
                         busy = busy,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             val target = device
                             if (target == null) {
                                 Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
+                            } else if (mode == CreateMode.COLOR) {
+                                viewModel.applyColors(target)
                             } else {
-                                viewModel.uploadPixelArt(target)
+                                viewModel.sendText(target)
                             }
                         },
                     )
+                    if (mode == CreateMode.PIXEL) {
+                        ActionButton(
+                            label = stringResource(R.string.isle_upload_art),
+                            busy = busy,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                val target = device
+                                if (target == null) {
+                                    Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    viewModel.uploadPixelArt(target)
+                                }
+                            },
+                        )
+                    }
                 }
             }
 
             Text(
                 text = stringResource(
-                    if (mode == CreateMode.COLOR) R.string.isle_color_hint else R.string.isle_pixel_hint,
+                    when (mode) {
+                        CreateMode.COLOR -> R.string.isle_color_hint
+                        CreateMode.PIXEL -> R.string.isle_pixel_hint
+                        CreateMode.TEMPLATE -> R.string.isle_create_template_hint
+                    },
                 ),
                 color = IsleColors.TextMuted,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 12.dp, bottom = 24.dp),
+            )
+        }
+
+        // 模板色标取色：松手才提交，拖动过程只在弹层里预览
+        if (templateColorIndex in templateColors.indices) {
+            ColorPickerSheet(
+                title = stringResource(R.string.isle_template_color_title, templateColorIndex + 1),
+                initial = templateColors[templateColorIndex],
+                onDismiss = { templateColorIndex = -1 },
+                onPick = { viewModel.setTemplateColor(templateColorIndex, it) },
             )
         }
     }
@@ -297,6 +352,156 @@ private fun ActionButton(label: String, busy: Boolean, modifier: Modifier = Modi
             )
         } else {
             Text(label, color = Color(0xFF08090E), fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun TemplatePanel(
+    colors: List<Int>,
+    templates: List<PaletteTemplate>,
+    onEditColor: (Int) -> Unit,
+    onAddColor: () -> Unit,
+    onRemoveColor: (Int) -> Unit,
+    onSave: () -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 26.dp, padding = 18.dp) {
+        Text(
+            text = stringResource(R.string.isle_palette_template_editor),
+            color = IsleColors.TextPrimary,
+            fontSize = 16.sp,
+        )
+        Text(
+            text = stringResource(R.string.isle_palette_template_edit_hint),
+            color = IsleColors.TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+
+        // 色标实时预览，与固件上传后的渐变方向一致（从左到右）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp)
+                .height(46.dp)
+                .background(
+                    Brush.horizontalGradient(colors.map { packedToColor(it) }),
+                    RoundedCornerShape(14.dp),
+                )
+                .border(1.dp, IsleColors.StrokeStrong, RoundedCornerShape(14.dp)),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            colors.forEachIndexed { index, packed ->
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(packedToColor(packed), CircleShape)
+                            .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                            .clickable { onEditColor(index) },
+                    )
+                    if (colors.size > PaletteTemplateStore.MIN_COLORS) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(16.dp)
+                                .background(IsleColors.Surface, CircleShape)
+                                .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                                .clickable { onRemoveColor(index) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("×", color = IsleColors.TextSecondary, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+            if (colors.size < PaletteTemplateStore.MAX_COLORS) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(Color(0x14FFFFFF), CircleShape)
+                        .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                        .clickable(onClick = onAddColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    GlyphIcon(glyph = Glyph.Plus, size = 16.dp, tint = IsleColors.TextSecondary)
+                }
+            }
+        }
+
+        ActionButton(
+            label = stringResource(R.string.isle_palette_template_save),
+            busy = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp),
+            onClick = onSave,
+        )
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        cornerRadius = 26.dp,
+        padding = 18.dp,
+    ) {
+        Text(
+            text = stringResource(R.string.isle_saved_templates),
+            color = IsleColors.TextPrimary,
+            fontSize = 16.sp,
+        )
+        if (templates.isEmpty()) {
+            Text(
+                text = stringResource(R.string.isle_saved_templates_empty),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        } else {
+            templates.forEach { template ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(64.dp)
+                            .height(28.dp)
+                            .background(
+                                Brush.horizontalGradient(template.colors.map { packedToColor(it) }),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .border(1.dp, IsleColors.Stroke, RoundedCornerShape(8.dp)),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = template.name,
+                        color = IsleColors.TextPrimary,
+                        fontSize = 12.5.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { onDelete(template.id) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        GlyphIcon(glyph = Glyph.Trash, size = 15.dp, tint = IsleColors.TextMuted)
+                    }
+                }
+            }
         }
     }
 }

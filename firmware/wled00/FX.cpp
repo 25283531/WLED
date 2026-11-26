@@ -222,7 +222,9 @@ void blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
  * Normal blinking. Intensity sets duty cycle.
  */
 void mode_blink(void) {
-  blink(SEGCOLOR(0), SEGCOLOR(1), false, true);
+  // 熄灭阶段用纯黑，而不是次色：否则占空比稍低时整条灯会长期亮着「另一个颜色」，
+  // 看起来像没切到明灭效果。亮起阶段仍走调色板，用户选单色/多色模板都能正确呈现。
+  blink(SEGCOLOR(0), 0x000000, false, true);
 }
 static const char _data_FX_MODE_BLINK[] PROGMEM = "Blink@!,Duty cycle;!,!;!;01";
 
@@ -440,7 +442,9 @@ void mode_breath(void) {
 
   uint8_t lum = 30 + var;
   for (unsigned i = 0; i < SEGLEN; i++) {
-    SEGMENT.setPixelColor(i, color_blend(SEGCOLOR(1), SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 0), lum));
+    // 从纯黑淡入调色板颜色，而不是在「次色」和主色之间混合：
+    // 次色常在切效果时残留成别的颜色，会让呼吸灯看起来像常亮的杂色。
+    SEGMENT.setPixelColor(i, color_blend(0x000000, SEGMENT.color_from_palette(i, true, PALETTE_SOLID_WRAP, 0), lum));
   }
 
 }

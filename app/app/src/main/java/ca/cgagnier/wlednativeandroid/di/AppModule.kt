@@ -27,6 +27,7 @@ import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
 import ca.cgagnier.wlednativeandroid.ui.control.ControlViewModel
 import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
@@ -67,6 +68,8 @@ val appModule: Module = module {
 
     // 四个页签共享同一个「当前设备」与多灯同步开关（开关持久化在 UserPreferences 里）
     single { SelectedDeviceStore(get()) }
+    // 多色模板只在手机本地保存，创作页负责制作，设备页调色板负责调用
+    single { PaletteTemplateStore(androidContext()) }
 
     single<DataStore<UserPreferences>> {
         val context = androidContext()

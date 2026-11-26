@@ -10,6 +10,8 @@ import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
 import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplate
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
@@ -24,8 +26,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 创作工坊的两个分段：色轮调色 / 自定义图文。 */
-enum class CreateMode { COLOR, PIXEL }
+/** 创作工坊的三个分段：色轮调色 / 自定义图文 / 多色模板。 */
+enum class CreateMode { COLOR, PIXEL, TEMPLATE }
 
 /** 像素画板的工具。 */
 enum class PixelTool { BRUSH, ERASER, PICKER }
@@ -72,6 +74,9 @@ val PIXEL_PALETTE: List<Int> = listOf(
     0xFF7AD0, 0x3EE08F, 0xFFC46B, 0xFF5A5A,
 )
 
+/** 多色模板「添加颜色」时的候选色，尽量不与已有色重复。 */
+private val TEMPLATE_ADD_COLORS = listOf(0xFFB46B, 0x3EE08F, 0xFF7AD0, 0xFFFFFF, 0x5FE3E4)
+
 /**
  * 创作工坊。
  *
@@ -84,6 +89,7 @@ class CreateViewModel(
     private val favoriteEffectDao: FavoriteEffectDao,
     private val selectedDeviceStore: SelectedDeviceStore,
     private val deviceApiFactory: DeviceApiFactory,
+    private val paletteTemplateStore: PaletteTemplateStore,
 ) : ViewModel() {
 
     val devices: StateFlow<List<DeviceWithState>> = deviceConnectionManager.allDevicesWithState
@@ -128,6 +134,41 @@ class CreateViewModel(
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** 手机本地保存的多色模板。 */
+    val paletteTemplates: StateFlow<List<PaletteTemplate>> = paletteTemplateStore.templates
+
+    /** 正在编辑的模板色标（`0xRRGGBB`），默认给出三色，用户可增减。 */
+    private val _templateColors = MutableStateFlow(listOf(0x5FE3E4, 0x8C7BFF, 0xFF7AD0))
+    val templateColors: StateFlow<List<Int>> = _templateColors.asStateFlow()
+
+    fun setTemplateColor(index: Int, packed: Int) {
+        val current = _templateColors.value
+        if (index !in current.indices) return
+        _templateColors.value = current.toMutableList().apply {
+            this[index] = packed and 0xFFFFFF
+        }
+    }
+
+    fun addTemplateColor() {
+        val current = _templateColors.value
+        if (current.size >= PaletteTemplateStore.MAX_COLORS) return
+        val candidate = TEMPLATE_ADD_COLORS.firstOrNull { it !in current } ?: 0xFFFFFF
+        _templateColors.value = current + candidate
+    }
+
+    fun removeTemplateColor(index: Int) {
+        val current = _templateColors.value
+        if (current.size <= PaletteTemplateStore.MIN_COLORS || index !in current.indices) return
+        _templateColors.value = current.filterIndexed { i, _ -> i != index }
+    }
+
+    /** 保存当前色标为模板；成功返回 true，交给界面弹提示。 */
+    fun saveTemplate(): Boolean = paletteTemplateStore.add(_templateColors.value) != null
+
+    fun deleteTemplate(id: String) {
+        paletteTemplateStore.remove(id)
+    }
 
     val favorites: StateFlow<List<FavoriteEffect>> = favoriteEffectDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
@@ -291,13 +332,16 @@ class CreateViewModel(
 
     /** 把当前创作存成收藏，之后在首页快捷卡片里可以直接调出。 */
     fun saveFavorite(device: DeviceWithState) {
+        if (_mode.value == CreateMode.TEMPLATE) return
         val effectId = when (_mode.value) {
             CreateMode.COLOR -> currentSegment(device)?.effect ?: 0
             CreateMode.PIXEL -> IMAGE_EFFECT
+            CreateMode.TEMPLATE -> return
         }
         val name = when (_mode.value) {
             CreateMode.COLOR -> "自定义配色"
             CreateMode.PIXEL -> "像素画 ${_gridCols.value}×${_gridRows.value}"
+            CreateMode.TEMPLATE -> return
         }
         viewModelScope.launch {
             val existing = favoriteEffectDao.findByEffectId(effectId)

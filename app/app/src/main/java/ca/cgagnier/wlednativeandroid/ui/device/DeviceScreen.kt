@@ -42,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -57,19 +56,24 @@ import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
 import ca.cgagnier.wlednativeandroid.ui.effects.BassLava
+import ca.cgagnier.wlednativeandroid.ui.effects.CUSTOM_PALETTE_ID_BASE
 import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectTuningPolicy
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectTuningPolicy.SOLID_PALETTE_ID
 import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplate
 import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
 import ca.cgagnier.wlednativeandroid.ui.effects.SpectrumLamp
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
+import ca.cgagnier.wlednativeandroid.ui.isle.ColorPickerSheet
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.GlowCircleButton
@@ -78,9 +82,13 @@ import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleBackdrop
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleColors
 import ca.cgagnier.wlednativeandroid.ui.isle.IsleSlider
+import ca.cgagnier.wlednativeandroid.ui.isle.PRESET_COLORS
 import ca.cgagnier.wlednativeandroid.ui.isle.SectionLabel
 import ca.cgagnier.wlednativeandroid.ui.isle.StarButton
 import ca.cgagnier.wlednativeandroid.ui.isle.device.DeviceAppearance
+import ca.cgagnier.wlednativeandroid.ui.isle.hsvToPacked
+import ca.cgagnier.wlednativeandroid.ui.isle.packedRgb
+import ca.cgagnier.wlednativeandroid.ui.isle.packedToColor
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAdd
 import ca.cgagnier.wlednativeandroid.util.CHANNEL_MAX
 import ca.cgagnier.wlednativeandroid.util.channelToNormalized
@@ -92,23 +100,17 @@ import org.koin.androidx.compose.koinViewModel
 
 private val NIGHTLIGHT_OPTIONS = listOf(5, 10, 15, 30, 60, 120)
 
-/**
- * 参数调节区的预设色。
- *
- * 前三位刻意取产品自己的招牌色（亮青 / 蔚蓝 / 紫罗兰），与灯效 188「极光之舞」
- * 和 App 图标同源；后几位补足暖色与绿，避免只能用冷色。
- */
-private val PRESET_COLORS = listOf(
-    0xFFFFFF,         // 白
-    0x00F5FF,         // 亮青
-    0x1E78FF,         // 蔚蓝
-    0xAF28FF,         // 紫罗兰
-    0xFF4FA8,         // 洋红
-    0xFF8A3C,         // 橙
-    0x3CFF8A,         // 翠绿
-    0xFFE9D7,         // 暖白
-    0xFFB46B,         // 暖黄（约 2700K，睡眠夜灯的基准色）
-)
+/** 尚未在本设备分配过槽位的模板占位 id，不与任何固件调色板 id 冲突。 */
+private const val NO_TEMPLATE_SLOT = -1
+
+// 固件里「只取当前颜色槽位」的动态调色板没有固定色标，用段落当前颜色实时拼出预览。
+private val RANDOM_CYCLE_PALETTE_ID = PaletteCatalog.byName("Random Cycle")?.id
+private val COLORS_1_2_PALETTE_ID = PaletteCatalog.byName("Colors 1&2")?.id
+private val COLOR_GRADIENT_PALETTE_ID = PaletteCatalog.byName("Color Gradient")?.id
+private val COLORS_ONLY_PALETTE_ID = PaletteCatalog.byName("Colors Only")?.id
+
+/** Random Cycle 由固件随机生成，给一组多色样例作为示意预览。 */
+private val RANDOM_CYCLE_PREVIEW = listOf(0xFF4D6D, 0xFFA53C, 0xF2E14B, 0x4CE0B3, 0x4D9BFF, 0xB44DFF)
 
 /** 频谱像素的 4 个频段显示名，顺序与固件 FFT 分组一致（低 -> 高）。 */
 private val FREQUENCY_BAND_LABELS = intArrayOf(
@@ -131,16 +133,6 @@ private val STAGE_BAND_LABELS = intArrayOf(
  * 对任何依赖调色板的灯效都生效。
  */
 private const val SOLID_PALETTE_ID = 2
-
-/** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
-private fun packedToColor(packed: Int): Color = Color(
-    red = (packed shr 16) and 0xFF,
-    green = (packed shr 8) and 0xFF,
-    blue = packed and 0xFF,
-)
-
-/** Compose 颜色压回 `0xRRGGBB`，与 `col[]` 协议字段一致。 */
-private fun packedRgb(color: Color): Int = color.toArgb() and 0xFFFFFF
 
 /**
  * 首页（设备）：高频日常主控台。
@@ -213,6 +205,19 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val spectrumLampId = remember { SpectrumLamp.effectId }
     val spectrumLampActive = currentEffect != null && currentEffect == spectrumLampId
     val spectrumLampColors = remember(segment) { SpectrumLamp.currentColors(segment) }
+    // 纯色 / 明灭 / 循环彩的固件实现各有不参与运算的参数，或只支持多色调色板
+    val hideSpeed = remember(currentEffect) { EffectTuningPolicy.hidesSpeed(currentEffect) }
+    val hideIntensity = remember(currentEffect) { EffectTuningPolicy.hidesIntensity(currentEffect) }
+    val hidePalette = remember(currentEffect) { EffectTuningPolicy.hidesPalette(currentEffect) }
+    val hideSolidPalette = remember(currentEffect) { EffectTuningPolicy.hidesSolidPalette(currentEffect) }
+    val blinkMode = remember(currentEffect) { EffectTuningPolicy.isBlink(currentEffect) }
+    // 手机本地多色模板：创作页制作，设备页调色板预览与调用
+    val paletteTemplates by viewModel.paletteTemplates.collectAsStateWithLifecycle()
+    val paletteSlotsByDevice by viewModel.paletteSlots.collectAsStateWithLifecycle()
+    val deviceMac = device?.device?.macAddress
+    val paletteSlots = remember(paletteSlotsByDevice, deviceMac) {
+        deviceMac?.let { paletteSlotsByDevice[it] }.orEmpty()
+    }
 
     // 律动模式跟随当前灯效：从灯效库或快捷卡片切到音律灯效时，胶囊同步高亮「音乐律动」
     LaunchedEffect(currentEffect) {
@@ -230,6 +235,18 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                 NightlightEvent.Cancelled -> context.getString(R.string.isle_nightlight_cancelled)
                 NightlightEvent.Failed -> context.getString(R.string.isle_nightlight_failed)
                 NightlightEvent.LightOff -> context.getString(R.string.isle_nightlight_light_off)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.paletteEvents.collect { event ->
+            val message = when (event) {
+                is PaletteTemplateEvent.Applied ->
+                    context.getString(R.string.isle_palette_template_applied, event.name)
+                PaletteTemplateEvent.Failed ->
+                    context.getString(R.string.isle_palette_template_failed)
             }
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
@@ -298,6 +315,13 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     spectrumLampMode = spectrumLampActive,
                     slidersHidden = linearSpectrumActive || stageLightActive ||
                         triBreathActive || sonicPulseActive || spectrumLampActive,
+                    hideSpeed = hideSpeed,
+                    hideIntensity = hideIntensity,
+                    hidePalette = hidePalette,
+                    hideSolidPalette = hideSolidPalette,
+                    blinkMode = blinkMode,
+                    paletteTemplates = paletteTemplates,
+                    paletteSlots = paletteSlots,
                     frequencyColors = frequencyColors,
                     stageMask = stageMask,
                     stageColors = stageColors,
@@ -340,6 +364,9 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                         device?.let { viewModel.applyTriBreathPalette(it, palette) }
                     },
                     onEditSpectrumColor = { band -> spectrumColorBand = band },
+                    onSelectPaletteTemplate = { template ->
+                        device?.let { viewModel.applyPaletteTemplate(it, template) }
+                    },
                 )
             }
 
@@ -483,7 +510,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     frequencyColorBand?.let { band ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(FREQUENCY_BAND_LABELS[band]),
@@ -497,7 +524,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     stageColorBand?.let { band ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(STAGE_BAND_LABELS[band]),
@@ -511,7 +538,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     triBreathColorBand?.let { band ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(STAGE_BAND_LABELS[band]),
@@ -525,7 +552,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     sonicColorBand?.let { band ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(STAGE_BAND_LABELS[band]),
@@ -539,7 +566,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     audioSpiralColorChain?.let { chain ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(
@@ -555,7 +582,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     }
 
     spectrumColorBand?.let { band ->
-        FrequencyColorSheet(
+        ColorPickerSheet(
             title = stringResource(
                 R.string.isle_freq_color_title,
                 stringResource(STAGE_BAND_LABELS[band]),
@@ -738,6 +765,13 @@ private fun EffectTuning(
     bassLavaMode: Boolean,
     spectrumLampMode: Boolean,
     slidersHidden: Boolean,
+    hideSpeed: Boolean,
+    hideIntensity: Boolean,
+    hidePalette: Boolean,
+    hideSolidPalette: Boolean,
+    blinkMode: Boolean,
+    paletteTemplates: List<PaletteTemplate>,
+    paletteSlots: Map<String, Int>,
     frequencyColors: List<Int>,
     stageMask: Int,
     stageColors: List<Int>,
@@ -762,6 +796,7 @@ private fun EffectTuning(
     onEditAudioSpiralColor: (Int) -> Unit,
     onSpectrumPalette: (TriColorPalette) -> Unit,
     onEditSpectrumColor: (Int) -> Unit,
+    onSelectPaletteTemplate: (PaletteTemplate) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
@@ -791,6 +826,16 @@ private fun EffectTuning(
                     stageMode -> stringResource(R.string.isle_stage_tuning_summary, stageMask.countOneBits())
                     audioSpiralMode -> stringResource(R.string.isle_spiral_tuning_summary)
                     slidersHidden -> stringResource(R.string.isle_color_tuning_summary)
+                    blinkMode -> stringResource(
+                        R.string.isle_blink_tuning_summary,
+                        normalizedToPercent(localSpeed),
+                        normalizedToPercent(localIntensity),
+                    )
+                    hideSpeed && hideIntensity -> stringResource(R.string.isle_color_only_summary)
+                    hideIntensity -> stringResource(
+                        R.string.isle_effect_tuning_summary_speed,
+                        normalizedToPercent(localSpeed),
+                    )
                     else -> stringResource(
                         R.string.isle_effect_tuning_summary,
                         normalizedToPercent(localSpeed),
@@ -894,7 +939,7 @@ private fun EffectTuning(
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     } else {
-                        if (!slidersHidden) {
+                        if (!hideSpeed) {
                             TuningSlider(
                                 label = stringResource(R.string.isle_effect_speed),
                                 value = localSpeed,
@@ -903,19 +948,32 @@ private fun EffectTuning(
                                     onSpeed(normalizedToChannel(localSpeed))
                                 },
                             )
+                        }
+                        if (!hideIntensity) {
                             TuningSlider(
-                                label = stringResource(R.string.isle_effect_intensity),
+                                label = stringResource(
+                                    if (blinkMode) R.string.isle_effect_intensity_blink
+                                    else R.string.isle_effect_intensity,
+                                ),
                                 value = localIntensity,
                                 onValueChange = { localIntensity = it },
                                 onCommit = {
                                     onIntensity(normalizedToChannel(localIntensity))
                                 },
                             )
+                            if (blinkMode) {
+                                Text(
+                                    text = stringResource(R.string.isle_blink_intensity_hint),
+                                    color = IsleColors.TextMuted,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
                         }
 
                         Text(
                             text = stringResource(
-                                if (palette == SOLID_PALETTE_ID) {
+                                if (hidePalette || palette == SOLID_PALETTE_ID) {
                                     R.string.isle_solid_color
                                 } else {
                                     R.string.isle_effect_color
@@ -950,12 +1008,19 @@ private fun EffectTuning(
                             }
                         }
 
-                        PalettePicker(
-                            selected = palette,
-                            primaryPacked = colors.firstOrNull()?.let { packedRgb(it) } ?: 0xFFFFFF,
-                            onSelect = onPalette,
-                            modifier = Modifier.padding(top = 14.dp),
-                        )
+                        if (!hidePalette) {
+                            PalettePicker(
+                                selected = palette,
+                                primaryPacked = colors.firstOrNull()?.let { packedRgb(it) } ?: 0xFFFFFF,
+                                colorsPacked = colors.map { packedRgb(it) },
+                                templates = paletteTemplates,
+                                templateSlots = paletteSlots,
+                                showSolid = !hideSolidPalette,
+                                onSelect = onPalette,
+                                onSelectTemplate = onSelectPaletteTemplate,
+                                modifier = Modifier.padding(top = 14.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -968,14 +1033,19 @@ private fun EffectTuning(
  *
  * 每个色块画的是该调色板**真实的色标**（从固件 `palettes.cpp` 提取，
  * 见 `tools/gen_palette_catalog.py`），所以用户点之前就能看见它长什么样，
- * 而不是面对一串编号。固件里「只取当前颜色槽位」的那几个动态调色板
- * 没有固定颜色，用中性底纹示意，名字仍会显示在标题右侧。
+ * 而不是面对一串编号。固件里「只取当前颜色槽位」的动态调色板没有固定色，
+ * 用当前段落的颜色实时拼出预览，避免出现一排灰色空块。
  */
 @Composable
 private fun PalettePicker(
     selected: Int,
     primaryPacked: Int,
+    colorsPacked: List<Int>,
+    templates: List<PaletteTemplate>,
+    templateSlots: Map<String, Int>,
+    showSolid: Boolean,
     onSelect: (Int) -> Unit,
+    onSelectTemplate: (PaletteTemplate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val palettes = remember { PaletteCatalog.all }
@@ -989,8 +1059,44 @@ private fun PalettePicker(
             colors = listOf(primaryPacked, primaryPacked),
         )
     }
-    val current = if (selected == SOLID_PALETTE_ID) solid else palettes.firstOrNull { it.id == selected }
-    val visiblePalettes = remember(palettes) { palettes.filterNot { it.id == SOLID_PALETTE_ID } }
+    // 自定义模板的设备调色板 id：槽位 0 -> 200，槽位 1 -> 199 ……
+    // 还没在这台设备上用过的模板也有 id 占位（NO_TEMPLATE_SLOT），先展示预览，点用后才分配真实槽位。
+    val templatePalettes = remember(templates, templateSlots) {
+        templates.map { template ->
+            val slot = templateSlots[template.id]
+            template to PaletteInfo(
+                id = slot?.let { CUSTOM_PALETTE_ID_BASE - it } ?: NO_TEMPLATE_SLOT,
+                name = template.name,
+                isStatic = true,
+                colors = template.colors,
+            )
+        }
+    }
+    // 「*」动态调色板在固件里从当前颜色槽取色，这里用当前段落颜色拼出真实预览。
+    val dynamicPreviews = remember(palettes, colorsPacked) {
+        val c1 = colorsPacked.getOrElse(0) { 0xFFFFFF }
+        val c2 = colorsPacked.getOrElse(1) { 0x000000 }
+        val c3 = colorsPacked.getOrElse(2) { c2 }
+        palettes.mapNotNull { palette ->
+            val preview = when {
+                palette.id == RANDOM_CYCLE_PALETTE_ID -> RANDOM_CYCLE_PREVIEW
+                palette.id == COLORS_1_2_PALETTE_ID -> listOf(c1, c2)
+                palette.id == COLOR_GRADIENT_PALETTE_ID -> listOf(c1, c1, c2, c2)
+                palette.id == COLORS_ONLY_PALETTE_ID -> listOf(c1, c2, c3, c1)
+                else -> null
+            }
+            preview?.let { palette.copy(colors = it) }
+        }.associateBy { it.id }
+    }
+    val current = when {
+        showSolid && selected == SOLID_PALETTE_ID -> solid
+        else -> palettes.firstOrNull { it.id == selected }
+            ?: templatePalettes.firstOrNull { it.second.id == selected }?.second
+    }
+    val visiblePalettes = remember(palettes, dynamicPreviews) {
+        palettes.filterNot { it.id == SOLID_PALETTE_ID }
+            .map { dynamicPreviews[it.id] ?: it }
+    }
     Column(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1010,6 +1116,52 @@ private fun PalettePicker(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
+        // 手机本地的多色模板：只有分配过设备槽位（点用过）的才有对应调色板 id
+        Text(
+            text = stringResource(R.string.isle_palette_templates),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        if (templatePalettes.isEmpty()) {
+            Text(
+                text = stringResource(R.string.isle_palette_templates_hint),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                templatePalettes.forEach { (template, info) ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(46.dp),
+                    ) {
+                        PaletteSwatch(
+                            palette = info,
+                            selected = info.id == selected,
+                            onClick = { onSelectTemplate(template) },
+                        )
+                        Text(
+                            text = template.name,
+                            color = IsleColors.TextMuted,
+                            fontSize = 9.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1017,11 +1169,13 @@ private fun PalettePicker(
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            PaletteSwatch(
-                palette = solid,
-                selected = selected == SOLID_PALETTE_ID,
-                onClick = { onSelect(SOLID_PALETTE_ID) },
-            )
+            if (showSolid) {
+                PaletteSwatch(
+                    palette = solid,
+                    selected = selected == SOLID_PALETTE_ID,
+                    onClick = { onSelect(SOLID_PALETTE_ID) },
+                )
+            }
             visiblePalettes.forEach { palette ->
                 PaletteSwatch(
                     palette = palette,
@@ -1045,7 +1199,7 @@ private fun PaletteSwatch(
             .size(width = 46.dp, height = 30.dp)
             .clip(shape)
             .background(
-                // 有固定色标才画渐变；`*` 系列调色板没有色标，用中性底纹示意，避免出现空白方框
+                // 有固定色标才画渐变；动态调色板已用当前段落颜色补好预览，兜底仍是中性底纹
                 if (palette.hasPreview && palette.colors.isNotEmpty()) {
                     Brush.horizontalGradient(palette.colors.map { Color(0xFF000000.toInt() or it) })
                 } else {
@@ -1458,137 +1612,6 @@ private fun FrequencyPaletteSwatch(
     }
 }
 
-/**
- * 频谱像素的单频段取色弹层。
- *
- * 用 HSV 三个滑条覆盖任意颜色，同时保留一排产品预设色方便快速选择；
- * 滑条松手与预设点按都会立即下发，拖动过程中只更新本地预览。
- */
-@Composable
-private fun FrequencyColorSheet(
-    title: String,
-    initial: Int,
-    onDismiss: () -> Unit,
-    onPick: (Int) -> Unit,
-) {
-    val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(initial, it) } }
-    var hue by remember { mutableFloatStateOf(hsv[0] / 360f) }
-    var saturation by remember { mutableFloatStateOf(hsv[1]) }
-    var brightness by remember { mutableFloatStateOf(if (hsv[2] < 0.05f) 1f else hsv[2]) }
-    val current = hsvToPacked(hue, saturation, brightness)
-
-    BottomSheet(onDismiss = onDismiss) {
-        SheetTitle(title)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(packedToColor(current))
-                .border(1.dp, IsleColors.StrokeStrong, RoundedCornerShape(12.dp)),
-        )
-        FrequencyColorSlider(
-            label = stringResource(R.string.isle_freq_hue),
-            value = hue,
-            track = Brush.horizontalGradient(
-                listOf(
-                    0xFFFF0000.toInt(), 0xFFFFFF00.toInt(), 0xFF00FF00.toInt(), 0xFF00FFFF.toInt(),
-                    0xFF0000FF.toInt(), 0xFFFF00FF.toInt(), 0xFFFF0000.toInt(),
-                ).map { packedToColor(it) },
-            ),
-            onValueChange = { hue = it },
-            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
-        )
-        FrequencyColorSlider(
-            label = stringResource(R.string.isle_freq_saturation),
-            value = saturation,
-            track = Brush.horizontalGradient(
-                listOf(Color.White, packedToColor(hsvToPacked(hue, 1f, brightness))),
-            ),
-            onValueChange = { saturation = it },
-            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
-        )
-        FrequencyColorSlider(
-            label = stringResource(R.string.isle_freq_brightness),
-            value = brightness,
-            track = Brush.horizontalGradient(
-                listOf(Color.Black, packedToColor(hsvToPacked(hue, saturation, 1f))),
-            ),
-            onValueChange = { brightness = it },
-            onCommit = { onPick(hsvToPacked(hue, saturation, brightness)) },
-        )
-
-        Text(
-            text = stringResource(R.string.isle_freq_preset_colors),
-            color = IsleColors.TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
-            PRESET_COLORS.forEach { packed ->
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(packedToColor(packed), CircleShape)
-                        .border(1.dp, IsleColors.StrokeStrong, CircleShape)
-                        .clickable {
-                            onPick(packed)
-                            onDismiss()
-                        },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FrequencyColorSlider(
-    label: String,
-    value: Float,
-    track: Brush,
-    onValueChange: (Float) -> Unit,
-    onCommit: () -> Unit,
-) {
-    Column(modifier = Modifier.padding(top = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = label,
-                color = IsleColors.TextSecondary,
-                fontSize = 12.sp,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "${(value * 100).roundToInt()}%",
-                color = IsleColors.TextPrimary,
-                fontSize = 12.sp,
-                modifier = Modifier.width(40.dp),
-            )
-        }
-        IsleSlider(
-            value = value,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onCommit,
-            trackBrush = track,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 2.dp),
-        )
-    }
-}
-
-private fun hsvToPacked(hue: Float, saturation: Float, brightness: Float): Int =
-    android.graphics.Color.HSVToColor(
-        floatArrayOf(
-            hue.coerceIn(0f, 1f) * 360f,
-            saturation.coerceIn(0f, 1f),
-            brightness.coerceIn(0f, 1f),
-        ),
-    ) and 0xFFFFFF
-
 @Composable
 private fun TuningSlider(
     label: String,
@@ -1776,7 +1799,8 @@ private fun QuickCard(
             .border(
                 width = if (isActive) 1.6.dp else 1.dp,
                 brush = if (isActive) {
-                    Brush.linearGradient(curated?.gradient?.map { Color(it) } ?: IsleColors.Accent)
+                    // 精选色板是 6 位 RGB，补上不透明通道，否则 Color(int) 会变成透明色
+                    Brush.linearGradient(curated?.gradient?.map { Color(it or 0xFF000000) } ?: IsleColors.Accent)
                 } else {
                     Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke))
                 },

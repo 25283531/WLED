@@ -8,23 +8,29 @@ import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.model.wledapi.State
 import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
+import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
+import ca.cgagnier.wlednativeandroid.ui.effects.CUSTOM_PALETTE_ID_BASE
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectMood
 import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplate
+import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
 import ca.cgagnier.wlednativeandroid.ui.effects.SonicPulse
 import ca.cgagnier.wlednativeandroid.ui.effects.SpectrumLamp
 import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
 import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
 import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.buildEffectSegment
+import ca.cgagnier.wlednativeandroid.ui.effects.buildPaletteFileJson
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,6 +40,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val FAVORITES_SUBSCRIPTION_TIMEOUT_MS = 5_000L
 private const val NIGHTLIGHT_MODE_FADE = 1
@@ -67,6 +74,14 @@ sealed interface NightlightEvent {
     data object LightOff : NightlightEvent
 }
 
+/** 调用手机里保存的多色模板的结果。 */
+sealed interface PaletteTemplateEvent {
+    data class Applied(val name: String) : PaletteTemplateEvent
+
+    /** 模板色标没能写进设备（离线、上传被关闭或段落补丁失败）。 */
+    data object Failed : PaletteTemplateEvent
+}
+
 /** WLED 颜色槽位数量（主色 / 次色 / 第三色）。 */
 private const val COLOR_SLOT_COUNT = 3
 
@@ -90,6 +105,8 @@ class DeviceHomeViewModel(
     private val deviceConnectionManager: DeviceConnectionManager,
     private val favoriteEffectDao: FavoriteEffectDao,
     private val selectedDeviceStore: SelectedDeviceStore,
+    private val deviceApiFactory: DeviceApiFactory,
+    private val paletteTemplateStore: PaletteTemplateStore,
 ) : ViewModel() {
 
     val devices: StateFlow<List<DeviceWithState>> = deviceConnectionManager.allDevicesWithState
@@ -118,6 +135,17 @@ class DeviceHomeViewModel(
 
     /** 定时关灯的操作结果，界面用它弹 Toast，避免「点完什么都没发生」。 */
     val nightlightEvents: SharedFlow<NightlightEvent> = _nightlightEvents.asSharedFlow()
+
+    /** 手机本地保存的多色模板，设备页调色板里预览、调用。 */
+    val paletteTemplates: StateFlow<List<PaletteTemplate>> = paletteTemplateStore.templates
+
+    /** 每台设备分配到的模板槽位（用于判断哪个模板当前被选中）。 */
+    val paletteSlots: StateFlow<Map<String, Map<String, Int>>> = paletteTemplateStore.slots
+
+    private val _paletteEvents = MutableSharedFlow<PaletteTemplateEvent>(extraBufferCapacity = 4)
+
+    /** 调用多色模板的结果，界面用它弹 Toast。 */
+    val paletteEvents: SharedFlow<PaletteTemplateEvent> = _paletteEvents.asSharedFlow()
 
     fun selectDevice(macAddress: String?) = selectedDeviceStore.select(macAddress)
 
@@ -171,6 +199,41 @@ class DeviceHomeViewModel(
     fun setPalette(device: DeviceWithState, palette: Int) = broadcast(device) { mac ->
         deviceConnectionManager.sendSegmentPatch(mac) {
             it.copy(palette = palette.coerceIn(0, 255))
+        }
+    }
+
+    /**
+     * 调用手机本地保存的多色模板。
+     *
+     * 模板不存在设备里：先把色标上传成这台设备的自定义调色板（`/paletteN.json`），
+     * 再把 `seg.pal` 指到对应 id。槽位按「设备 + 模板」记忆，同一模板重复点用不会
+     * 反复占用新的调色板槽位。
+     */
+    fun applyPaletteTemplate(device: DeviceWithState, template: PaletteTemplate) {
+        viewModelScope.launch {
+            val payload = buildPaletteFileJson(template.colors).toByteArray()
+            val applied = targets(device).map { mac ->
+                val target = devices.value.firstOrNull { it.device.macAddress == mac } ?: device
+                val slot = paletteTemplateStore.allocateSlot(
+                    macAddress = mac,
+                    templateId = template.id,
+                    deviceCustomPaletteCount = target.stateInfo?.info?.customPaletteCount,
+                )
+                val uploaded = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val api = deviceApiFactory.create(target.device)
+                        api.uploadFile(payload, "palette$slot.json")
+                    }.getOrNull()?.let { it.code in 200..299 } == true
+                }
+                if (!uploaded) return@map false
+                deviceConnectionManager.sendSegmentPatch(mac) {
+                    it.copy(palette = (CUSTOM_PALETTE_ID_BASE - slot).coerceAtLeast(0))
+                }
+            }
+            _paletteEvents.emit(
+                if (applied.any { it }) PaletteTemplateEvent.Applied(template.name)
+                else PaletteTemplateEvent.Failed,
+            )
         }
     }
 

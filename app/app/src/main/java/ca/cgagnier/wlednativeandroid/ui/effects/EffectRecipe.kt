@@ -44,5 +44,7 @@ fun buildEffectSegment(
             palette = curated.paletteId,
         )
     }
-    return result.restoreFrom(favorite)
+    // 最后再施加效果自身的约束（循环彩禁用单色），
+    // 历史收藏里的旧参数不能把这个约束覆盖掉，否则又会出现「调了没反应」。
+    return EffectTuningPolicy.adjust(result.restoreFrom(favorite), effectId)
 }
