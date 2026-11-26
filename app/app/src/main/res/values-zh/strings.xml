@@ -229,6 +229,7 @@
     <string name="isle_effect_color">颜色</string>
     <string name="isle_palette">调色板</string>
     <string name="isle_freq_tuning_summary">4 段配色</string>
+    <string name="isle_color_tuning_summary">颜色与调色板</string>
     <string name="isle_freq_colors">频段颜色</string>
     <string name="isle_freq_templates">4 色配色</string>
     <string name="isle_freq_custom">自定义</string>

@@ -11088,28 +11088,38 @@ void mode_particle1DGEQ(void) {
   struct VUData { uint8_t volS; };
   if (!SEGENV.allocateData(sizeof(VUData))) FX_FALLBACK_STATIC;
   VUData *d = (VUData*)SEGENV.data;
-  um_data_t *um_data = getAudioData();
-  float vol = 0;
-  if (um_data) vol = *(float*)um_data->u_data[0];
-  int16_t dv = (int16_t)vol - d->volS; d->volS += (uint8_t)((dv*(dv>0?4:1))/8); // 快攻慢放
-  uint32_t base = SEGCOLOR(0);
+  // 音量等级取 16 段频谱平均值：volumeSmth 是 sum*1.9 且音乐一响就饱和到 255，
+  // 直接映射会让音量条长期顶到最上方；平均值保留了真实动态范围
+  uint8_t level = 0;
+  if (um_data_t *um_data = getAudioData()){
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    if (fft){
+      uint16_t sum = 0;
+      for (uint8_t i=0;i<16;i++) sum += fft[i];
+      level = (uint8_t)(sum >> 4);
+    }
+  }
+  // 噪声门 + 音量曲线：200 = AGC 目标峰值，即全频段满幅才点亮到顶行；
+  // 安静时（<8）完全熄灭，中等音量只到中低段
+  float lvl = (level > 8) ? ((float)level / 200.0f) : 0.0f;
+  if (lvl > 1.0f) lvl = 1.0f;
+  uint8_t target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
+  int16_t dv = (int16_t)target - d->volS;
+  int16_t nv = (int16_t)d->volS + (dv * (dv>0?5:1)) / 8; // 快攻慢放
+  d->volS = (uint8_t)(nv < 0 ? 0 : nv);
+  SEGMENT.fill(BLACK);
   uint8_t fillH = d->volS; // 0..255 posY
-  // 常亮底色：压暗约两个量级（nscale8(2) ≈ 0.8%）
-  CRGB dim(base); dim.nscale8(2);
-  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,dim);
-  if (fillH < 6) return; // 极安静时只留暗底
-  // 顶部暗色：底色向黑混合，越往上越深
-  uint32_t deep = color_blend(base, 0, 55);
+  if (fillH < 4) return;   // 安静时全部熄灭
+  // 颜色沿高度从下往上取自调色板：palette=0 时取段主色（单色），
+  // 多色调色板则按色标顺序自下而上排列，色标之间由调色板插值自然混色
   for (uint16_t y=0;y<rows;y++){
     uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
     if (posY > fillH) continue;
-    uint8_t t = (uint8_t)(((uint32_t)posY*255)/fillH); // 0 底 -> 255 顶
-    CRGB c(color_blend(base, deep, t));
-    c.nscale8((uint8_t)(235 - (t>>2))); // 高亮，顶部略暗
+    CRGB c(SEGMENT.color_from_palette(posY, false, false, 0));
     for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,c);
   }
 }
-static const char _data_FX_MODE_PS_1D_GEQ[] PROGMEM = "PS GEQ 1D@速度,强度;;!;;";
+static const char _data_FX_MODE_PS_1D_GEQ[] PROGMEM = "PS GEQ 1D@;!;!;;";
 
 /*
   Particle based Fire effect

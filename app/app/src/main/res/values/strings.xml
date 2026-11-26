@@ -231,6 +231,7 @@
     <string name="isle_effect_color">Color</string>
     <string name="isle_palette">Palette</string>
     <string name="isle_freq_tuning_summary">4-band colors</string>
+    <string name="isle_color_tuning_summary">Colors &amp; palette</string>
     <string name="isle_freq_colors">Band colors</string>
     <string name="isle_freq_templates">4-color palettes</string>
     <string name="isle_freq_custom">Custom</string>

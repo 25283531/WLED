@@ -155,6 +155,9 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val frequencyEffectId = remember { FrequencyPixels.effectId }
     val frequencyPixelsActive = currentEffect != null && currentEffect == frequencyEffectId
     val frequencyColors = remember(segment) { FrequencyPixels.currentColors(segment) }
+    // 线型频谱（PS GEQ 1D）只跟随声量等级，速度/强度不参与运算，设备页隐藏这两个滑块
+    val linearSpectrumId = remember { EffectCatalog.byName("PS GEQ 1D")?.id }
+    val linearSpectrumActive = currentEffect != null && currentEffect == linearSpectrumId
 
     val nightlight = state?.nightlight
     val nightlightActive = nightlight?.isOn == true
@@ -227,6 +230,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     palette = segment?.palette ?: 0,
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     frequencyMode = frequencyPixelsActive,
+                    slidersHidden = linearSpectrumActive,
                     frequencyColors = frequencyColors,
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
@@ -564,6 +568,7 @@ private fun EffectTuning(
     palette: Int,
     colors: List<Color>,
     frequencyMode: Boolean,
+    slidersHidden: Boolean,
     frequencyColors: List<Int>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
@@ -595,6 +600,7 @@ private fun EffectTuning(
                 text = when {
                     expanded -> stringResource(R.string.isle_effect_tuning_collapse)
                     frequencyMode -> stringResource(R.string.isle_freq_tuning_summary)
+                    slidersHidden -> stringResource(R.string.isle_color_tuning_summary)
                     else -> stringResource(
                         R.string.isle_effect_tuning_summary,
                         normalizedToPercent(localSpeed),
@@ -616,22 +622,24 @@ private fun EffectTuning(
                             onPalette = onFrequencyPalette,
                         )
                     } else {
-                        TuningSlider(
-                            label = stringResource(R.string.isle_effect_speed),
-                            value = localSpeed,
-                            onValueChange = { localSpeed = it },
-                            onCommit = {
-                                onSpeed(normalizedToChannel(localSpeed))
-                            },
-                        )
-                        TuningSlider(
-                            label = stringResource(R.string.isle_effect_intensity),
-                            value = localIntensity,
-                            onValueChange = { localIntensity = it },
-                            onCommit = {
-                                onIntensity(normalizedToChannel(localIntensity))
-                            },
-                        )
+                        if (!slidersHidden) {
+                            TuningSlider(
+                                label = stringResource(R.string.isle_effect_speed),
+                                value = localSpeed,
+                                onValueChange = { localSpeed = it },
+                                onCommit = {
+                                    onSpeed(normalizedToChannel(localSpeed))
+                                },
+                            )
+                            TuningSlider(
+                                label = stringResource(R.string.isle_effect_intensity),
+                                value = localIntensity,
+                                onValueChange = { localIntensity = it },
+                                onCommit = {
+                                    onIntensity(normalizedToChannel(localIntensity))
+                                },
+                            )
+                        }
 
                         Text(
                             text = stringResource(R.string.isle_effect_color),
