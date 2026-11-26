@@ -8323,7 +8323,8 @@ static const char _data_FX_MODE_FREQMATRIX[] PROGMEM = "Freqmatrix@Speed,Sound e
 // 布局自适应：1D 灯带直接按灯珠索引，2D 矩阵按逻辑坐标映射，不写死行列数。
 // fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处不再重复平滑。
 struct FreqpixelData {
-  uint32_t nextShuffle;   // 下次重排时间
+  uint32_t lastShuffle;   // 上次重排时间
+  float bassAvg;          // 低频慢跟随均值，用于节拍检测
   uint16_t n;             // 随机排列长度
   uint16_t order[1];      // 0..n-1 的随机排列（变长）
 };
@@ -8352,18 +8353,25 @@ void mode_freqpixels(void) {
   }
   if (silent) return;                         // 静音全灭
 
-  // 随机排列：每 140~200ms 重排一次，让数量变化表现为随机位置亮灭而非固定区块
+  // 随机排列：由低频节拍驱动重排（低频明显超过慢跟随均值时视为一次鼓点），
+  // 并设 150ms 防抖，避免快速重排导致画面杂乱；长时间无节拍时每 1.8s 兜底重排一次。
+  uint8_t bass = energy[0];
   if (SEGENV.call == 0 || d->n != n) {
     d->n = n;
     for (uint16_t i = 0; i < n; i++) d->order[i] = i;
-    d->nextShuffle = strip.now;
+    d->bassAvg = bass;
+    d->lastShuffle = strip.now - 2000;   // 首帧立即散开，避免按顺序点亮成一条
   }
-  if ((int32_t)(strip.now - d->nextShuffle) >= 0) {
+  int32_t sinceShuffle = (int32_t)(strip.now - d->lastShuffle);
+  bool beat = bass > 18 && bass > d->bassAvg * 1.35f + 4.0f;
+  bool doShuffle = (beat && sinceShuffle > 150) || sinceShuffle > 1800;
+  d->bassAvg = d->bassAvg * 0.92f + bass * 0.08f;   // 约 0.3s 的慢跟随
+  if (doShuffle) {
     for (uint16_t i = n - 1; i > 0; i--) {
       uint16_t j = prng.random16() % (i + 1);
       uint16_t t = d->order[i]; d->order[i] = d->order[j]; d->order[j] = t;
     }
-    d->nextShuffle = strip.now + 140 + (prng.random8() & 63);
+    d->lastShuffle = strip.now;
   }
 
   // 第 4 色：RGB777 从 c1/c2/c3 解包（c3 只有 5bit，因此低位在前）
