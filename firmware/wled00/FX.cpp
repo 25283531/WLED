@@ -5938,11 +5938,11 @@ void mode_audiospiral(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct SpirData { float spinPhase, bassEnv, mhEnv; uint32_t lastMs; };
+  struct SpirData { float wavePhase, bassEnv, mhEnv; uint32_t lastMs; };
   if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
   SpirData *d = (SpirData*)SEGENV.data;
-  const float fPI = 3.14159265f, fTWO_PI = 6.2831853f; // 避开 Arduino.h 的 PI/TWO_PI 宏
-  if (d->lastMs == 0){ d->spinPhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = strip.now ? strip.now : 1; }
+  const float fTWO_PI = 6.2831853f; // 避开 Arduino.h 的 TWO_PI 宏（double 提升拖慢运算）
+  if (d->lastMs == 0){ d->wavePhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = strip.now ? strip.now : 1; }
   // 取色：主/副色覆盖默认螺旋色（用户色卡）
   uint8_t hueA = 135, hueB = 235;
   uint32_t cA = SEGCOLOR(0), cB = SEGCOLOR(1);
@@ -5969,45 +5969,42 @@ void mode_audiospiral(void) {
   bassClean = powf(bassClean, 1.4f);
   if (bassClean > d->bassEnv) d->bassEnv += (bassClean - d->bassEnv) * 0.70f;
   else d->bassEnv += (bassClean - d->bassEnv) * 0.14f;
-  // 中高频包络：控制光带粗细与饱和度
+  // 中高频包络：控制两条链之间的间距与饱和度
   float mhClean = (mhInput > 0.10f) ? ((mhInput - 0.10f) / 0.90f) : 0.0f;
   mhClean = (mhClean < 0.0f) ? 0.0f : (mhClean > 1.0f ? 1.0f : mhClean);
   if (mhClean > d->mhEnv) d->mhEnv += (mhClean - d->mhEnv) * 0.45f;
   else d->mhEnv += (mhClean - d->mhEnv) * 0.16f;
-  // 旋转相位：低频控制角速度（单向积分，绝不倒转）
-  float angVel = 0.85f + d->bassEnv * 6.50f;
-  d->spinPhase += angVel * dt;
-  if (d->spinPhase > 628.3185f) d->spinPhase -= 628.3185f;
-  float activeW = 0.14f + d->mhEnv * 0.22f;                 // 中高频控制粗细
-  float minW = 1.5f / (float)cols;                          // 窄矩阵适配：光带至少覆盖约1.5个灯珠列的角距
-  if (activeW < minW) activeW = minW;
-  uint8_t sat = (uint8_t)(165.0f + d->mhEnv * 90.0f);       // 中高频控制饱和度
-  uint8_t val = (uint8_t)(195.0f + d->mhEnv * 60.0f);
+  // 行波相位：低频控制 DNA 沿轴向行进的速度（单向积分，绝不倒转）
+  d->wavePhase += (0.85f + d->bassEnv * 6.50f) * dt;
+  if (d->wavePhase > 628.3185f) d->wavePhase -= 628.3185f;
+  // 螺旋宽度 = 两条线之间的最大间距（以灯珠列计），中高频把双链撑开
+  float sepCols = 2.0f + d->mhEnv * 1.2f;         // 间距 2.0~3.2 个灯珠列（约 80°~128°）
+  float halfSep = 0.5f * sepCols / (float)cols;   // 归一化方位半间距
+  const float turns = 1.0f;                       // 全高交叉 2 次（DNA 经典形态）
+  const float lineHalfW = 0.62f;                  // 单条线的半宽（灯珠列），保持细线
+  uint8_t sat = (uint8_t)(190.0f + d->mhEnv * 65.0f);
+  uint8_t val = (uint8_t)(200.0f + d->mhEnv * 55.0f);
   for (uint16_t y=0;y<rows;y++){
     float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;  // 0=底部, 1=顶部
     uint16_t sy = rows - 1 - y;                                   // 本项目矩阵 y=0 在物理顶部，写入时翻转
     float edgeFade = 1.0f;
     if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
     else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
+    float wave = sin_approx(ny * turns * fTWO_PI + d->wavePhase);
+    float azA =  halfSep * wave;   // 两链反相摆动 → 在节点处交叉
+    float azB = -halfSep * wave;
     for (uint16_t x=0;x<cols;x++){
-      float theta = ((float)x / (float)cols) * fTWO_PI;
-      float twist = ny * 1.35f * fTWO_PI + d->spinPhase + d->bassEnv * 0.45f * ny;
-      float phaseA = theta - twist;
-      float phaseB = phaseA + fPI; // 双链相差 180°
-      // 归一化角距离 [0,1]：折叠到 [-PI,PI] 再取绝对值/PI（不调用 atan2/sin）
-      float kA = (float)(int)(phaseA * 0.15915494f + (phaseA >= 0 ? 0.5f : -0.5f));
-      float wA = phaseA - kA * fTWO_PI;
-      float distA = (wA < 0 ? -wA : wA) / fPI;
-      float kB = (float)(int)(phaseB * 0.15915494f + (phaseB >= 0 ? 0.5f : -0.5f));
-      float wB = phaseB - kB * fTWO_PI;
-      float distB = (wB < 0 ? -wB : wB) / fPI;
-      float nA = distA / activeW;
-      float iA = (nA < 1.5f) ? expf(-2.2f * nA * nA) : 0.0f;
-      float nB = distB / activeW;
-      float iB = (nB < 1.5f) ? expf(-2.2f * nB * nB) : 0.0f;
-      CRGB fc(6, 8, 16); // 极暗通透底色
+      float nx = (float)x / (float)cols;
+      // 方位距离折叠到 [0,0.5]：周向自动形成两份对称图案，任意观察角度都能看到双螺旋
+      float dA = fabsf(nx - azA); if (dA > 0.5f) dA = 1.0f - dA;
+      float dB = fabsf(nx - azB); if (dB > 0.5f) dB = 1.0f - dB;
+      float nA = (dA * (float)cols) / lineHalfW;
+      float nB = (dB * (float)cols) / lineHalfW;
+      float iA = (nA < 2.0f) ? expf(-2.2f * nA * nA) : 0.0f;   // 细线钟形衰减
+      float iB = (nB < 2.0f) ? expf(-2.2f * nB * nB) : 0.0f;
+      CRGB fc(0, 0, 0);                                        // 无常亮底色
       if (iA > 0.01f){
-        uint8_t coreA = (uint8_t)(iA * iA * 55.0f); // 中心高光去饱和
+        uint8_t coreA = (uint8_t)(iA * iA * 55.0f); // 线心去饱和成高光
         uint8_t sA = (sat > coreA) ? (sat - coreA) : 0;
         uint8_t vA = (uint8_t)(iA * val * edgeFade);
         fc += CRGB(CHSV(hueA, sA, vA));
