@@ -11099,9 +11099,9 @@ void mode_particle1DGEQ(void) {
       level = (uint8_t)(sum >> 4);
     }
   }
-  // 噪声门 + 音量曲线：200 = AGC 目标峰值，即全频段满幅才点亮到顶行；
-  // 安静时（<8）完全熄灭，中等音量只到中低段
-  float lvl = (level > 8) ? ((float)level / 200.0f) : 0.0f;
+  // 噪声门 + 音量曲线：160 = 实测音乐在 AGC 后 16 段平均值的满幅参考
+  // （常规段落约 70~120，只有最响的峰值才接近 160）；安静时（<8）完全熄灭
+  float lvl = (level > 8) ? ((float)level / 160.0f) : 0.0f;
   if (lvl > 1.0f) lvl = 1.0f;
   uint8_t target = (uint8_t)(powf(lvl, 1.3f) * 255.0f + 0.5f);
   int16_t dv = (int16_t)target - d->volS;
