@@ -5824,7 +5824,7 @@ void mode_stagelight(void) {
   if (col == 0) col = 0xFFFFFF;   // 未设置颜色时默认白色
   CRGB fc(col);
   fc.nscale8(d->pulse[d->curBand]);
-  SEGMENT.fill(fc);
+  SEGMENT.fill(((uint32_t)fc.r << 16) | ((uint32_t)fc.g << 8) | fc.b);  // Segment::fill 仅接受 uint32_t
 }
 static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@,,,;;!;2f;sx=128,ix=192,c1=1";
 void mode_tribreath(void) {
