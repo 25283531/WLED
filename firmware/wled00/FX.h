@@ -339,10 +339,9 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_LUMI_HEARTH              180  // 壁炉火焰
 #define FX_MODE_LUMI_LAVA                181  // 熔岩灯
 #define FX_MODE_LUMI_CAUSTICS            182  // 深海波光
-#define FX_MODE_LUMI_FOUNTAIN            183  // 环形频谱喷泉
+#define FX_MODE_LUMI_FOUNTAIN            183  // 已删除（环形频谱喷泉），槽位保留为 RSVD，不得复用
 
-
-#define FX_MODE_STAGELIGHT 184
+#define FX_MODE_STAGELIGHT               184  // 舞台灯：c1 bit0..2 选择低/中/高频，col[0..2] 为对应频段颜色
 #define FX_MODE_TRIBREATH 185
 #define FX_MODE_AUDIOSPIRAL 186
 #define FX_MODE_SONICPULSE 187

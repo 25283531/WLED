@@ -5731,160 +5731,102 @@ void mode_lumi_caustics(void) {
 static const char _data_FX_MODE_LUMI_CAUSTICS[] PROGMEM = "Lumi Caustics@Speed,Grid,Sharpness;;!;2;sx=70,ix=100,c1=150";
 
 
-// 7. 环形频谱喷泉（真 FFT：低频 -> 底部暖浪，中高音 -> 星光，瞬态 -> 扩散波纹）
-void mode_lumi_fountain(void) {
-  if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
-
-  const uint16_t cols = SEG_W;
-  const uint16_t rows = SEG_H;
-  if (cols < 2 || rows < 2) return;
-
-  struct LumiFountainRing { uint8_t h, life, pad; };              // h: posY, life: 亮度
-  struct LumiFountainPart { int8_t vx, vy; uint8_t x, y, life; };
-  const uint8_t kMaxRings = 3, kMaxParts = 16;
-  struct LumiFountainData {
-    uint8_t bassS, midS, highS, prevVol;
-    uint32_t lastPeak;
-    LumiFountainRing ring[3];
-    LumiFountainPart part[16];
-  };
-  if (!SEGENV.allocateData(sizeof(LumiFountainData))) FX_FALLBACK_STATIC;
-  LumiFountainData *d = reinterpret_cast<LumiFountainData*>(SEGENV.data);
-
-  um_data_t *um_data = getAudioData();
-  if (!um_data) { SEGMENT.fill(BLACK); return; }
-  uint8_t *fft = (uint8_t*)um_data->u_data[2];
-  if (!fft) { SEGMENT.fill(BLACK); return; }
-  float    vol  = *(float*)um_data->u_data[0];
-  uint8_t  peak = *(uint8_t*)um_data->u_data[3];
-
-  uint8_t bass = fft[0];
-  for (uint8_t i = 1; i < 3; i++) if (fft[i] > bass) bass = fft[i];
-  uint8_t mid = fft[3];
-  for (uint8_t i = 4; i < 8; i++) if (fft[i] > mid) mid = fft[i];
-  uint8_t high = fft[8];
-  for (uint8_t i = 9; i < 16; i++) if (fft[i] > high) high = fft[i];
-
-  // 三频段能量直接取统一层输出（已完成 AGC 与平滑，效果内不再重复处理）
-  d->bassS = bass; d->midS = mid; d->highS = high;
-
-  bool transient = (peak != 0);   // 节拍由统一层检测（含冷却窗口）
-  // 瞬态灵敏度
-  if (transient && (uint8_t)vol < (256 - SEGMENT.custom2)) transient = false;
-
-  if (SEGENV.call == 0) {
-    for (uint8_t i = 0; i < kMaxRings; i++) { d->ring[i].h = 0; d->ring[i].life = 0; }
-    for (uint8_t i = 0; i < kMaxParts; i++) d->part[i].life = 0;
-  }
-
-  // 瞬态 -> 扩散波纹
-  if (transient) {
-    for (uint8_t i = 0; i < kMaxRings; i++) if (d->ring[i].life == 0) {
-      d->ring[i].h = 0;
-      d->ring[i].life = 255;
-      break;
-    }
-  }
-
-  // 底部暖浪：环高 = bass 映射到 0..50% 高度
-  uint8_t bandH = scale8(d->bassS, 128);
-  for (uint16_t y = 0; y < rows; y++) {
-    uint8_t posY = (uint8_t)(((uint32_t)(rows - 1 - y) * 255) / (rows - 1));
-    if (posY <= bandH && bandH > 0) {
-      uint8_t f = (uint8_t)(((uint32_t)posY * 255) / bandH);
-      CRGB c(lumiRamp4(0xFF3D00, 0xFF7A00, 0xFFB000, 0xFFD060, f));
-      c.nscale8((uint8_t)(180 + (d->midS >> 2)));
-      for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, c);
-    } else {
-      for (uint16_t x = 0; x < cols; x++) SEGMENT.setPixelColorXY(x, y, BLACK);
-    }
-  }
-
-  // 波纹：从底部向上扩散，亮度随寿命衰减
-  for (uint8_t i = 0; i < kMaxRings; i++) {
-    if (d->ring[i].life == 0) continue;
-    d->ring[i].h += (uint8_t)(4 + (SEGMENT.speed >> 6));
-    d->ring[i].life = scale8(d->ring[i].life, 220);
-    if (d->ring[i].life < 12 || d->ring[i].h > 250) { d->ring[i].life = 0; continue; }
-    uint16_t fy = lumiRow(d->ring[i].h, rows);
-    CRGB c(0xFFD9A0);
-    c.nscale8(d->ring[i].life);
-    for (uint16_t x = 0; x < cols; x++) SEGMENT.addPixelColorXY(x, fy, c);
-  }
-
-  // 中高音 -> 星光粒子（真 FFT 驱动）
-  uint8_t partCount = 1 + (SEGMENT.custom1 >> 4);      // 1..16
-  if (partCount > kMaxParts) partCount = kMaxParts;
-  uint8_t energy = (uint8_t)(d->midS + d->highS);
-  if (energy > 40 && prng.random8(255) < energy) {
-    for (uint8_t i = 0; i < partCount; i++) if (d->part[i].life == 0) {
-      d->part[i].x    = prng.random8();
-      d->part[i].y    = (uint8_t)(80 + prng.random8(40));            // 从约 35% 高度发射
-      d->part[i].vx   = (int8_t)((int16_t)prng.random8(5) - 2);
-      d->part[i].vy   = (int8_t)-(1 + (d->highS >> 6));
-      d->part[i].life = (uint8_t)(12 + prng.random8(8));
-      break;
-    }
-  }
-  for (uint8_t i = 0; i < partCount; i++) {
-    if (d->part[i].life == 0) continue;
-    d->part[i].x += (uint8_t)d->part[i].vx;
-    d->part[i].y += (uint8_t)d->part[i].vy;
-    d->part[i].life--;
-    if (d->part[i].life == 0 || d->part[i].y < 8 || d->part[i].y > 250) { d->part[i].life = 0; continue; }
-    uint16_t fx = (uint16_t)(((uint32_t)d->part[i].x * cols) >> 8) % cols;
-    uint16_t fy = lumiRow(d->part[i].y, rows);
-    CRGB c(0xCFF6FF);
-    c.nscale8(scale8(d->part[i].life, LUMI_MAXV));
-    SEGMENT.addPixelColorXY(fx, fy, c);
-  }
-} // mode_lumi_fountain()
+// 舞台灯：低/中/高三个频段各自对应一种爆闪颜色（col[0..2]），c1 的 bit0..2 选择启用哪些频段。
+// 每个频段使用自身近期峰值做相对归一化，安静段的重拍同样能触发，不会因为 AGC 抹平而变成常亮灯。
 void mode_stagelight(void) {
 
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct StageData { uint8_t bandS, strobe, colIdx; uint32_t lastPeak; };
+  struct StageData {
+    uint8_t pulse[3];   // 每频段爆闪包络，0 = 熄灭
+    uint8_t ref[3];     // 每频段自适应峰值参考
+    uint8_t prev[3];    // 上一帧原始能量，用于上升沿检测
+    uint8_t curBand;    // 当前显示的频段，0xFF = 无（全黑）
+  };
   if (!SEGENV.allocateData(sizeof(StageData))) FX_FALLBACK_STATIC;
   StageData *d = (StageData*)SEGENV.data;
-  if (SEGENV.call == 0) d->colIdx = 0;
+  if (SEGENV.call == 0) {
+    for (uint8_t b = 0; b < 3; b++) { d->pulse[b] = 0; d->ref[b] = 0; d->prev[b] = 0; }
+    d->curBand = 0xFF;
+  }
+
+  // 至少关联一个频段，掩码为 0 时回落到默认的低频
+  const uint8_t mask = (SEGMENT.custom1 & 0x07) ? (SEGMENT.custom1 & 0x07) : 0x01;
+
   SEGMENT.fill(BLACK);
+
+  uint8_t raw[3] = {0, 0, 0};
+  uint8_t peak = 0;
+  bool haveAudio = false;
   um_data_t *um_data = getAudioData();
-  if (!um_data) { d->strobe = scale8(d->strobe, 200); return; }
-  uint8_t *fft = (uint8_t*)um_data->u_data[2];
-  uint8_t peak = *(uint8_t*)um_data->u_data[3];
-  uint8_t b=0,m=0,h=0;
-  if (fft){
-    b=fft[0]; for(int i=1;i<3;i++) if(fft[i]>b) b=fft[i];
-    m=fft[3]; for(int i=4;i<8;i++) if(fft[i]>m) m=fft[i];
-    h=fft[8]; for(int i=9;i<16;i++) if(fft[i]>h) h=fft[i];
+  if (um_data) {
+    uint8_t *fft = (uint8_t*)um_data->u_data[2];
+    if (fft) {
+      raw[0] = fft[0]; for (uint8_t i = 1; i < 3; i++)  if (fft[i] > raw[0]) raw[0] = fft[i];
+      raw[1] = fft[3]; for (uint8_t i = 4; i < 8; i++)  if (fft[i] > raw[1]) raw[1] = fft[i];
+      raw[2] = fft[8]; for (uint8_t i = 9; i < 16; i++) if (fft[i] > raw[2]) raw[2] = fft[i];
+      haveAudio = true;
+    }
+    if (um_data->u_data[3]) peak = *(uint8_t*)um_data->u_data[3];
+    // AGC 前原始响度：只用来判断"是否真的在放声音"，避免静音时被噪声放大后误闪
+    if (um_data->u_size > 8 && um_data->u_data[8] && *(uint8_t*)um_data->u_data[8] < 3) haveAudio = false;
   }
-  uint8_t band = (SEGMENT.custom1 < 128) ? b : h;
-  d->bandS = band;   // 统一层已平滑，效果内不再重复
-  uint8_t dominant = (b>=m && b>=h) ? 0 : (m>=h ? 1 : 2); // 主频段，多色时选色
-  uint8_t thr = SEGMENT.custom2; // 阈值，越大越不敏感
-  bool hit = (d->bandS > thr) && (d->bandS > d->strobe);
-  if (hit || peak){
-    uint8_t tier = 0;
-    if (d->bandS > (uint8_t)(thr+30)) tier = 1;
-    if (d->bandS > (uint8_t)(thr+60)) tier = 2;
-    if (d->bandS > (uint8_t)(thr+100)) tier = 3;
-    static const uint8_t kTierBri[4] = {120, 160, 205, 255};
-    uint8_t target = kTierBri[tier];
-    if (target > d->strobe) d->strobe = target;
-    d->colIdx = dominant;
+
+  // 自适应参考：每个频段独立跟踪近期峰值，上行立即跟随、下行缓慢回落；
+  // 归一化能量只反映当前这一下相对本段素材有多响，与手机音量、链路 AGC 无关。
+  uint8_t norm[3] = {0, 0, 0};
+  uint8_t strongest = 0, strongestNorm = 0;
+  for (uint8_t b = 0; b < 3; b++) {
+    if (raw[b] > d->ref[b]) d->ref[b] = raw[b];
+    else if (d->ref[b] > 32) d->ref[b] = (uint8_t)(d->ref[b] - ((d->ref[b] >> 6) + 1));
+    if (d->ref[b] < 96) d->ref[b] = 96;   // 噪声底，避免极小声音被放大成爆闪
+    uint16_t n = ((uint16_t)raw[b] * 255) / d->ref[b];
+    norm[b] = (uint8_t)(n > 255 ? 255 : n);
+    // 节拍只认已关联频段里的最强者，避免最强的那个频段没被选中时整拍不闪
+    if ((mask & (1 << b)) && norm[b] > strongestNorm) { strongestNorm = norm[b]; strongest = b; }
   }
-  d->strobe = scale8(d->strobe, 200);
-  if (d->strobe < 8) return; // 全黑，无常亮底
-  uint32_t c1 = SEGCOLOR(0), c2 = SEGCOLOR(1), c3 = SEGCOLOR(2);
-  uint32_t flash;
-  if (c2 || c3) flash = (d->colIdx==0)? c1 : (d->colIdx==1? c2 : c3); // 多色按主频段选
-  else flash = c1;                                                            // 单色
-  if (!flash) flash = 0xFFFFFF;
-  CRGB fc(flash); fc.nscale8(d->strobe);
-  for (uint16_t y=0;y<rows;y++) for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x,y,fc);
+
+  // 触发：上升沿（能量比上一帧高出一截）或统一层节拍；
+  // 节拍只认已关联频段里归一化最强的那个，避免无关频段抢走节拍。
+  static const uint8_t kTierBri[4] = {110, 160, 210, 255};
+  uint8_t hits = 0;
+  for (uint8_t b = 0; b < 3; b++) {
+    if (haveAudio && (mask & (1 << b))) {
+      bool rising = (raw[b] > d->prev[b] + 6) && (norm[b] > 120);
+      bool beat   = (peak != 0) && (b == strongest) && (norm[b] > 100);
+      if (rising || beat) {
+        hits |= (1 << b);
+        uint8_t tier = norm[b] > 230 ? 3 : (norm[b] > 185 ? 2 : (norm[b] > 150 ? 1 : 0));
+        if (kTierBri[tier] > d->pulse[b]) d->pulse[b] = kTierBri[tier];
+      }
+    }
+    d->prev[b] = raw[b];
+    // 快攻慢释：每帧衰减约 25%，肉眼可见拖尾但不会残留常亮底色
+    d->pulse[b] = scale8(d->pulse[b], 190);
+    if (d->pulse[b] < 6) d->pulse[b] = 0;
+  }
+
+  // 同一瞬间多个频段触发时只显示一个颜色，优先级：低频 > 中频 > 高频；不做混色
+  if (hits) {
+    d->curBand = (hits & 0x01) ? 0 : ((hits & 0x02) ? 1 : 2);
+  }
+  if (d->curBand > 2 || !(mask & (1 << d->curBand))) {
+    d->curBand = 0xFF;
+    return;   // 无触发时保持全黑
+  }
+  if (d->pulse[d->curBand] == 0) {
+    d->curBand = 0xFF;
+    return;   // 爆闪拖尾结束，回到全黑
+  }
+
+  uint32_t col = SEGCOLOR(d->curBand) & 0xFFFFFF;
+  if (col == 0) col = 0xFFFFFF;   // 未设置颜色时默认白色
+  CRGB fc(col);
+  fc.nscale8(d->pulse[d->curBand]);
+  SEGMENT.fill(fc);
 }
-static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@速度,强度,响应频段,爆闪阈值;;!;2f;sx=128,ix=192,c1=0,c2=96";
+static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@,,,;;!;2f;sx=128,ix=192,c1=1";
 void mode_tribreath(void) {
 
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
@@ -6235,7 +6177,6 @@ void mode_spectrumlamp(void) {
   }
 }
 static const char _data_FX_MODE_SPECTRUMLAMP[] PROGMEM = "Spectrum Lamp@速度,强度;;!;;";
-static const char _data_FX_MODE_LUMI_FOUNTAIN[] PROGMEM = "Lumi Spectrum Fountain@Speed,Bass gain,Stars,Sensitivity;;!;2f;sx=128,ix=180,c1=160,c2=140";
 
 
 
@@ -11615,7 +11556,6 @@ void WS2812FX::setupEffectData() {
   // 光屿 Lumi 系列（M2，新增 10 个，只追加不移动 0..188）
   addEffect(FX_MODE_LUMI_FOREST,   &mode_lumi_forest,   _data_FX_MODE_LUMI_FOREST);
   addEffect(FX_MODE_LUMI_CAUSTICS, &mode_lumi_caustics, _data_FX_MODE_LUMI_CAUSTICS);
-  addEffect(FX_MODE_LUMI_FOUNTAIN, &mode_lumi_fountain, _data_FX_MODE_LUMI_FOUNTAIN);
   addEffect(FX_MODE_STAGELIGHT, &mode_stagelight, _data_FX_MODE_STAGELIGHT);
   addEffect(FX_MODE_TRIBREATH, &mode_tribreath, _data_FX_MODE_TRIBREATH);
   addEffect(FX_MODE_AUDIOSPIRAL, &mode_audiospiral, _data_FX_MODE_AUDIOSPIRAL);
