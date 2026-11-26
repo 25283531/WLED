@@ -5942,7 +5942,7 @@ void mode_audiospiral(void) {
   if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
   SpirData *d = (SpirData*)SEGENV.data;
   const float fPI = 3.14159265f, fTWO_PI = 6.2831853f; // 避开 Arduino.h 的 PI/TWO_PI 宏
-  if (d->lastMs == 0){ d->spinPhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = 1; }
+  if (d->lastMs == 0){ d->spinPhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = strip.now ? strip.now : 1; }
   // 取色：主/副色覆盖默认螺旋色（用户色卡）
   uint8_t hueA = 135, hueB = 235;
   uint32_t cA = SEGCOLOR(0), cB = SEGCOLOR(1);
@@ -5979,11 +5979,13 @@ void mode_audiospiral(void) {
   d->spinPhase += angVel * dt;
   if (d->spinPhase > 628.3185f) d->spinPhase -= 628.3185f;
   float activeW = 0.14f + d->mhEnv * 0.22f;                 // 中高频控制粗细
+  float minW = 1.5f / (float)cols;                          // 窄矩阵适配：光带至少覆盖约1.5个灯珠列的角距
+  if (activeW < minW) activeW = minW;
   uint8_t sat = (uint8_t)(165.0f + d->mhEnv * 90.0f);       // 中高频控制饱和度
   uint8_t val = (uint8_t)(195.0f + d->mhEnv * 60.0f);
-  SEGMENT.fill(BLACK);
   for (uint16_t y=0;y<rows;y++){
-    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;
+    float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.5f;  // 0=底部, 1=顶部
+    uint16_t sy = rows - 1 - y;                                   // 本项目矩阵 y=0 在物理顶部，写入时翻转
     float edgeFade = 1.0f;
     if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
     else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
@@ -6016,7 +6018,7 @@ void mode_audiospiral(void) {
         uint8_t vB = (uint8_t)(iB * val * edgeFade);
         fc += CRGB(CHSV(hueB, sB, vB));
       }
-      SEGMENT.setPixelColorXY(x, y, fc);
+      SEGMENT.setPixelColorXY(x, sy, fc);
     }
   }
 }
