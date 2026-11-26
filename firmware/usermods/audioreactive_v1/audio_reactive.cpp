@@ -686,16 +686,20 @@ struct AudioNormState {
   float lowEnv;                   // 低频包络（供节拍检测）
   uint32_t lastMs;
   uint32_t lastPeakMs;
+  uint32_t lastFeedMs;            // 最近一次收到音频数据（远程通道看门狗用）
+  uint32_t lastIdleMs;            // 空闲衰减计时
   bool primed;
 };
 static AudioNormState audioNorm;
 
 static void audioNormUpdate(const float *lin) {
   uint32_t now = millis();
+  audioNorm.lastFeedMs = now;                     // 看门狗计时：有数据流入
   if (!audioNorm.primed) {                        // 首帧只初始化，避免 dt 异常
     for (int i=0;i<NUM_GEQ_CHANNELS;i++) audioNorm.smth[i] = 0.0f;
     audioNorm.agc = 1.0f; audioNorm.volSmth = 0.0f; audioNorm.lowEnv = 0.0f;
-    audioNorm.lastMs = now; audioNorm.lastPeakMs = 0; audioNorm.primed = true;
+    audioNorm.lastMs = now; audioNorm.lastPeakMs = 0; audioNorm.lastIdleMs = 0;
+    audioNorm.primed = true;
     return;
   }
   float dt = (float)(now - audioNorm.lastMs) * 0.001f;
@@ -747,6 +751,31 @@ static void audioNormUpdate(const float *lin) {
     timeOfPeak = now;
     audioNorm.lastPeakMs = now;
   }
+}
+
+// 远程音频看门狗：超过 1.5s 没有新数据时把频谱与音量平滑归零。
+// 停止手机发送后，最后一帧不再冻结驱动灯效（原地闪烁会被误认为"音频还在工作"）。
+// 恢复发送后 audioNormUpdate() 会立即接管，无需额外复位。
+static void audioNormIdle() {
+  if (audioNorm.lastFeedMs == 0) return;          // 从未收到远程数据
+  uint32_t now = millis();
+  if (now - audioNorm.lastFeedMs < 1500u) return; // 仍在正常接收
+  float dt = (audioNorm.lastIdleMs == 0) ? 0.02f : (float)(now - audioNorm.lastIdleMs) * 0.001f;
+  audioNorm.lastIdleMs = now;
+  if (dt <= 0.0f) return;
+  if (dt > 0.2f) dt = 0.2f;
+  const float k = 1.0f - expf(-dt / 0.25f);       // 250ms 衰减时间常数
+  for (int i=0;i<NUM_GEQ_CHANNELS;i++) {
+    audioNorm.smth[i] -= audioNorm.smth[i] * k;
+    if (audioNorm.smth[i] < 1.0f) audioNorm.smth[i] = 0.0f;
+    float o = (float)fftResult[i] * (1.0f - k);
+    if (o < 2.0f) o = 0.0f;
+    fftResult[i] = (uint8_t)o;
+  }
+  audioNorm.volSmth -= audioNorm.volSmth * k;
+  if (audioNorm.volSmth < 1.0f) audioNorm.volSmth = 0.0f;
+  audioNormVol = audioNorm.volSmth;
+  samplePeak = false;
 }
 ////////////////////
 // Peak detection //
@@ -1762,6 +1791,13 @@ class AudioReactive : public Usermod {
         limitSampleDynamics();
       }  // if (!disableSoundProcessing)
 #endif
+
+      // 远程接收模式：停止发送后由看门狗把频谱平滑归零，音量同步统一层出口
+      if (audioSyncEnabled & 0x02) {
+        audioNormIdle();
+        volumeSmth = audioNormVol;
+        volumeRaw  = audioNormVol;
+      }
 
       autoResetPeak();          // auto-reset sample peak after strip minShowDelay
       if (!udpSyncConnected) udpSamplePeak = false;  // reset UDP samplePeak while UDP is unconnected
