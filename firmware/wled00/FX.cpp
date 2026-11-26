@@ -5938,26 +5938,24 @@ void mode_audiospiral(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  // DNA 双螺旋 + 金色横档（参考 CylinderDnaLadderEffect 移植，全比例参数，与行列数无关）
-  struct DnaData {
-    float scrollPhase;   // 螺旋滚动相位（rad）
-    float smoothVol;     // 平滑总音量 0~1
-    float smoothBass;    // 平滑重低音 0~1
-    float smoothMidHigh; // 平滑中高频 0~1
-    float pitchOffset;   // 螺距弹簧位移（圈数增量）
-    float pitchVel;      // 螺距弹簧速度
-    float rungHueShift;  // 横档色相漂移
-    float peakFlash;     // 节拍闪光 0~1
+  // 音频螺旋：两条主链之间夹一条 6 列宽的音频响应填充带，整体按固定转速螺旋上升
+  struct SpiralData {
+    float scroll;      // 螺旋滚动（圈，0~1）
+    float smooth[6];   // 6 个子列能量平滑 0~1
+    float blink[6];    // 6 个子列闪烁相位（rad）
+    float flash;       // 节拍闪光 0~1
     uint32_t lastMs;
   };
-  if (!SEGENV.allocateData(sizeof(DnaData))) FX_FALLBACK_STATIC;
-  DnaData *d = (DnaData*)SEGENV.data;
+  if (!SEGENV.allocateData(sizeof(SpiralData))) FX_FALLBACK_STATIC;
+  SpiralData *d = (SpiralData*)SEGENV.data;
   if (d->lastMs == 0){
-    d->scrollPhase = 0.0f; d->smoothVol = 0.0f; d->smoothBass = 0.0f; d->smoothMidHigh = 0.0f;
-    d->pitchOffset = 0.0f; d->pitchVel = 0.0f; d->rungHueShift = 0.0f; d->peakFlash = 0.0f;
+    d->scroll = 0.0f; d->flash = 0.0f;
+    for (int i=0;i<6;i++){
+      d->smooth[i] = 0.0f;
+      d->blink[i] = (float)i * 1.05f;
+    }
     d->lastMs = strip.now ? strip.now : 1;
   }
-  const float fPI = 3.14159265f;
   const float fTWO_PI = 6.2831853f;
 
   // 主链配色：默认暖橙 + 亮蓝；用户改了段色卡（非纯白）则跟随用户
@@ -5966,16 +5964,18 @@ void mode_audiospiral(void) {
   if (userA && userA != 0xFFFFFF) strandA = CRGB(userA);
   if (userB && userB != 0xFFFFFF) strandB = CRGB(userB);
 
-  // 三路音频特征：总音量 / 重低音(43~216Hz) / 中高频(301~3704Hz) / 节拍
-  float volRaw = 0.0f, bassRaw = 0.0f, mhRaw = 0.0f;
+  // 音频特征：6 个子列分别取 fft[0,2,4,6,8,10]（低频→高频），节拍取 samplePeak
+  uint8_t fftv[6] = {0,0,0,0,0,0};
+  float volRaw = 0.0f;
   uint8_t peakHit = 0;
   if (um_data_t *um_data = getAudioData()){
     if (um_data->u_data[0]) volRaw = (*(float*)um_data->u_data[0]) / 255.0f;
     uint8_t *fft = (uint8_t*)um_data->u_data[2];
     if (fft){
-      bassRaw = (fft[0] * 0.45f + fft[1] * 0.35f + fft[2] * 0.20f) / 255.0f;
-      uint16_t sum = 0; for (int i=4;i<=12;i++) sum += fft[i];
-      mhRaw = ((float)sum / 9.0f) / 255.0f;
+      for (int i=0;i<6;i++){
+        int fi = i * 2; if (fi > 15) fi = 15;
+        fftv[i] = fft[fi];
+      }
     }
     if (um_data->u_data[3]) peakHit = *(uint8_t*)um_data->u_data[3];
   }
@@ -5985,82 +5985,68 @@ void mode_audiospiral(void) {
   d->lastMs = now;
   if (dt > 0.05f) dt = 0.05f; if (dt < 0.0f) dt = 0.0f;
 
-  // 平滑（音量快攻慢放、低频快攻慢放、中高频温和跟随）
-  float volClean = (volRaw > 0.04f) ? ((volRaw - 0.04f) / 0.96f) : 0.0f;
-  d->smoothVol += (volClean - d->smoothVol) * ((volClean > d->smoothVol) ? 0.45f : 0.14f);
-  float bassClean = (bassRaw > 0.08f) ? ((bassRaw - 0.08f) / 0.92f) : 0.0f;
-  d->smoothBass += (bassClean - d->smoothBass) * ((bassClean > d->smoothBass) ? 0.60f : 0.15f);
-  d->smoothMidHigh += (mhRaw - d->smoothMidHigh) * 0.25f;
-  if (peakHit) d->peakFlash = 1.0f;
-  else d->peakFlash *= expf(-8.0f * dt);
+  // 固定转速：与音频无关，约 6.3 秒转一圈
+  d->scroll += 0.16f * dt;
+  if (d->scroll >= 1.0f) d->scroll -= 1.0f;
 
-  // 螺旋滚动：音量+低频实时加速
-  float moveFreq = 0.65f + (d->smoothVol * 0.6f + d->smoothBass * 0.4f) * 4.80f;
-  d->scrollPhase += moveFreq * dt;
-  if (d->scrollPhase >= fTWO_PI) d->scrollPhase -= fTWO_PI;
+  // 节拍闪光
+  if (peakHit) d->flash = 1.0f; else d->flash *= expf(-7.0f * dt);
 
-  // 螺距：重低音把螺旋压紧（弹簧阻尼，避免生硬抖动）
-  float targetPitch = powf(d->smoothBass, 1.2f) * 0.45f;
-  float springForce = (targetPitch - d->pitchOffset) * 110.0f - d->pitchVel * 13.0f;
-  d->pitchVel += springForce * dt;
-  d->pitchOffset += d->pitchVel * dt;
-  float pitchTurns = 1.15f + d->pitchOffset;
-  if (pitchTurns < 0.55f) pitchTurns = 0.55f;
+  // 每个子列：能量平滑 + 闪烁相位（能量越高闪得越快，0.5~5.5Hz）
+  for (int i=0;i<6;i++){
+    float e = (float)fftv[i] / 255.0f;
+    d->smooth[i] += (e - d->smooth[i]) * ((e > d->smooth[i]) ? 0.55f : 0.12f);
+    d->blink[i] += (0.5f + d->smooth[i] * 5.0f) * fTWO_PI * dt;
+    if (d->blink[i] >= fTWO_PI) d->blink[i] -= fTWO_PI;
+  }
 
-  // 横档配色：金黄为底，中高频偏色流动 + 节拍瞬间提亮
-  float targetHueShift = d->smoothMidHigh * 145.0f + d->peakFlash * 25.0f;
-  d->rungHueShift += (targetHueShift - d->rungHueShift) * 0.18f;
-  uint8_t rungHue = (uint8_t)(38.0f + d->rungHueShift);
-  int rungSat = 210 + (int)(d->smoothMidHigh * 45.0f) - (int)(d->peakFlash * 35.0f);
-  if (rungSat < 160) rungSat = 160; else if (rungSat > 255) rungSat = 255;
-  int rungVal = 175 + (int)(d->smoothMidHigh * 60.0f) + (int)(d->peakFlash * 50.0f);
-  if (rungVal < 150) rungVal = 150; else if (rungVal > 255) rungVal = 255;
-  CRGB rungColor = CHSV(rungHue, (uint8_t)rungSat, (uint8_t)rungVal);
-
-  // 主链角宽自适应：至少覆盖约 1.2 个灯珠列，9 列布局也不会断线
-  float halfW = 1.24f / (float)cols;
-  if (halfW < 0.085f) halfW = 0.085f;
-  const float rungThick = 0.24f;
-  const float rungsPerTurn = 6.5f;
+  const float pitch = 1.15f;                  // 底到顶的螺旋圈数（固定）
+  float bandW = 6.0f / (float)cols;           // 两主链之间的圆周宽度：6 列
+  if (bandW > 0.90f) bandW = 0.90f;
+  float halfW = 0.70f / (float)cols;          // 主链半宽约 1.4 列，避免断线
+  if (halfW > bandW * 0.22f) halfW = bandW * 0.22f;
+  float chainBoost = 0.86f + 0.14f * volRaw;  // 主链随总音量轻微提亮
 
   for (uint16_t y=0;y<rows;y++){
     float ny = (rows > 1) ? ((float)y / (float)(rows-1)) : 0.0f;  // 0=底部, 1=顶部
     uint16_t sy = rows - 1 - y;                                   // 本项目矩阵 y=0 在物理顶部，写入时翻转
-    // A、B 两链相位差 180°（真实双螺旋），随高度扭转
-    float thetaA = ny * pitchTurns * fTWO_PI - d->scrollPhase;
-    if (thetaA < 0.0f) thetaA += fTWO_PI;
-    if (thetaA >= fTWO_PI) thetaA -= fTWO_PI;
-    if (thetaA < 0.0f) thetaA += fTWO_PI;
-    float thetaB = thetaA + fPI; if (thetaB >= fTWO_PI) thetaB -= fTWO_PI;
-    // 横档沿螺旋同步上移（与主链焊死，不打滑）
-    float rungCoord = (ny * pitchTurns - d->scrollPhase / fTWO_PI) * rungsPerTurn;
-    rungCoord -= (float)((int)rungCoord);
-    if (rungCoord < 0.0f) rungCoord += 1.0f;
-    float distRung = fabsf(rungCoord - 0.5f) * 2.0f;
-    float rungAlpha = (distRung < rungThick) ? sqrtf(1.0f - distRung / rungThick) : 0.0f;
+    float azA = ny * pitch - d->scroll;                           // A 链方位（圈），固定螺旋上升
+    azA -= (float)(int)azA;
+    if (azA < 0.0f) azA += 1.0f;
     for (uint16_t x=0;x<cols;x++){
-      float theta = ((float)x / (float)cols) * fTWO_PI;
-      CRGB fc(2, 3, 6);   // 近黑底色，衬托双螺旋轮廓
-      // 横档：只画 A→B 之间的半圈弧面（梯子结构）
-      float spanA = theta - thetaA; if (spanA < 0.0f) spanA += fTWO_PI;
-      if (rungAlpha > 0.0f && spanA > 0.0f && spanA < fPI){
-        CRGB rc = rungColor; rc.nscale8((uint8_t)(rungAlpha * 255.0f));
-        fc = rc;
+      float px = (float)x / (float)cols;
+      float dxx = px - azA;                     // 相对 A 链的方位差（圈，0~1）
+      if (dxx < 0.0f) dxx += 1.0f;
+      if (dxx >= 1.0f) dxx -= 1.0f;
+      CRGB fc(2, 3, 6);                         // 近黑底色
+      // 填充带：A → B 之间顺时针 6 列，按位置分 6 个子列，各自由对应频段驱动
+      if (dxx > 0.0f && dxx < bandW){
+        float t = dxx / bandW;
+        int bi = (int)(t * 6.0f); if (bi > 5) bi = 5; if (bi < 0) bi = 0;
+        float e = d->smooth[bi];
+        float osc = 0.5f + 0.5f * sin_approx(d->blink[bi]);
+        float v = (0.10f + 0.90f * e) * (0.40f + 0.60f * osc);
+        v *= 1.0f + 0.35f * d->flash; if (v > 1.0f) v = 1.0f;
+        int hue = 132 + bi * 18 + (int)(e * 24.0f) + (int)(d->flash * 18.0f);
+        if (hue > 255) hue -= 256; if (hue < 0) hue += 256;
+        int sat = 240 - (int)(e * 45.0f);
+        if (sat < 180) sat = 180; else if (sat > 255) sat = 255;
+        fc = CHSV((uint8_t)hue, (uint8_t)sat, (uint8_t)(v * 255.0f));
       }
-      // 两条主链：层级高于横档
-      float diffA = fabsf(theta - thetaA); if (diffA > fPI) diffA = fTWO_PI - diffA;
-      float diffB = fabsf(theta - thetaB); if (diffB > fPI) diffB = fTWO_PI - diffB;
-      float nA = diffA / fPI, nB = diffB / fPI;
-      if (nA < halfW){
-        float edge = 1.0f - powf(nA / halfW, 2.4f);   // 中心饱满、边缘抗锯齿
-        uint8_t amt = (uint8_t)(edge * 255.0f), inv = 255U - amt;
+      // 主链 A（默认暖橙）：覆盖在填充带之上
+      float dA = fabsf(dxx); if (dA > 0.5f) dA = 1.0f - dA;
+      if (dA < halfW){
+        float r = dA / halfW;
+        uint8_t amt = (uint8_t)((1.0f - r * r) * chainBoost * 255.0f), inv = 255U - amt;
         fc.r = (uint8_t)((fc.r * inv + strandA.r * amt) / 255U);
         fc.g = (uint8_t)((fc.g * inv + strandA.g * amt) / 255U);
         fc.b = (uint8_t)((fc.b * inv + strandA.b * amt) / 255U);
       }
-      if (nB < halfW){
-        float edge = 1.0f - powf(nB / halfW, 2.4f);
-        uint8_t amt = (uint8_t)(edge * 255.0f), inv = 255U - amt;
+      // 主链 B（默认亮蓝）
+      float dB = fabsf(dxx - bandW); if (dB > 0.5f) dB = 1.0f - dB;
+      if (dB < halfW){
+        float r = dB / halfW;
+        uint8_t amt = (uint8_t)((1.0f - r * r) * chainBoost * 255.0f), inv = 255U - amt;
         fc.r = (uint8_t)((fc.r * inv + strandB.r * amt) / 255U);
         fc.g = (uint8_t)((fc.g * inv + strandB.g * amt) / 255U);
         fc.b = (uint8_t)((fc.b * inv + strandB.b * amt) / 255U);
