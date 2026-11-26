@@ -5941,7 +5941,6 @@ void mode_audiospiral(void) {
   struct SpirData { float wavePhase, bassEnv, mhEnv; uint32_t lastMs; };
   if (!SEGENV.allocateData(sizeof(SpirData))) FX_FALLBACK_STATIC;
   SpirData *d = (SpirData*)SEGENV.data;
-  const float fTWO_PI = 6.2831853f; // 避开 Arduino.h 的 TWO_PI 宏（double 提升拖慢运算）
   if (d->lastMs == 0){ d->wavePhase = 0.0f; d->bassEnv = 0.0f; d->mhEnv = 0.0f; d->lastMs = strip.now ? strip.now : 1; }
   // 取色：主/副色覆盖默认螺旋色（用户色卡）
   uint8_t hueA = 135, hueB = 235;
@@ -5974,14 +5973,13 @@ void mode_audiospiral(void) {
   mhClean = (mhClean < 0.0f) ? 0.0f : (mhClean > 1.0f ? 1.0f : mhClean);
   if (mhClean > d->mhEnv) d->mhEnv += (mhClean - d->mhEnv) * 0.45f;
   else d->mhEnv += (mhClean - d->mhEnv) * 0.16f;
-  // 行波相位：低频控制 DNA 沿轴向行进的速度（单向积分，绝不倒转）
-  d->wavePhase += (0.85f + d->bassEnv * 6.50f) * dt;
-  if (d->wavePhase > 628.3185f) d->wavePhase -= 628.3185f;
-  // 螺旋宽度 = 两条线之间的最大间距（以灯珠列计），中高频把双链撑开
-  float sepCols = 2.0f + d->mhEnv * 1.2f;         // 间距 2.0~3.2 个灯珠列（约 80°~128°）
-  float halfSep = 0.5f * sepCols / (float)cols;   // 归一化方位半间距
-  const float turns = 1.0f;                       // 全高交叉 2 次（DNA 经典形态）
-  const float lineHalfW = 0.62f;                  // 单条线的半宽（灯珠列），保持细线
+  // 行波相位：低频控制 DNA 沿轴向行进的速度（单向积分，绝不倒转），单位=圈
+  d->wavePhase += (0.1353f + d->bassEnv * 1.0345f) * dt;
+  if (d->wavePhase >= 1.0f) d->wavePhase -= 1.0f;
+  // 螺旋宽度 = 两条链在正面视图里的间距（屏幕归一化 ±1），中高频把双链撑开
+  const float turns  = 1.35f;                     // 全高约 1.35 个螺旋周期（3 次交叉）
+  const float amp    = 0.72f + d->mhEnv * 0.23f;  // 摆幅 0.72~0.95（±1 为正面边缘）
+  const float lineW  = 0.42f;                     // 单条链的半宽（屏幕归一化）
   uint8_t sat = (uint8_t)(190.0f + d->mhEnv * 65.0f);
   uint8_t val = (uint8_t)(200.0f + d->mhEnv * 55.0f);
   for (uint16_t y=0;y<rows;y++){
@@ -5990,30 +5988,35 @@ void mode_audiospiral(void) {
     float edgeFade = 1.0f;
     if (ny < 0.10f) edgeFade = 0.45f + 0.55f * (ny / 0.10f);
     else if (ny > 0.90f) edgeFade = 0.45f + 0.55f * ((1.0f - ny) / 0.10f);
-    float wave = sin_approx(ny * turns * fTWO_PI + d->wavePhase);
-    float azA =  halfSep * wave;   // 两链反相摆动 → 在节点处交叉
-    float azB = -halfSep * wave;
+    // 三角波：两链的横向目标位置匀速对扫（两端不停留），交叉点即两链重叠处
+    float u = ny * turns + d->wavePhase;
+    u -= (float)((int)u);
+    float tri = (u < 0.5f) ? (u * 4.0f - 1.0f) : (3.0f - u * 4.0f);
+    float posA = amp * tri;        // 链 A 的屏幕横向位置
+    float posB = -posA;            // 链 B 与之镜像 → 必然交叉
     for (uint16_t x=0;x<cols;x++){
+      // 方位折叠到 [-0.25,0.25]（圆周 180° 两份对称，任意观察角度都能看到完整双螺旋）
       float nx = (float)x / (float)cols;
-      // 方位距离折叠到 [0,0.5]：周向自动形成两份对称图案，任意观察角度都能看到双螺旋
-      float dA = fabsf(nx - azA); if (dA > 0.5f) dA = 1.0f - dA;
-      float dB = fabsf(nx - azB); if (dB > 0.5f) dB = 1.0f - dB;
-      float nA = (dA * (float)cols) / lineHalfW;
-      float nB = (dB * (float)cols) / lineHalfW;
+      if (nx > 0.5f) nx -= 1.0f;
+      if (nx > 0.25f) nx -= 0.5f;
+      else if (nx < -0.25f) nx += 0.5f;
+      float p = nx * 4.0f;         // 线性屏幕坐标：灯珠列等距铺满正面 [-1,1]
+      float nA = fabsf(p - posA) / lineW;
+      float nB = fabsf(p - posB) / lineW;
       float iA = (nA < 2.0f) ? expf(-2.2f * nA * nA) : 0.0f;   // 细线钟形衰减
       float iB = (nB < 2.0f) ? expf(-2.2f * nB * nB) : 0.0f;
       CRGB fc(0, 0, 0);                                        // 无常亮底色
       if (iA > 0.01f){
         uint8_t coreA = (uint8_t)(iA * iA * 55.0f); // 线心去饱和成高光
-        uint8_t sA = (sat > coreA) ? (sat - coreA) : 0;
+        uint8_t satA = (sat > coreA) ? (sat - coreA) : 0;
         uint8_t vA = (uint8_t)(iA * val * edgeFade);
-        fc += CRGB(CHSV(hueA, sA, vA));
+        fc += CRGB(CHSV(hueA, satA, vA));
       }
       if (iB > 0.01f){
         uint8_t coreB = (uint8_t)(iB * iB * 55.0f);
-        uint8_t sB = (sat > coreB) ? (sat - coreB) : 0;
+        uint8_t satB = (sat > coreB) ? (sat - coreB) : 0;
         uint8_t vB = (uint8_t)(iB * val * edgeFade);
-        fc += CRGB(CHSV(hueB, sB, vB));
+        fc += CRGB(CHSV(hueB, satB, vB));
       }
       SEGMENT.setPixelColorXY(x, sy, fc);
     }
