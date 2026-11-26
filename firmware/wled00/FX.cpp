@@ -8323,11 +8323,8 @@ static const char _data_FX_MODE_FREQMATRIX[] PROGMEM = "Freqmatrix@Speed,Sound e
 // 布局自适应：1D 灯带直接按灯珠索引，2D 矩阵按逻辑坐标映射，不写死行列数。
 // fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处不再重复平滑。
 struct FreqpixelData {
-  uint32_t lastShuffle;   // 上次重排时间
-  float accentAvg;        // 重拍能量慢基线
-  uint8_t prevFft[6];     // 上一帧低频 FFT，用于计算上升沿通量
   uint16_t n;             // 随机排列长度
-  uint16_t order[1];      // 0..n-1 的随机排列（变长）
+  uint16_t order[1];      // 0..n-1 的固定随机排列（变长）
 };
 void mode_freqpixels(void) {
   const bool is2D = strip.isMatrix && SEGMENT.is2D() && SEG_W > 1 && SEG_H > 1;
@@ -8354,35 +8351,15 @@ void mode_freqpixels(void) {
   }
   if (silent) return;                         // 静音全灭
 
-  // 随机排列：以鼓点/重拍的上升沿为触发。两条判据任一成立即视为一次重拍：
-  //   1) 低频 6 个 bin 的正向谱通量足够大（鼓点攻击瞬间最强，不受整体音量基线影响）
-  //   2) 低/中低频能量峰值超过慢基线一段距离（无鼓点的歌曲靠重音也能触发）
-  // 峰值达到阈值时立即重排（防抖 90ms，避免一次鼓点的尾巴触发多次）；
-  // 平缓歌曲长时间无重拍时每 2.2s 兜底缓慢跳变一次。
-  uint16_t flux = 0;
-  for (uint8_t i = 0; i < 6; i++) {
-    int16_t diff = (int16_t)fft[i] - (int16_t)d->prevFft[i];
-    if (diff > 0) flux += diff;
-    d->prevFft[i] = fft[i];
-  }
-  uint8_t accent = energy[0] > energy[1] ? energy[0] : energy[1];
+  // 位置固定：仅在效果启动或尺寸变化时洗牌一次，之后位置不再变化，
+  // 只让每个频段点亮的灯珠数量随音频起伏。
   if (SEGENV.call == 0 || d->n != n) {
     d->n = n;
     for (uint16_t i = 0; i < n; i++) d->order[i] = i;
-    d->accentAvg = accent;
-    d->lastShuffle = strip.now - 3000;   // 首帧立即散开，避免按顺序点亮成一条
-    flux = 0;                            // 首帧不把整体上升当作鼓点
-  }
-  int32_t sinceShuffle = (int32_t)(strip.now - d->lastShuffle);
-  bool hit = accent > 120 || flux > 110 || accent > d->accentAvg + 18.0f;
-  bool doShuffle = (hit && accent > 35 && sinceShuffle > 90) || sinceShuffle > 2200;
-  d->accentAvg = d->accentAvg * 0.96f + accent * 0.04f;   // 约 0.6s 慢基线
-  if (doShuffle) {
     for (uint16_t i = n - 1; i > 0; i--) {
       uint16_t j = prng.random16() % (i + 1);
       uint16_t t = d->order[i]; d->order[i] = d->order[j]; d->order[j] = t;
     }
-    d->lastShuffle = strip.now;
   }
 
   // 第 4 色：RGB777 从 c1/c2/c3 解包（c3 只有 5bit，因此低位在前）
