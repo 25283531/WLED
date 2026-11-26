@@ -5833,8 +5833,8 @@ void mode_tribreath(void) {
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  // 每频段独立包络：快攻（声音出现立即抬起）+ 慢释（声音消失缓慢回落）
-  struct TriEnv { float env[3]; uint32_t lastMs; };
+  // 每频段：波峰/波谷跟踪 + 快攻慢释包络
+  struct TriEnv { float env[3]; float lo[3]; float hi[3]; uint32_t lastMs; };
   if (!SEGENV.allocateData(sizeof(TriEnv))) FX_FALLBACK_STATIC;
   TriEnv *d = (TriEnv*)SEGENV.data;
   SEGMENT.fill(BLACK);
@@ -5843,7 +5843,7 @@ void mode_tribreath(void) {
   uint8_t *fft = (uint8_t*)um_data->u_data[2]; if (!fft) return;
 
   // 频段划分与其它音律灯效一致：低频 bin 0..2、中频 3..7、高频 8..15，各取最大值。
-  // fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处再叠一层包络让下行更柔和。
+  // fftResult 已由音频层统一做 AGC + 快攻慢释平滑。
   uint8_t energy[3];
   energy[0] = fft[0]; for (int i=1;i<3;i++)  if (fft[i]>energy[0]) energy[0]=fft[i];
   energy[1] = fft[3]; for (int i=4;i<8;i++)  if (fft[i]>energy[1]) energy[1]=fft[i];
@@ -5852,18 +5852,37 @@ void mode_tribreath(void) {
   // 帧间隔归一化，避免不同帧率下包络速度不一致
   uint32_t now = strip.now;
   if (SEGENV.call == 0) {
-    d->env[0] = d->env[1] = d->env[2] = 0.0f;
     d->lastMs = now ? now : 1;
+    for (uint8_t b=0;b<3;b++) {
+      float raw = (float)energy[b] / 255.0f;
+      d->env[b] = 0.0f;
+      d->lo[b] = d->hi[b] = raw;   // 从当前值起跟踪，避免首帧误闪满格
+    }
   }
   float dt = (float)(now - d->lastMs) * 0.001f;
   d->lastMs = now;
   if (dt < 0.0f) dt = 0.0f;
   if (dt > 0.1f) dt = 0.1f;
 
-  const float kAttackTau  = 0.025f;   // 25ms：起音立即跟上
-  const float kReleaseTau = 0.45f;    // 450ms：收声后缓慢落下
+  // 与绝对音量解耦：每段用自身波峰/波谷动态范围做归一化，
+  // 波峰时行数上冲、波谷时回落熄灭，持续恒定的声音不常亮。
+  const float kLoRiseTau = 0.80f;   // 波谷基线：缓慢抬升
+  const float kHiFallTau = 2.50f;   // 波峰参考：缓慢回落
+  const float kMinRange  = 0.06f;   // 动态范围过小视为稳态，不点亮
+  const float kAttackTau = 0.020f;  // 20ms：波峰立即跟上
+  const float kReleaseTau= 0.180f;  // 180ms：波谷后快速回落
   for (uint8_t b=0;b<3;b++) {
-    float target = (float)energy[b] / 255.0f;
+    float raw = (float)energy[b] / 255.0f;
+    if (raw < d->lo[b]) d->lo[b] = raw;                                    // 立即跟随更低的谷
+    else d->lo[b] += (raw - d->lo[b]) * (1.0f - expf(-dt / kLoRiseTau));
+    if (raw > d->hi[b]) d->hi[b] = raw;                                    // 立即跟随更高的峰
+    else d->hi[b] -= (d->hi[b] - raw) * (1.0f - expf(-dt / kHiFallTau));
+
+    float range = d->hi[b] - d->lo[b];
+    float target = (range > kMinRange) ? (raw - d->lo[b]) / range : 0.0f;  // 位于峰谷之间的相对位置
+    if (target < 0.0f) target = 0.0f;
+    if (target > 1.0f) target = 1.0f;
+
     float tau = (target > d->env[b]) ? kAttackTau : kReleaseTau;
     d->env[b] += (target - d->env[b]) * (1.0f - expf(-dt / tau));
     if (d->env[b] < 0.0f) d->env[b] = 0.0f;
