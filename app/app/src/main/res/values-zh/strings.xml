@@ -248,6 +248,15 @@
     <string name="isle_freq_palette_neon">霓虹</string>
     <string name="isle_freq_palette_sunset">日落</string>
     <string name="isle_freq_palette_forest">森林</string>
+    <string name="isle_stage_tuning_summary">关联 %1$d 个频段</string>
+    <string name="isle_stage_bands">关联频段</string>
+    <string name="isle_stage_band_count">已选 %1$d 个</string>
+    <string name="isle_stage_band_low">低频</string>
+    <string name="isle_stage_band_mid">中频</string>
+    <string name="isle_stage_band_high">高频</string>
+    <string name="isle_stage_hint">每个关联频段在对应声音出现时闪自己的颜色，可同时关联多个频段。</string>
+    <string name="isle_triband_tuning_summary">3 段配色</string>
+    <string name="isle_triband_templates">3 色配色</string>
     <string name="isle_rhythm_mode">律动模式</string>
     <string name="isle_quick_effects">快捷灯效</string>
     <string name="isle_mood_aurora">幻彩极光</string>

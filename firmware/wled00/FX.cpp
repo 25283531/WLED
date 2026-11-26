@@ -5828,39 +5828,68 @@ void mode_stagelight(void) {
 }
 static const char _data_FX_MODE_STAGELIGHT[] PROGMEM = "Stage Light@,,,;;!;2f;sx=128,ix=192,c1=1";
 void mode_tribreath(void) {
-
+  // 三频呼吸：低频/中频/高频各占灯柱高度的三分之一（自下而上堆叠）。
+  // 每个频段内点亮的行数与该频段响度正相关，静音时该段熄灭，形成三段音柱。
   if (!strip.isMatrix || !SEGMENT.is2D()) FX_FALLBACK_STATIC;
   const uint16_t cols = SEG_W, rows = SEG_H;
   if (cols < 2 || rows < 2) return;
-  struct TriData { uint8_t bassS, midS, highS, prevVol; uint32_t lastPeak; };
-  if (!SEGENV.allocateData(sizeof(TriData))) FX_FALLBACK_STATIC;
-  TriData *d = (TriData*)SEGENV.data;
-  um_data_t *um_data = getAudioData();
+  // 每频段独立包络：快攻（声音出现立即抬起）+ 慢释（声音消失缓慢回落）
+  struct TriEnv { float env[3]; uint32_t lastMs; };
+  if (!SEGENV.allocateData(sizeof(TriEnv))) FX_FALLBACK_STATIC;
+  TriEnv *d = (TriEnv*)SEGENV.data;
   SEGMENT.fill(BLACK);
+  um_data_t *um_data = getAudioData();
   if (!um_data) return;
   uint8_t *fft = (uint8_t*)um_data->u_data[2]; if (!fft) return;
-  uint8_t peak = *(uint8_t*)um_data->u_data[3];
-  uint8_t bass = fft[0]; for (int i=1;i<3;i++) if (fft[i]>bass) bass=fft[i];
-  uint8_t mid  = fft[3]; for (int i=4;i<8;i++) if (fft[i]>mid)  mid=fft[i];
-  uint8_t high = fft[8]; for (int i=9;i<16;i++) if (fft[i]>high) high=fft[i];
-  // 三频段能量直接取统一层输出（已完成 AGC 与平滑）
-  d->bassS = bass; d->midS = mid; d->highS = high;
-  bool transient = (peak != 0);   // 节拍由统一层检测
-  uint8_t bassBoost = transient ? 80 : 0;
-  for (uint16_t y=0;y<rows;y++){
-    uint8_t posY = (uint8_t)(((uint32_t)(rows-1-y)*255)/(rows-1)); // 0=底 255=顶
-    uint8_t level; uint32_t col;
-    if (posY < 86){            // 整个底部三分之一：随低频呼吸
-      level = d->bassS; col = 0xFF7020;
-    } else if (posY < 171){    // 中部三分之一：随中频呼吸
-      level = d->midS;  col = 0x30FF90;
-    } else {                    // 顶部三分之一：随高频呼吸（非随机乱闪）
-      level = d->highS; col = 0x5080FF;
+
+  // 频段划分与其它音律灯效一致：低频 bin 0..2、中频 3..7、高频 8..15，各取最大值。
+  // fftResult 已由音频层统一做 AGC + 快攻慢释平滑，此处再叠一层包络让下行更柔和。
+  uint8_t energy[3];
+  energy[0] = fft[0]; for (int i=1;i<3;i++)  if (fft[i]>energy[0]) energy[0]=fft[i];
+  energy[1] = fft[3]; for (int i=4;i<8;i++)  if (fft[i]>energy[1]) energy[1]=fft[i];
+  energy[2] = fft[8]; for (int i=9;i<16;i++) if (fft[i]>energy[2]) energy[2]=fft[i];
+
+  // 帧间隔归一化，避免不同帧率下包络速度不一致
+  uint32_t now = strip.now;
+  if (SEGENV.call == 0) {
+    d->env[0] = d->env[1] = d->env[2] = 0.0f;
+    d->lastMs = now ? now : 1;
+  }
+  float dt = (float)(now - d->lastMs) * 0.001f;
+  d->lastMs = now;
+  if (dt < 0.0f) dt = 0.0f;
+  if (dt > 0.1f) dt = 0.1f;
+
+  const float kAttackTau  = 0.025f;   // 25ms：起音立即跟上
+  const float kReleaseTau = 0.45f;    // 450ms：收声后缓慢落下
+  for (uint8_t b=0;b<3;b++) {
+    float target = (float)energy[b] / 255.0f;
+    float tau = (target > d->env[b]) ? kAttackTau : kReleaseTau;
+    d->env[b] += (target - d->env[b]) * (1.0f - expf(-dt / tau));
+    if (d->env[b] < 0.0f) d->env[b] = 0.0f;
+    if (d->env[b] > 1.0f) d->env[b] = 1.0f;
+  }
+
+  // 颜色取自段色卡 col[0..2]（低/中/高），未设置时回落为暖橙/薄荷/亮蓝。
+  static const uint32_t kDefaultCol[3] = {0xFF7020, 0x30FF90, 0x5080FF};
+  CRGB bandCol[3];
+  for (uint8_t b=0;b<3;b++) {
+    uint32_t c = SEGCOLOR(b) & 0xFFFFFF;
+    bandCol[b] = CRGB(c ? c : kDefaultCol[b]);
+  }
+
+  const uint16_t bandRows = (rows + 2) / 3;   // 每段行数（向上取整），三段覆盖整根灯柱
+  for (uint8_t b=0;b<3;b++) {
+    uint16_t start = (uint16_t)b * bandRows;  // 该段底部距灯柱底部的行数
+    if (start >= rows) break;
+    uint16_t height = rows - start; if (height > bandRows) height = bandRows;
+    // 行数 ∝ 包络值，四舍五入让慢释阶段逐行回落
+    uint16_t lit = (uint16_t)((float)height * d->env[b] + 0.5f);
+    if (lit > height) lit = height;
+    for (uint16_t k=0;k<lit;k++) {
+      uint16_t y = rows - 1 - (start + k);    // y=0 为物理顶部，自下而上点亮
+      for (uint16_t x=0;x<cols;x++) SEGMENT.setPixelColorXY(x, y, bandCol[b]);
     }
-    uint16_t bri = (uint16_t)10 + level + (posY < 86 ? bassBoost : 0);
-    if (bri > 255) bri = 255;
-    CRGB c(col); c.nscale8((uint8_t)bri);
-    for (uint16_t x=0;x<cols;x++) SEGMENT.addPixelColorXY(x,y,c);
   }
 }
 static const char _data_FX_MODE_TRIBREATH[] PROGMEM = "Tri-band Breath@速度,强度;;!;;";

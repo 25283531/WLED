@@ -250,6 +250,15 @@
     <string name="isle_freq_palette_neon">Neon</string>
     <string name="isle_freq_palette_sunset">Sunset</string>
     <string name="isle_freq_palette_forest">Forest</string>
+    <string name="isle_stage_tuning_summary">%1$d bands linked</string>
+    <string name="isle_stage_bands">Linked bands</string>
+    <string name="isle_stage_band_count">%1$d selected</string>
+    <string name="isle_stage_band_low">Low</string>
+    <string name="isle_stage_band_mid">Mid</string>
+    <string name="isle_stage_band_high">High</string>
+    <string name="isle_stage_hint">Each linked band flashes its own color when that frequency hits.</string>
+    <string name="isle_triband_tuning_summary">3-band colors</string>
+    <string name="isle_triband_templates">3-color palettes</string>
     <string name="isle_rhythm_mode">Rhythm mode</string>
     <string name="isle_quick_effects">Quick effects</string>
     <string name="isle_mood_aurora">Aurora</string>

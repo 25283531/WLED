@@ -62,6 +62,9 @@ import ca.cgagnier.wlednativeandroid.ui.effects.FourColorPalette
 import ca.cgagnier.wlednativeandroid.ui.effects.FrequencyPixels
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteInfo
+import ca.cgagnier.wlednativeandroid.ui.effects.StageLight
+import ca.cgagnier.wlednativeandroid.ui.effects.TriBreath
+import ca.cgagnier.wlednativeandroid.ui.effects.TriColorPalette
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.GlassCard
 import ca.cgagnier.wlednativeandroid.ui.isle.GlowCircleButton
@@ -110,6 +113,13 @@ private val FREQUENCY_BAND_LABELS = intArrayOf(
     R.string.isle_freq_band_high,
 )
 
+/** 舞台灯的 3 个频段显示名，顺序与固件一致（低 -> 中 -> 高）。 */
+private val STAGE_BAND_LABELS = intArrayOf(
+    R.string.isle_stage_band_low,
+    R.string.isle_stage_band_mid,
+    R.string.isle_stage_band_high,
+)
+
 /** `0xRRGGBB` 还原成 Compose 的颜色。显式拆分量，避免 `Color(Int)` 的 ARGB 歧义。 */
 private fun packedToColor(packed: Int): Color = Color(
     red = (packed shr 16) and 0xFF,
@@ -146,6 +156,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     var showAddDialog by remember { mutableStateOf(false) }
     var tuningExpanded by remember { mutableStateOf(false) }
     var frequencyColorBand by remember { mutableStateOf<Int?>(null) }
+    var stageColorBand by remember { mutableStateOf<Int?>(null) }
+    var triBreathColorBand by remember { mutableStateOf<Int?>(null) }
 
     val state = device?.stateInfo?.state
     val isOn = state?.isOn ?: false
@@ -158,6 +170,15 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     // 线型频谱（PS GEQ 1D）只跟随声量等级，速度/强度不参与运算，设备页隐藏这两个滑块
     val linearSpectrumId = remember { EffectCatalog.byName("PS GEQ 1D")?.id }
     val linearSpectrumActive = currentEffect != null && currentEffect == linearSpectrumId
+    // 舞台灯：频段选择与配色由 App 参数面板管理，速度/强度同样不参与运算
+    val stageLightId = remember { StageLight.effectId }
+    val stageLightActive = currentEffect != null && currentEffect == stageLightId
+    val stageMask = remember(segment) { StageLight.currentMask(segment) }
+    val stageColors = remember(segment) { StageLight.currentColors(segment) }
+    // 三频呼吸：三段等分，颜色由 App 参数面板管理，速度/强度不参与运算
+    val triBreathId = remember { TriBreath.effectId }
+    val triBreathActive = currentEffect != null && currentEffect == triBreathId
+    val triBreathColors = remember(segment) { TriBreath.currentColors(segment) }
 
     val nightlight = state?.nightlight
     val nightlightActive = nightlight?.isOn == true
@@ -230,8 +251,13 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     palette = segment?.palette ?: 0,
                     colors = remember(segment) { segment?.tubeColors().orEmpty() },
                     frequencyMode = frequencyPixelsActive,
-                    slidersHidden = linearSpectrumActive,
+                    stageMode = stageLightActive,
+                    triBreathMode = triBreathActive,
+                    slidersHidden = linearSpectrumActive || stageLightActive || triBreathActive,
                     frequencyColors = frequencyColors,
+                    stageMask = stageMask,
+                    stageColors = stageColors,
+                    triBreathColors = triBreathColors,
                     onToggle = { tuningExpanded = !tuningExpanded },
                     onSpeed = { channel ->
                         device?.let { viewModel.setSpeed(it, channel) }
@@ -249,6 +275,14 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                         device?.let { viewModel.applyFrequencyPalette(it, palette) }
                     },
                     onEditFrequencyColor = { band -> frequencyColorBand = band },
+                    onStageBand = { band ->
+                        device?.let { viewModel.setStageBands(it, StageLight.toggleBand(stageMask, band)) }
+                    },
+                    onEditStageColor = { band -> stageColorBand = band },
+                    onTriBreathPalette = { palette ->
+                        device?.let { viewModel.applyTriBreathPalette(it, palette) }
+                    },
+                    onEditTriBreathColor = { band -> triBreathColorBand = band },
                 )
             }
 
@@ -401,6 +435,34 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
             onDismiss = { frequencyColorBand = null },
             onPick = { packed ->
                 device?.let { viewModel.setFrequencyColor(it, band, packed) }
+            },
+        )
+    }
+
+    stageColorBand?.let { band ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(STAGE_BAND_LABELS[band]),
+            ),
+            initial = stageColors.getOrElse(band) { StageLight.DEFAULT_COLOR },
+            onDismiss = { stageColorBand = null },
+            onPick = { packed ->
+                device?.let { viewModel.setStageBandColor(it, band, packed) }
+            },
+        )
+    }
+
+    triBreathColorBand?.let { band ->
+        FrequencyColorSheet(
+            title = stringResource(
+                R.string.isle_freq_color_title,
+                stringResource(STAGE_BAND_LABELS[band]),
+            ),
+            initial = triBreathColors.getOrElse(band) { TriBreath.DEFAULT_COLORS[band] },
+            onDismiss = { triBreathColorBand = null },
+            onPick = { packed ->
+                device?.let { viewModel.setTriBreathColor(it, band, packed) }
             },
         )
     }
@@ -568,8 +630,13 @@ private fun EffectTuning(
     palette: Int,
     colors: List<Color>,
     frequencyMode: Boolean,
+    stageMode: Boolean,
+    triBreathMode: Boolean,
     slidersHidden: Boolean,
     frequencyColors: List<Int>,
+    stageMask: Int,
+    stageColors: List<Int>,
+    triBreathColors: List<Int>,
     onToggle: () -> Unit,
     onSpeed: (Int) -> Unit,
     onIntensity: (Int) -> Unit,
@@ -577,6 +644,10 @@ private fun EffectTuning(
     onColor: (Int) -> Unit,
     onFrequencyPalette: (FourColorPalette) -> Unit,
     onEditFrequencyColor: (Int) -> Unit,
+    onStageBand: (Int) -> Unit,
+    onEditStageColor: (Int) -> Unit,
+    onTriBreathPalette: (TriColorPalette) -> Unit,
+    onEditTriBreathColor: (Int) -> Unit,
 ) {
     var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
     var localIntensity by remember(intensity) {
@@ -600,6 +671,8 @@ private fun EffectTuning(
                 text = when {
                     expanded -> stringResource(R.string.isle_effect_tuning_collapse)
                     frequencyMode -> stringResource(R.string.isle_freq_tuning_summary)
+                    triBreathMode -> stringResource(R.string.isle_triband_tuning_summary)
+                    stageMode -> stringResource(R.string.isle_stage_tuning_summary, stageMask.countOneBits())
                     slidersHidden -> stringResource(R.string.isle_color_tuning_summary)
                     else -> stringResource(
                         R.string.isle_effect_tuning_summary,
@@ -620,6 +693,19 @@ private fun EffectTuning(
                             colors = frequencyColors,
                             onEdit = onEditFrequencyColor,
                             onPalette = onFrequencyPalette,
+                        )
+                    } else if (triBreathMode) {
+                        TriBreathColorEditor(
+                            colors = triBreathColors,
+                            onEdit = onEditTriBreathColor,
+                            onPalette = onTriBreathPalette,
+                        )
+                    } else if (stageMode) {
+                        StageLightEditor(
+                            mask = stageMask,
+                            colors = stageColors,
+                            onToggleBand = onStageBand,
+                            onEditColor = onEditStageColor,
                         )
                     } else {
                         if (!slidersHidden) {
@@ -841,6 +927,232 @@ private fun FrequencyColorEditor(
             )
         }
     }
+}
+
+/**
+ * 三频呼吸参数：为低频 / 中频 / 高频三段各取一色，或直接套用三色模板。
+ *
+ * 频段顺序与固件一致（低 / 中 / 高），颜色分别写进 `col[0..2]`；
+ * 未设置时按默认色显示，固件侧同样回落为暖橙 / 薄荷 / 亮蓝。
+ */
+@Composable
+private fun TriBreathColorEditor(
+    colors: List<Int>,
+    onEdit: (Int) -> Unit,
+    onPalette: (TriColorPalette) -> Unit,
+) {
+    val matched = remember(colors) { TriBreath.matchPalette(colors) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.isle_freq_colors),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = matched?.let { stringResource(it.nameRes) }
+                ?: stringResource(R.string.isle_freq_custom),
+            color = IsleColors.TextMuted,
+            fontSize = 11.5.sp,
+        )
+    }
+    STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
+        val packed = colors.getOrElse(band) { TriBreath.DEFAULT_COLORS[band] }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onEdit(band) }
+                .padding(vertical = 7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(packedToColor(packed), CircleShape)
+                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+            )
+            Text(
+                text = stringResource(labelRes),
+                color = IsleColors.TextPrimary,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            )
+            Text(
+                text = String.format("#%06X", packed and 0xFFFFFF),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
+            )
+        }
+    }
+
+    Text(
+        text = stringResource(R.string.isle_triband_templates),
+        color = IsleColors.TextSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TriBreath.palettes.forEach { palette ->
+            TriColorPaletteSwatch(
+                palette = palette,
+                selected = palette == matched,
+                onClick = { onPalette(palette) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TriColorPaletteSwatch(
+    palette: TriColorPalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(7.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(shape)
+                .border(
+                    width = if (selected) 1.8.dp else 1.dp,
+                    color = if (selected) IsleColors.Cyan else IsleColors.StrokeStrong,
+                    shape = shape,
+                ),
+        ) {
+            palette.colors.forEach { packed ->
+                Box(
+                    modifier = Modifier
+                        .size(width = 18.dp, height = 28.dp)
+                        .background(packedToColor(packed)),
+                )
+            }
+        }
+        Text(
+            text = stringResource(palette.nameRes),
+            color = if (selected) IsleColors.Cyan else IsleColors.TextMuted,
+            fontSize = 10.5.sp,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * 舞台灯参数：选择关联的频段（至少一个），再为每个关联频段单独取色。
+ *
+ * 频段顺序与固件一致（低 / 中 / 高），颜色分别写进 `col[0..2]`；
+ * 未设置时按白色显示，固件侧同样回落为白色。
+ */
+@Composable
+private fun StageLightEditor(
+    mask: Int,
+    colors: List<Int>,
+    onToggleBand: (Int) -> Unit,
+    onEditColor: (Int) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.isle_stage_bands),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = stringResource(R.string.isle_stage_band_count, mask.countOneBits()),
+            color = IsleColors.TextMuted,
+            fontSize = 11.5.sp,
+        )
+    }
+    Row(
+        modifier = Modifier.padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
+            val selected = StageLight.isLinked(mask, band)
+            val shape = RoundedCornerShape(9.dp)
+            Box(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(if (selected) IsleColors.Cyan else IsleColors.SurfaceHigh)
+                    .border(
+                        width = 1.dp,
+                        color = if (selected) IsleColors.Cyan else IsleColors.StrokeStrong,
+                        shape = shape,
+                    )
+                    .clickable { onToggleBand(band) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = stringResource(labelRes),
+                    color = if (selected) IsleColors.Background else IsleColors.TextSecondary,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+    }
+
+    Text(
+        text = stringResource(R.string.isle_freq_colors),
+        color = IsleColors.TextSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+    )
+    STAGE_BAND_LABELS.forEachIndexed { band, labelRes ->
+        if (!StageLight.isLinked(mask, band)) return@forEachIndexed
+        val packed = colors.getOrElse(band) { StageLight.DEFAULT_COLOR }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onEditColor(band) }
+                .padding(vertical = 7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(packedToColor(packed), CircleShape)
+                    .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+            )
+            Text(
+                text = stringResource(labelRes),
+                color = IsleColors.TextPrimary,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp),
+            )
+            Text(
+                text = String.format("#%06X", packed and 0xFFFFFF),
+                color = IsleColors.TextMuted,
+                fontSize = 11.sp,
+            )
+        }
+    }
+
+    Text(
+        text = stringResource(R.string.isle_stage_hint),
+        color = IsleColors.TextMuted,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 10.dp),
+    )
 }
 
 @Composable
