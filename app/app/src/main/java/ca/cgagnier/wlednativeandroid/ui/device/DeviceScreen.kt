@@ -853,16 +853,22 @@ private fun EffectTuning(
                         )
                     } else if (audioSpiralMode) {
                         TuningSlider(
-                            label = stringResource(R.string.isle_effect_speed),
+                            label = stringResource(R.string.isle_spiral_speed),
                             value = localSpeed,
                             onValueChange = { localSpeed = it },
                             onCommit = { onSpeed(normalizedToChannel(localSpeed)) },
                         )
                         TuningSlider(
-                            label = stringResource(R.string.isle_effect_intensity),
+                            label = stringResource(R.string.isle_spiral_intensity),
                             value = localIntensity,
                             onValueChange = { localIntensity = it },
                             onCommit = { onIntensity(normalizedToChannel(localIntensity)) },
+                        )
+                        Text(
+                            text = stringResource(R.string.isle_spiral_hint),
+                            color = IsleColors.TextMuted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 10.dp),
                         )
                         SpiralColorEditor(
                             colors = audioSpiralColors,
@@ -870,13 +876,13 @@ private fun EffectTuning(
                         )
                     } else if (bassLavaMode) {
                         TuningSlider(
-                            label = stringResource(R.string.isle_effect_speed),
+                            label = stringResource(R.string.isle_basslava_speed),
                             value = localSpeed,
                             onValueChange = { localSpeed = it },
                             onCommit = { onSpeed(normalizedToChannel(localSpeed)) },
                         )
                         TuningSlider(
-                            label = stringResource(R.string.isle_effect_intensity),
+                            label = stringResource(R.string.isle_basslava_intensity),
                             value = localIntensity,
                             onValueChange = { localIntensity = it },
                             onCommit = { onIntensity(normalizedToChannel(localIntensity)) },

@@ -269,6 +269,11 @@
     <string name="isle_spiral_chain_a">Chain A</string>
     <string name="isle_spiral_chain_b">Chain B</string>
     <string name="isle_basslava_hint">Speed sets how fast the lava drifts. Intensity sets how hard the bass swells and brightens it.</string>
+    <string name="isle_basslava_speed">Drift speed</string>
+    <string name="isle_basslava_intensity">Pump strength</string>
+    <string name="isle_spiral_speed">Rotation speed</string>
+    <string name="isle_spiral_intensity">Fill brightness</string>
+    <string name="isle_spiral_hint">Speed sets how fast the double chain spirals. Intensity sets how bright the audio-driven fill band between the chains is.</string>
     <string name="isle_rhythm_mode">Rhythm mode</string>
     <string name="isle_quick_effects">Quick effects</string>
     <string name="isle_mood_aurora">Aurora</string>

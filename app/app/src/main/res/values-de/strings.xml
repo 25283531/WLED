@@ -269,6 +269,11 @@
     <string name="isle_spiral_chain_a">Kette A</string>
     <string name="isle_spiral_chain_b">Kette B</string>
     <string name="isle_basslava_hint">Tempo bestimmt die Driftgeschwindigkeit der Lava. Intensität bestimmt, wie stark der Bass sie wölbt und aufhellt.</string>
+    <string name="isle_basslava_speed">Driftgeschwindigkeit</string>
+    <string name="isle_basslava_intensity">Pumpstärke</string>
+    <string name="isle_spiral_speed">Drehgeschwindigkeit</string>
+    <string name="isle_spiral_intensity">Füllhelligkeit</string>
+    <string name="isle_spiral_hint">Tempo bestimmt, wie schnell die Doppelkette spiralt. Intensität bestimmt, wie hell das audiogetriebene Füllband zwischen den Ketten ist.</string>
     <string name="isle_rhythm_mode">Rhythmusmodus</string>
     <string name="isle_quick_effects">Schnelleffekte</string>
     <string name="isle_mood_aurora">Aurora</string>

@@ -51,6 +51,8 @@ android {
         if (!keystorePath.isNullOrBlank()) {
             create("release") {
                 storeFile = file(keystorePath)
+                // CI 用 cryptography 生成的 PKCS12（无 keytool），显式声明类型避免按 JKS 解析失败
+                storeType = "PKCS12"
                 storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
                 keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
                 keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
