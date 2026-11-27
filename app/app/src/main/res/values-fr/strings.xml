@@ -231,6 +231,11 @@
     <string name="isle_effect_speed">Vitesse</string>
     <string name="isle_effect_intensity">Intensité</string>
     <string name="isle_effect_intensity_blink">Durée allumée</string>
+    <string name="isle_effect_intensity_width">Largeur</string>
+    <string name="isle_effect_intensity_strobe_count">Nombre d\'éclairs</string>
+    <string name="isle_effect_intensity_firework_rate">Fréquence des feux</string>
+    <string name="isle_effect_tuning_summary_custom">Vitesse %1$d%% · %2$s %3$d%%</string>
+    <string name="isle_effect_tuning_summary_custom_single">%1$s %2$d%%</string>
     <string name="isle_blink_intensity_hint">Plus la valeur est élevée, plus la lumière reste allumée à chaque clignotement ; 0% est presque toujours éteint.</string>
     <string name="isle_blink_tuning_summary">Vitesse %1$d%% · Durée allumée %2$d%%</string>
     <string name="isle_effect_color">Couleur</string>

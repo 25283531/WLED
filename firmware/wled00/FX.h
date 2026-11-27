@@ -150,7 +150,7 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_BREATH                   2
 #define FX_MODE_RAINBOW                  3
 #define FX_MODE_RAINBOW_CYCLE            4
-#define FX_MODE_FADE                     5
+#define FX_MODE_FADE                     5 // reserved: Fade effect removed, slot kept so later ids do not shift
 #define FX_MODE_THEATER_CHASE            6
 #define FX_MODE_RUNNING_LIGHTS           7
 #define FX_MODE_DISSOLVE                 8

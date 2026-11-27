@@ -211,6 +211,11 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val hidePalette = remember(currentEffect) { EffectTuningPolicy.hidesPalette(currentEffect) }
     val hideSolidPalette = remember(currentEffect) { EffectTuningPolicy.hidesSolidPalette(currentEffect) }
     val blinkMode = remember(currentEffect) { EffectTuningPolicy.isBlink(currentEffect) }
+    val solidMode = remember(currentEffect) { EffectTuningPolicy.isSolid(currentEffect) }
+    val colorsOnlyViaPalette = remember(currentEffect) {
+        EffectTuningPolicy.colorsOnlyViaPalette(currentEffect)
+    }
+    val intensityLabel = remember(currentEffect) { EffectTuningPolicy.intensityLabel(currentEffect) }
     // 手机本地多色模板：创作页制作，设备页调色板预览与调用
     val paletteTemplates by viewModel.paletteTemplates.collectAsStateWithLifecycle()
     val paletteSlotsByDevice by viewModel.paletteSlots.collectAsStateWithLifecycle()
@@ -320,6 +325,9 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     hidePalette = hidePalette,
                     hideSolidPalette = hideSolidPalette,
                     blinkMode = blinkMode,
+                    solidMode = solidMode,
+                    colorsOnlyViaPalette = colorsOnlyViaPalette,
+                    intensityLabel = intensityLabel,
                     paletteTemplates = paletteTemplates,
                     paletteSlots = paletteSlots,
                     frequencyColors = frequencyColors,
@@ -770,6 +778,9 @@ private fun EffectTuning(
     hidePalette: Boolean,
     hideSolidPalette: Boolean,
     blinkMode: Boolean,
+    solidMode: Boolean,
+    colorsOnlyViaPalette: Boolean,
+    intensityLabel: EffectTuningPolicy.IntensityLabel,
     paletteTemplates: List<PaletteTemplate>,
     paletteSlots: Map<String, Int>,
     frequencyColors: List<Int>,
@@ -802,6 +813,16 @@ private fun EffectTuning(
     var localIntensity by remember(intensity) {
         mutableFloatStateOf(channelToNormalized(intensity))
     }
+    val intensityLabelText = stringResource(
+        when (intensityLabel) {
+            EffectTuningPolicy.IntensityLabel.WIDTH -> R.string.isle_effect_intensity_width
+            EffectTuningPolicy.IntensityLabel.STROBE_COUNT -> R.string.isle_effect_intensity_strobe_count
+            EffectTuningPolicy.IntensityLabel.FIREWORK_RATE -> R.string.isle_effect_intensity_firework_rate
+            EffectTuningPolicy.IntensityLabel.DEFAULT -> R.string.isle_effect_intensity
+        },
+    )
+    // 焰火的颜色只由「颜色槽派生」的 2–5 号调色板生效，其余模板下改色块不会有任何效果。
+    val showColorRow = !colorsOnlyViaPalette || palette in 2..5
 
     Column(modifier = Modifier.padding(top = 14.dp)) {
         Row(
@@ -832,9 +853,20 @@ private fun EffectTuning(
                         normalizedToPercent(localIntensity),
                     )
                     hideSpeed && hideIntensity -> stringResource(R.string.isle_color_only_summary)
+                    hideSpeed -> stringResource(
+                        R.string.isle_effect_tuning_summary_custom_single,
+                        intensityLabelText,
+                        normalizedToPercent(localIntensity),
+                    )
                     hideIntensity -> stringResource(
                         R.string.isle_effect_tuning_summary_speed,
                         normalizedToPercent(localSpeed),
+                    )
+                    intensityLabel != EffectTuningPolicy.IntensityLabel.DEFAULT -> stringResource(
+                        R.string.isle_effect_tuning_summary_custom,
+                        normalizedToPercent(localSpeed),
+                        intensityLabelText,
+                        normalizedToPercent(localIntensity),
                     )
                     else -> stringResource(
                         R.string.isle_effect_tuning_summary,
@@ -951,10 +983,11 @@ private fun EffectTuning(
                         }
                         if (!hideIntensity) {
                             TuningSlider(
-                                label = stringResource(
-                                    if (blinkMode) R.string.isle_effect_intensity_blink
-                                    else R.string.isle_effect_intensity,
-                                ),
+                                label = if (blinkMode) {
+                                    stringResource(R.string.isle_effect_intensity_blink)
+                                } else {
+                                    intensityLabelText
+                                },
                                 value = localIntensity,
                                 onValueChange = { localIntensity = it },
                                 onCommit = {
@@ -971,40 +1004,42 @@ private fun EffectTuning(
                             }
                         }
 
-                        Text(
-                            text = stringResource(
-                                if (hidePalette || palette == SOLID_PALETTE_ID) {
-                                    R.string.isle_solid_color
-                                } else {
-                                    R.string.isle_effect_color
-                                },
-                            ),
-                            color = IsleColors.TextSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            colors.take(3).forEach { color ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .background(color, CircleShape)
-                                        .border(1.dp, IsleColors.StrokeStrong, CircleShape),
-                                )
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            PRESET_COLORS.forEach { packed ->
-                                val rgb = packedToColor(packed)
-                                Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .background(rgb, CircleShape)
-                                        .border(1.dp, IsleColors.StrokeStrong, CircleShape)
-                                        .clickable { onColor(packed) },
-                                )
+                        if (showColorRow) {
+                            Text(
+                                text = stringResource(
+                                    if (solidMode || palette == SOLID_PALETTE_ID) {
+                                        R.string.isle_solid_color
+                                    } else {
+                                        R.string.isle_effect_color
+                                    },
+                                ),
+                                color = IsleColors.TextSecondary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                colors.take(3).forEach { color ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .background(color, CircleShape)
+                                            .border(1.dp, IsleColors.StrokeStrong, CircleShape),
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                PRESET_COLORS.forEach { packed ->
+                                    val rgb = packedToColor(packed)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .background(rgb, CircleShape)
+                                            .border(1.dp, IsleColors.StrokeStrong, CircleShape)
+                                            .clickable { onColor(packed) },
+                                    )
+                                }
                             }
                         }
 

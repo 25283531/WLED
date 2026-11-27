@@ -29,12 +29,7 @@
   "name": "Rainbow",
   "fn": null
  },
- {
-  "idx": 5,
-  "fx": "FX_MODE_FADE",
-  "name": "Fade",
-  "fn": null
- },
+ null,
  {
   "idx": 6,
   "fx": "FX_MODE_THEATER_CHASE",

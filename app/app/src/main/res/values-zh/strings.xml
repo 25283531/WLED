@@ -229,6 +229,11 @@
     <string name="isle_effect_speed">速度</string>
     <string name="isle_effect_intensity">强度</string>
     <string name="isle_effect_intensity_blink">点亮时长</string>
+    <string name="isle_effect_intensity_width">追逐宽度</string>
+    <string name="isle_effect_intensity_strobe_count">频闪次数</string>
+    <string name="isle_effect_intensity_firework_rate">焰火频率</string>
+    <string name="isle_effect_tuning_summary_custom">速度 %1$d%% · %2$s %3$d%%</string>
+    <string name="isle_effect_tuning_summary_custom_single">%1$s %2$d%%</string>
     <string name="isle_blink_intensity_hint">数值越大，一次明灭中亮起的时间越长；0% 几乎全灭。</string>
     <string name="isle_blink_tuning_summary">速度 %1$d%% · 点亮时长 %2$d%%</string>
     <string name="isle_effect_color">颜色</string>
