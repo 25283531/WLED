@@ -19,6 +19,8 @@ object EffectTuningPolicy {
     private val solidId = EffectCatalog.byName("Solid")?.id
     private val blinkId = EffectCatalog.byName("Blink")?.id
     private val colorloopId = EffectCatalog.byName("Colorloop")?.id
+    /** 音律溶液：完全由音频驱动，速度/强度不参与运算，只保留颜色。 */
+    private val audioSolutionId = EffectCatalog.byName("Audio Solution")?.id
     private val rainbowPaletteId = PaletteCatalog.byName("Rainbow")?.id ?: 11
 
     fun isSolid(effectId: Int?): Boolean = effectId != null && effectId == solidId
@@ -27,11 +29,13 @@ object EffectTuningPolicy {
 
     fun isColorloop(effectId: Int?): Boolean = effectId != null && effectId == colorloopId
 
-    /** 纯色不读取速度。 */
-    fun hidesSpeed(effectId: Int?): Boolean = isSolid(effectId)
+    /** 纯色不读取速度；音律溶液只读音频。 */
+    fun hidesSpeed(effectId: Int?): Boolean =
+        isSolid(effectId) || (effectId != null && effectId == audioSolutionId)
 
-    /** 纯色不读取强度；明灭的强度是点亮时长，保留可调。 */
-    fun hidesIntensity(effectId: Int?): Boolean = isSolid(effectId)
+    /** 纯色不读取强度；明灭的强度是点亮时长，保留可调；音律溶液只读音频。 */
+    fun hidesIntensity(effectId: Int?): Boolean =
+        isSolid(effectId) || (effectId != null && effectId == audioSolutionId)
 
     /** 纯色不需要调色板，颜色由上方色板决定。 */
     fun hidesPalette(effectId: Int?): Boolean = isSolid(effectId)

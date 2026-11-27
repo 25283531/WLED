@@ -274,7 +274,8 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_SONICPULSE 114
 #define FX_MODE_BASSLAVA 115
 #define FX_MODE_SPECTRUMLAMP 116
-#define MODE_COUNT                     117
+#define FX_MODE_AUDIOSOLUTION 117
+#define MODE_COUNT                     118
 
 
 #define TRANSITION_FADE            0x00  // universal

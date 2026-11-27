@@ -157,6 +157,7 @@ object EffectCatalog {
         EffectInfo(114, "Sonic Pulse", "声波脉冲", EffectCategory.ONE_D, EffectMood.MUSIC, false, "114"),
         EffectInfo(115, "Bass Lava", "低频熔岩", EffectCategory.ONE_D, EffectMood.MUSIC, false, "115"),
         EffectInfo(116, "Spectrum Lamp", "频谱灯", EffectCategory.ONE_D, EffectMood.MUSIC, false, "116"),
+        EffectInfo(117, "Audio Solution", "音律溶液", EffectCategory.ONE_D, EffectMood.MUSIC, false, "117"),
     )
 
     private val byId: Map<Int, EffectInfo> = all.associateBy { it.id }

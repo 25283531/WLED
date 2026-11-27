@@ -925,6 +925,7 @@ def build_effects() -> dict:
         "Sonic Pulse": lambda t: r_clock(t),
         "Bass Lava": lambda t: r_lumi_aurora(t),
         "Spectrum Lamp": lambda t: r_lumi_forest(t),
+        "Audio Solution": lambda t: r_solution(t),
     }
     return fx
 
@@ -1089,6 +1090,41 @@ def r_rain2d(t, color=(120, 200, 255)):
             y = head - i
             if 0 <= y < H:
                 grid[y][x] = dim(color, (1.0 - i / 5) ** 1.5)
+    return grid
+
+
+def r_solution(t):
+    """音律溶液：底部琥珀→暗红→深靛的溶液随音量向上推进，节拍带来瞬时冲锋，
+    顶部保持用户常亮基色（预览用冰青），交界处叠加圆周涡流。"""
+    top = (0, 245, 255)
+    invader_stops = [0.0, (255, 165, 35), 0.48, (165, 14, 28), 1.0, (26, 8, 58)]
+    vol = 0.5 + 0.5 * math.sin(t * 2 * math.pi)
+    line = 0.18 + 0.54 * (vol ** 0.85)
+    line += 0.10 * math.exp(-((t * 2) % 1.0) * 6.0)   # 节拍冲锋后弹性回落
+    swirl = t * 2 * math.pi * 1.4
+    band = 0.14
+    grid = empty()
+    for y in range(H):
+        ny = (H - 1 - y) / (H - 1)                    # 0 = 画面底部
+        for x in range(W):
+            theta = x / W * 2 * math.pi
+            eddy = (math.sin(theta * 2 + swirl + ny * 4.5) * 0.6
+                    + math.cos(theta * 3 - swirl * 1.3 + ny * 7.0) * 0.4)
+            local = max(0.05, min(0.96, line + eddy * (0.045 + 0.03 * vol)))
+            dist = ny - local
+            if dist > band * 0.5:
+                grid[y][x] = top
+                continue
+            depth = max(0.0, min(1.0, ny / max(local, 0.05)))
+            invader = gradient(invader_stops, depth)
+            smoke = 0.85 + 0.15 * math.sin(theta * 4 - swirl * 1.6 + ny * 10)
+            invader = dim(invader, smoke)
+            if dist < -band * 0.5:
+                grid[y][x] = invader
+            else:
+                m = (dist + band * 0.5) / band
+                m = m * m * (3 - 2 * m)
+                grid[y][x] = mix(invader, top, m)
     return grid
 
 

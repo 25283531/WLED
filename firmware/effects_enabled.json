@@ -700,5 +700,11 @@
   "fx": "FX_MODE_SPECTRUMLAMP",
   "name": "Spectrum Lamp",
   "fn": null
+ },
+ {
+  "idx": 117,
+  "fx": "FX_MODE_AUDIOSOLUTION",
+  "name": "Audio Solution",
+  "fn": null
  }
 ]
