@@ -215,11 +215,10 @@ fun CreateScreen(
                     fontSize = 11.5.sp,
                     modifier = Modifier.weight(1f),
                 )
-                // 自定义图文不再对应灯效库里的效果（Image 已隐藏），收藏后无处展示，
-                // 因此只在色轮调色模式保留收藏入口。
-                if (mode == CreateMode.COLOR) {
+                // 色轮调色存入灯效收藏，自定义图文存入本地图文仓库（设备页「动态字幕」可调用）
+                if (mode != CreateMode.TEMPLATE) {
                     SaveButton(
-                        onClick = { device?.let { viewModel.saveFavorite(it) } },
+                        onClick = { device?.let { viewModel.saveFavorite(it, context) } },
                     )
                 }
             }

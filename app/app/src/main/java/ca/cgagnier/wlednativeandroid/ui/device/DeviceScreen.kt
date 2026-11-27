@@ -1,6 +1,8 @@
 package ca.cgagnier.wlednativeandroid.ui.device
 
+import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +44,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -54,6 +58,7 @@ import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.model.Device
 import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
+import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicFavorite
 import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
 import ca.cgagnier.wlednativeandroid.ui.effects.BassLava
 import ca.cgagnier.wlednativeandroid.ui.effects.CUSTOM_PALETTE_ID_BASE
@@ -91,7 +96,9 @@ import ca.cgagnier.wlednativeandroid.ui.isle.packedRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.packedToColor
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAdd
 import ca.cgagnier.wlednativeandroid.util.CHANNEL_MAX
+import ca.cgagnier.wlednativeandroid.util.brightnessChannelToNormalized
 import ca.cgagnier.wlednativeandroid.util.channelToNormalized
+import ca.cgagnier.wlednativeandroid.util.normalizedToBrightnessChannel
 import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
 import ca.cgagnier.wlednativeandroid.util.normalizedToPercent
 import kotlin.math.roundToInt
@@ -150,6 +157,8 @@ fun DeviceScreen(
     val selectedMac by viewModel.selectedMacAddress.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val mood by viewModel.mood.collectAsStateWithLifecycle()
+    val sleepLightSelected by viewModel.sleepLightSelected.collectAsStateWithLifecycle()
+    val customGraphics by viewModel.customGraphics.collectAsStateWithLifecycle()
     val syncEnabled by viewModel.syncEnabled.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
@@ -263,7 +272,9 @@ fun DeviceScreen(
         }
     }
 
-    val quickCards = remember(favorites, mood) { viewModel.quickCards(favorites, mood) }
+    val quickCards = remember(favorites, mood, customGraphics) {
+        viewModel.quickCards(favorites, mood, customGraphics)
+    }
     val favoriteIds = remember(favorites) { favorites.map { it.effectId }.toSet() }
 
     IsleBackdrop(modifier = modifier) {
@@ -395,6 +406,7 @@ fun DeviceScreen(
                 )
                 MoodRow(
                     selected = mood,
+                    sleepSelected = sleepLightSelected,
                     onSelect = viewModel::selectMood,
                     onSleepLight = {
                         val target = device
@@ -413,24 +425,39 @@ fun DeviceScreen(
                     text = stringResource(R.string.isle_quick_effects),
                     modifier = Modifier.padding(top = 20.dp),
                 )
-                QuickGrid(
-                    cards = quickCards,
-                    favoriteIds = favoriteIds,
-                    currentEffect = currentEffect,
-                    onApply = { card ->
-                        val target = device
-                        if (target == null) {
-                            Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
-                        } else {
-                            viewModel.applyEffect(target, card.effect.id, card.favorite)
-                        }
-                    },
-                    onToggleFavorite = { effect ->
-                        device?.let { viewModel.toggleFavorite(it, effect) }
-                    },
-                    // 「动态字幕」已从灯效库里独立出来，快捷区保留一个动作入口直达创作页
-                    onOpenTextEditor = onOpenTextEditor,
-                )
+                if (quickCards.isEmpty()) {
+                    EmptyQuickHint(
+                        text = stringResource(R.string.isle_no_graphic_favorites),
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                } else {
+                    QuickGrid(
+                        cards = quickCards,
+                        favoriteIds = favoriteIds,
+                        currentEffect = currentEffect,
+                        currentName = segment?.name,
+                        onApplyEffect = { card ->
+                            val target = device
+                            if (target == null) {
+                                Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.applyEffect(target, card.effect.id, card.favorite)
+                            }
+                        },
+                        onToggleFavorite = { effect ->
+                            device?.let { viewModel.toggleFavorite(it, effect) }
+                        },
+                        onApplyGraphic = { graphic ->
+                            val target = device
+                            if (target == null) {
+                                Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.applyCustomGraphic(target, graphic)
+                            }
+                        },
+                        onRemoveGraphic = viewModel::removeCustomGraphic,
+                    )
+                }
             }
         }
     }
@@ -736,7 +763,7 @@ private fun MiniAction(glyph: Glyph, label: String, active: Boolean, onClick: ()
 
 @Composable
 private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
-    var local by remember(value) { mutableFloatStateOf(channelToNormalized(value)) }
+    var local by remember(value) { mutableFloatStateOf(brightnessChannelToNormalized(value)) }
     Column(modifier = Modifier.padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.isle_brightness),
@@ -749,7 +776,7 @@ private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
             IsleSlider(
                 value = local,
                 onValueChange = { local = it },
-                onValueChangeFinished = { onCommit(normalizedToChannel(local)) },
+                onValueChangeFinished = { onCommit(normalizedToBrightnessChannel(local)) },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 12.dp),
@@ -1729,6 +1756,7 @@ private fun TuningSlider(
 @Composable
 private fun MoodRow(
     selected: EffectMood,
+    sleepSelected: Boolean,
     onSelect: (EffectMood) -> Unit,
     onSleepLight: () -> Unit,
 ) {
@@ -1737,7 +1765,8 @@ private fun MoodRow(
             MoodTile(
                 glyph = mood.glyph(),
                 label = stringResource(mood.labelRes()),
-                selected = mood == selected,
+                // 夜灯选中时它下发的纯色会被识别成幻彩极光，这里不能让别的胶囊抢走高亮。
+                selected = !sleepSelected && mood == selected,
                 onClick = { onSelect(mood) },
                 modifier = Modifier.weight(1f),
             )
@@ -1746,7 +1775,7 @@ private fun MoodRow(
         MoodTile(
             glyph = Glyph.Moon,
             label = stringResource(R.string.isle_sleep_light),
-            selected = false,
+            selected = sleepSelected,
             onClick = onSleepLight,
             modifier = Modifier.weight(1f),
         )
@@ -1800,11 +1829,13 @@ private fun MoodTile(
 private fun EffectMood.glyph(): Glyph = when (this) {
     EffectMood.AURORA -> Glyph.Aurora
     EffectMood.MUSIC -> Glyph.Music
+    EffectMood.TEXT -> Glyph.Text
 }
 
 private fun EffectMood.labelRes(): Int = when (this) {
     EffectMood.AURORA -> R.string.isle_mood_aurora
     EffectMood.MUSIC -> R.string.isle_mood_music
+    EffectMood.TEXT -> R.string.isle_mood_text
 }
 
 /**
@@ -1838,31 +1869,31 @@ private fun QuickGrid(
     cards: List<QuickCardItem>,
     favoriteIds: Set<Int>,
     currentEffect: Int?,
-    onApply: (QuickCardItem) -> Unit,
+    currentName: String?,
+    onApplyEffect: (QuickCardItem.EffectCard) -> Unit,
     onToggleFavorite: (EffectInfo) -> Unit,
-    onOpenTextEditor: () -> Unit,
+    onApplyGraphic: (CustomGraphicFavorite) -> Unit,
+    onRemoveGraphic: (CustomGraphicFavorite) -> Unit,
 ) {
-    // 「动态字幕」已不再是一个灯效，而是一个直达创作页自定义图文的动作，排在快捷区首位。
-    val tileCount = cards.size + 1
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        (0 until tileCount).chunked(2).forEach { row ->
+        cards.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { index ->
-                    if (index == 0) {
-                        QuickActionCard(
-                            glyph = Glyph.Text,
-                            label = stringResource(R.string.isle_mood_text),
-                            onClick = onOpenTextEditor,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        val card = cards[index - 1]
-                        QuickCard(
+                row.forEach { card ->
+                    when (card) {
+                        is QuickCardItem.EffectCard -> QuickCard(
                             effect = card.effect,
                             isFavorite = card.effect.id in favoriteIds,
                             isActive = card.effect.id == currentEffect,
-                            onClick = { onApply(card) },
+                            onClick = { onApplyEffect(card) },
                             onToggleFavorite = { onToggleFavorite(card.effect) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        // 「动态字幕」下展示用户自己收藏的自定义图文，点击即上传并播放。
+                        is QuickCardItem.GraphicCard -> QuickGraphicCard(
+                            graphic = card.graphic,
+                            isActive = card.graphic.deviceFileName == currentName,
+                            onClick = { onApplyGraphic(card.graphic) },
+                            onRemove = { onRemoveGraphic(card.graphic) },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -1873,36 +1904,103 @@ private fun QuickGrid(
     }
 }
 
-/** 快捷区里的动作卡片：没有灯效参数，点一下直接跳到对应创作页。 */
+/** 快捷区空态提示：例如「动态字幕」下还没有收藏任何自定义图文。 */
 @Composable
-private fun QuickActionCard(
-    glyph: Glyph,
-    label: String,
+private fun EmptyQuickHint(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color(0x0FFFFFFF), RoundedCornerShape(18.dp))
+            .border(1.dp, IsleColors.Stroke, RoundedCornerShape(18.dp))
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+    ) {
+        Text(text = text, color = IsleColors.TextMuted, fontSize = 12.sp)
+    }
+}
+
+/**
+ * 自定义图文的快捷卡片。
+ *
+ * 预览图是收藏时渲染的 PNG（灯珠矩阵栅格），星标表示「已在收藏中」，
+ * 点星标即从收藏里移除。
+ */
+@Composable
+private fun QuickGraphicCard(
+    graphic: CustomGraphicFavorite,
+    isActive: Boolean,
     onClick: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val preview = remember(graphic.previewPath) {
+        BitmapFactory.decodeFile(graphic.previewPath)?.asImageBitmap()
+    }
     Box(
         modifier = modifier
             .aspectRatio(1.55f)
             .background(Color(0xFF101218), RoundedCornerShape(20.dp))
             .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
+                width = if (isActive) 1.6.dp else 1.dp,
+                brush = if (isActive) {
+                    Brush.linearGradient(IsleColors.Accent)
+                } else {
+                    Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke))
+                },
                 shape = RoundedCornerShape(20.dp),
             )
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            GlyphIcon(glyph = glyph, size = 26.dp, tint = IsleColors.Cyan)
+        if (preview != null) {
+            Image(
+                bitmap = preview,
+                contentDescription = graphic.name,
+                // 灯珠矩阵是竖长的，用 Fit 完整展示，避免 Crop 裁掉大半内容
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                GlyphIcon(glyph = Glyph.Text, size = 26.dp, tint = IsleColors.Cyan)
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color(0x40000000), Color(0xD9030408)),
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+        ) {
             Text(
-                text = label,
-                color = IsleColors.TextPrimary,
-                fontSize = 13.sp,
+                text = graphic.name,
+                color = Color.White,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.isle_mood_text),
+                color = Color(0xFFB9C0CC),
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
+        StarButton(
+            selected = true,
+            onClick = onRemove,
+            size = 24.dp,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp),
+        )
     }
 }
 

@@ -7,6 +7,8 @@
 「律动模式」（mood）是 App 侧的产品分类，固件没有这个概念：
     AURORA 幻彩极光 —— 一切以色彩流动为主的氛围效果
     MUSIC  音乐律动 —— 由音频频谱驱动的效果（GEQ、频谱、声波类）
+    TEXT   动态字幕 —— 设备页专用胶囊，对应「创作」页收藏的自定义图文，
+                        灯效库里不再提供该分类
 「睡眠夜灯」不是分类，而是设备页的一键暖光动作，故不在此建模。
 分类按固件宏名（FX_MODE_*）白名单硬编码，与 id 解耦，宁可漏收也不猜。
 
@@ -146,7 +148,11 @@ def categorize(entry: dict) -> str:
 
 
 def mood_of(entry: dict) -> str:
-    if entry["fx"] in MUSIC_IDS:
+    fx = entry["fx"]
+    # Image 只用于播放「创作」页投送的自定义图文，归到设备页的「动态字幕」胶囊。
+    if fx == "FX_MODE_IMAGE":
+        return "TEXT"
+    if fx in MUSIC_IDS:
         return "MUSIC"
     return "AURORA"
 
@@ -185,7 +191,7 @@ def main() -> int:
         " *",
         " * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。",
         " */",
-        "enum class EffectMood { AURORA, MUSIC }",
+        "enum class EffectMood { AURORA, MUSIC, TEXT }",
         "",
         "/**",
         " * 一个固件灯效。",

@@ -10,7 +10,7 @@ enum class EffectCategory { ONE_D, TWO_D, ART }
  *
  * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。
  */
-enum class EffectMood { AURORA, MUSIC }
+enum class EffectMood { AURORA, MUSIC, TEXT }
 
 /**
  * 一个固件灯效。
@@ -58,7 +58,7 @@ object EffectCatalog {
         EffectInfo(13, "Gradient", "渐变", EffectCategory.ONE_D, EffectMood.AURORA, false, "13"),
         EffectInfo(14, "Rolling Balls", "逐光者", EffectCategory.ONE_D, EffectMood.AURORA, false, "14"),
         EffectInfo(15, "Fairy", "绿野迷踪", EffectCategory.ONE_D, EffectMood.AURORA, false, "15"),
-        EffectInfo(16, "Image", "自定义图片", EffectCategory.ART, EffectMood.AURORA, true, "16", hidden = true),
+        EffectInfo(16, "Image", "自定义图片", EffectCategory.ART, EffectMood.TEXT, true, "16", hidden = true),
         EffectInfo(17, "Juggle", "抛球", EffectCategory.ONE_D, EffectMood.AURORA, false, "17"),
         EffectInfo(18, "Colorwaves", "色浪", EffectCategory.ONE_D, EffectMood.AURORA, false, "18"),
         EffectInfo(19, "Noise 4", "噪声 IV", EffectCategory.ONE_D, EffectMood.AURORA, false, "19"),

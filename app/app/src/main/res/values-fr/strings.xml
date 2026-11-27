@@ -310,6 +310,7 @@
     <string name="isle_mood_aurora">Aurore</string>
     <string name="isle_mood_music">Musique</string>
     <string name="isle_mood_text">Texte</string>
+    <string name="isle_no_graphic_favorites">Aucun texte enregistré. Créez-en un dans « Créer » puis touchez l\'étoile.</string>
     <string name="isle_sleep_light">Veilleuse</string>
     <string name="isle_sleep_light_applied">Lumière douce de veilleuse activée</string>
     <string name="isle_nightlight_remaining">%1$s restantes</string>

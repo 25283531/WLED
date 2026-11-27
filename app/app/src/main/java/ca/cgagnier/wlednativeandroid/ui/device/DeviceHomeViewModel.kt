@@ -10,6 +10,9 @@ import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
 import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
+import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicFavorite
+import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicStore
+import ca.cgagnier.wlednativeandroid.ui.create.customGraphicFileName
 import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
 import ca.cgagnier.wlednativeandroid.ui.effects.CUSTOM_PALETTE_ID_BASE
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
@@ -30,6 +33,8 @@ import ca.cgagnier.wlednativeandroid.ui.effects.buildPaletteFileJson
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
 import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
+import ca.cgagnier.wlednativeandroid.util.normalizedToBrightnessChannel
+import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +60,14 @@ private const val NIGHTLIGHT_TARGET_BRIGHTNESS_OFF = 0
 private const val SLEEP_LIGHT_EFFECT_NAME = "Solid"
 private const val SLEEP_LIGHT_PALETTE_NAME = "Default"
 private const val SLEEP_LIGHT_COLOR = 0xFFB46B
-private const val SLEEP_LIGHT_BRIGHTNESS = 51
+
+/**
+ * 睡眠夜灯的目标亮度（滑杆比例）。
+ *
+ * 亮度滑杆走感知曲线（见 `normalizedToBrightnessChannel`），25% 约等于 `bri 12`，
+ * 比原来的线性 51 暗得多，符合「夜灯要足够暗」的预期。
+ */
+private const val SLEEP_LIGHT_BRIGHTNESS_NORMALIZED = 0.25f
 
 /** 定时关灯的一次操作结果，用于给用户明确反馈。 */
 sealed interface NightlightEvent {
@@ -88,13 +100,16 @@ private const val COLOR_SLOT_COUNT = 3
 /**
  * 首页快捷卡片的一项。
  *
- * [favorite] 只在用户收藏过该灯效时非空 —— 点下去时用它把收藏时存下的
- * 速度、强度、调色板与三色一并恢复，而不只是切一个效果 id。
+ * 普通灯效带 [FavoriteEffect] 快照；「动态字幕」下则是本地收藏的自定义图文。
  */
-data class QuickCardItem(
-    val effect: EffectInfo,
-    val favorite: FavoriteEffect?,
-)
+sealed interface QuickCardItem {
+    data class EffectCard(
+        val effect: EffectInfo,
+        val favorite: FavoriteEffect?,
+    ) : QuickCardItem
+
+    data class GraphicCard(val graphic: CustomGraphicFavorite) : QuickCardItem
+}
 
 /**
  * 首页（设备）：电源、亮度、三个律动模式 + 睡眠夜灯、快捷卡片、多灯同步、定时关灯。
@@ -107,6 +122,7 @@ class DeviceHomeViewModel(
     private val selectedDeviceStore: SelectedDeviceStore,
     private val deviceApiFactory: DeviceApiFactory,
     private val paletteTemplateStore: PaletteTemplateStore,
+    private val customGraphicStore: CustomGraphicStore,
 ) : ViewModel() {
 
     val devices: StateFlow<List<DeviceWithState>> = deviceConnectionManager.allDevicesWithState
@@ -124,6 +140,15 @@ class DeviceHomeViewModel(
     val mood: StateFlow<EffectMood> = _mood.asStateFlow()
 
     /**
+     * 「睡眠夜灯」胶囊的选中态。
+     *
+     * 夜灯不是 [EffectMood] 的一种（它下发的是纯色 + 暖光参数），
+     * 单独记一个布尔值，点其它胶囊或快捷灯效时清除。
+     */
+    private val _sleepLightSelected = MutableStateFlow(false)
+    val sleepLightSelected: StateFlow<Boolean> = _sleepLightSelected.asStateFlow()
+
+    /**
      * 多灯同步开关。
      *
      * 存在 [SelectedDeviceStore] 里而不是本 ViewModel 的私有状态 —— 它是设备级偏好，
@@ -139,6 +164,9 @@ class DeviceHomeViewModel(
     /** 手机本地保存的多色模板，设备页调色板里预览、调用。 */
     val paletteTemplates: StateFlow<List<PaletteTemplate>> = paletteTemplateStore.templates
 
+    /** 手机本地收藏的自定义图文，「动态字幕」胶囊下作为快捷卡片展示。 */
+    val customGraphics: StateFlow<List<CustomGraphicFavorite>> = customGraphicStore.favorites
+
     /** 每台设备分配到的模板槽位（用于判断哪个模板当前被选中）。 */
     val paletteSlots: StateFlow<Map<String, Map<String, Int>>> = paletteTemplateStore.slots
 
@@ -150,6 +178,7 @@ class DeviceHomeViewModel(
     fun selectDevice(macAddress: String?) = selectedDeviceStore.select(macAddress)
 
     fun selectMood(mood: EffectMood) {
+        _sleepLightSelected.value = false
         _mood.value = mood
     }
 
@@ -452,10 +481,46 @@ class DeviceHomeViewModel(
         device: DeviceWithState,
         effectId: Int,
         favorite: FavoriteEffect? = null,
-    ) = broadcast(device) { mac ->
-        deviceConnectionManager.sendSegmentPatch(mac) { segment ->
-            buildEffectSegment(segment, effectId, favorite)
+    ) {
+        _sleepLightSelected.value = false
+        broadcast(device) { mac ->
+            deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                buildEffectSegment(segment, effectId, favorite)
+            }
         }
+    }
+
+    /**
+     * 调用一条本地收藏的自定义图文：先把 GIF 上传到目标设备，再切到 `Image` 播放。
+     *
+     * 上传文件名由 GIF 内容推导（与创作页投送一致），因此同一份收藏在任何设备上
+     * 都落到同一个文件名，重复调用也能触发固件重新加载。
+     */
+    fun applyCustomGraphic(device: DeviceWithState, graphic: CustomGraphicFavorite) {
+        _sleepLightSelected.value = false
+        _mood.value = EffectMood.TEXT
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) { customGraphicStore.readGif(graphic) } ?: return@launch
+            val imageId = EffectCatalog.byName("Image")?.id ?: return@launch
+            val fileName = customGraphicFileName(bytes)
+            val speed = normalizedToChannel(graphic.speedPercent / 100f)
+            targets(device).forEach { mac ->
+                val target = devices.value.firstOrNull { it.device.macAddress == mac } ?: return@forEach
+                val uploaded = runCatching {
+                    deviceApiFactory.create(target.device).uploadFile(bytes, fileName)
+                }.getOrNull()
+                if (uploaded != null && uploaded.code in 200..299) {
+                    deviceConnectionManager.sendSegmentPatch(mac) { segment ->
+                        segment.copy(effect = imageId, name = fileName, effectSpeed = speed)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 从收藏里移除一条自定义图文（快捷卡片上的星标）。 */
+    fun removeCustomGraphic(graphic: CustomGraphicFavorite) {
+        customGraphicStore.remove(graphic.id)
     }
 
     /**
@@ -492,6 +557,7 @@ class DeviceHomeViewModel(
      * 不需要为它单独做一个灯效分类。
      */
     fun startSleepLight(device: DeviceWithState) {
+        _sleepLightSelected.value = true
         val solid = EffectCatalog.byName(SLEEP_LIGHT_EFFECT_NAME)
         val palette = PaletteCatalog.byName(SLEEP_LIGHT_PALETTE_NAME)
         val colors = listOf(
@@ -505,7 +571,10 @@ class DeviceHomeViewModel(
                     colors = colors,
                 )
             }
-            deviceConnectionManager.setBrightness(mac, SLEEP_LIGHT_BRIGHTNESS)
+            deviceConnectionManager.setBrightness(
+                mac,
+                normalizedToBrightnessChannel(SLEEP_LIGHT_BRIGHTNESS_NORMALIZED),
+            )
             deviceConnectionManager.setPower(mac, true)
         }
     }
@@ -574,17 +643,26 @@ class DeviceHomeViewModel(
      *
      * 收藏项带上收藏记录本身，点下去才能连参数一起恢复。
      */
-    fun quickCards(favorites: List<FavoriteEffect>, mood: EffectMood): List<QuickCardItem> {
+    fun quickCards(
+        favorites: List<FavoriteEffect>,
+        mood: EffectMood,
+        customGraphics: List<CustomGraphicFavorite> = emptyList(),
+    ): List<QuickCardItem> {
+        // 「动态字幕」没有灯效可补，只展示用户收藏的自定义图文。
+        if (mood == EffectMood.TEXT) {
+            return customGraphics.take(QUICK_CARD_COUNT).map { QuickCardItem.GraphicCard(it) }
+        }
         val favoriteById = favorites.associateBy { it.effectId }
         val inMood = favorites.mapNotNull { fav ->
-            EffectCatalog.find(fav.effectId)?.takeIf { !it.hidden }?.let { QuickCardItem(it, fav) }
+            EffectCatalog.find(fav.effectId)?.takeIf { !it.hidden }
+                ?.let { QuickCardItem.EffectCard(it, fav) }
         }.filter { it.effect.mood == mood }
         if (inMood.size >= QUICK_CARD_COUNT) return inMood.take(QUICK_CARD_COUNT)
         val takenIds = inMood.map { it.effect.id }.toSet()
         val fillers = EffectCatalog.byMood(mood)
             .filter { it.isPopular && it.id !in takenIds }
             .ifEmpty { EffectCatalog.byMood(mood).filter { it.id !in takenIds } }
-        return (inMood + fillers.map { QuickCardItem(it, favoriteById[it.id]) })
+        return (inMood + fillers.map { QuickCardItem.EffectCard(it, favoriteById[it.id]) })
             .distinctBy { it.effect.id }
             .take(QUICK_CARD_COUNT)
     }

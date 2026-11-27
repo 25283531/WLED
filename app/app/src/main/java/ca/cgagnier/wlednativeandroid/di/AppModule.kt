@@ -26,6 +26,7 @@ import ca.cgagnier.wlednativeandroid.service.api.createHttpClient
 import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
 import ca.cgagnier.wlednativeandroid.ui.control.ControlViewModel
 import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
+import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicStore
 import ca.cgagnier.wlednativeandroid.ui.device.DeviceHomeViewModel
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
@@ -70,6 +71,8 @@ val appModule: Module = module {
     single { SelectedDeviceStore(get()) }
     // 多色模板只在手机本地保存，创作页负责制作，设备页调色板负责调用
     single { PaletteTemplateStore(androidContext()) }
+    // 自定义图文收藏保存在手机本地：创作页保存，设备页「动态字幕」快捷卡片调用
+    single { CustomGraphicStore(androidContext()) }
 
     single<DataStore<UserPreferences>> {
         val context = androidContext()

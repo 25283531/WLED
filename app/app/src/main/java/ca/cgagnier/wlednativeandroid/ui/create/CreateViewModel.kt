@@ -1,6 +1,7 @@
 package ca.cgagnier.wlednativeandroid.ui.create
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /** 创作工坊的三个分段：色轮调色 / 自定义图文 / 多色模板。 */
 enum class CreateMode { COLOR, PIXEL, TEMPLATE }
@@ -50,14 +52,12 @@ private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
 private const val DEFAULT_GRID_ROWS = 10
 private const val MAX_GRID_SIDE = 40
-/**
- * 上传文件名前缀。
- *
- * 固件 `Image` 效果要求段落名（`seg.name`）是一个以 `.gif` 结尾的文件名，
- * 且只在名字变化时才重新加载文件 —— 所以每次按内容拼出唯一名字，
- * 既满足后缀要求，也能让重复投送真正刷新画面。
- */
-private const val UPLOAD_FILE_PREFIX = "isle_"
+
+/** 预览图每个灯珠放大成 6×6 像素，卡片上放大显示时不至于糊成一团。 */
+private const val PREVIEW_CELL_SCALE = 6
+
+/** 收藏名截断长度，过长的文字不适合显示在快捷卡片上。 */
+private const val FAVORITE_NAME_MAX_LENGTH = 12
 
 /** 自定义图文里文字/时间层可选的文字颜色。 */
 val GRAPHIC_COLORS: List<Int> = listOf(
@@ -90,6 +90,7 @@ class CreateViewModel(
     private val selectedDeviceStore: SelectedDeviceStore,
     private val deviceApiFactory: DeviceApiFactory,
     private val paletteTemplateStore: PaletteTemplateStore,
+    private val customGraphicStore: CustomGraphicStore,
 ) : ViewModel() {
 
     val devices: StateFlow<List<DeviceWithState>> = deviceConnectionManager.allDevicesWithState
@@ -376,14 +377,20 @@ class CreateViewModel(
                 }
                 // 内容哈希保证不同图文落到不同文件名：固件按文件名判断是否重新加载，
                 // 名字不变的话再次投送会继续显示上一张图。
-                val fileName = "$UPLOAD_FILE_PREFIX${bytes.size}_${bytes.contentHashCode().toUInt().toString(16)}.gif"
+                val fileName = customGraphicFileName(bytes)
                 val api = deviceApiFactory.create(device.device)
                 api.uploadFile(bytes, fileName) to fileName
             }
             val result = outcome.getOrNull()
             val uploaded = result != null && result.first.code in 200..299
             val applied = uploaded && deviceConnectionManager.sendSegmentPatch(device.device.macAddress) {
-                it.copy(effect = IMAGE_EFFECT, name = result?.second)
+                // 固件 Image 的帧间隔 = GIF 延迟 × (2 - sx/128)，
+                // sx 不写回就会沿用上一个效果的强度，导致滚动速度调节失灵。
+                it.copy(
+                    effect = IMAGE_EFFECT,
+                    name = result?.second,
+                    effectSpeed = normalizedToChannel(_speed.value),
+                )
             }
             _busy.value = false
             _status.value = when {
@@ -397,19 +404,23 @@ class CreateViewModel(
         }
     }
 
-    /** 把当前创作存成收藏，之后在首页快捷卡片里可以直接调出。 */
-    fun saveFavorite(device: DeviceWithState) {
-        if (_mode.value == CreateMode.TEMPLATE) return
-        val effectId = when (_mode.value) {
-            CreateMode.COLOR -> currentSegment(device)?.effect ?: 0
-            CreateMode.PIXEL -> IMAGE_EFFECT
+    /**
+     * 把当前创作存成收藏。
+     *
+     * 色轮调色存进灯效收藏表；自定义图文存进本地图文仓库（带 GIF 与预览图），
+     * 之后可以在设备页的「动态字幕」快捷卡片里调用。
+     */
+    fun saveFavorite(device: DeviceWithState, context: Context) {
+        when (_mode.value) {
             CreateMode.TEMPLATE -> return
+            CreateMode.PIXEL -> saveGraphicFavorite(context)
+            CreateMode.COLOR -> saveColorFavorite(device)
         }
-        val name = when (_mode.value) {
-            CreateMode.COLOR -> "自定义配色"
-            CreateMode.PIXEL -> "自定义图文 ${_gridCols.value}×${_gridRows.value}"
-            CreateMode.TEMPLATE -> return
-        }
+    }
+
+    private fun saveColorFavorite(device: DeviceWithState) {
+        val effectId = currentSegment(device)?.effect ?: 0
+        val name = "自定义配色"
         viewModelScope.launch {
             val existing = favoriteEffectDao.findByEffectId(effectId)
             if (existing != null) favoriteEffectDao.delete(existing)
@@ -430,6 +441,79 @@ class CreateViewModel(
                 isError = false,
             )
         }
+    }
+
+    private fun saveGraphicFavorite(context: Context) {
+        if (_layers.value.isEmpty()) {
+            _status.value = CreateStatus("请先添加文字、时间或图片", isError = true)
+            return
+        }
+        _busy.value = true
+        viewModelScope.launch {
+            val outcome = runCatching {
+                withContext(Dispatchers.Default) {
+                    val cols = _gridCols.value
+                    val rows = _gridRows.value
+                    val frames = GraphicComposer.renderFrames(
+                        context = context,
+                        cols = cols,
+                        rows = rows,
+                        layers = _layers.value,
+                        options = graphicOptions(),
+                    )
+                    require(frames.any { frame -> frame.colors.any { it != 0 } }) { "内容还没有点亮任何灯珠" }
+                    val preview = GraphicComposer.renderPreview(
+                        context = context,
+                        cols = cols,
+                        rows = rows,
+                        layers = _layers.value,
+                        options = graphicOptions(),
+                    )
+                    customGraphicStore.add(
+                        gif = buildGif(frames, cols, rows),
+                        preview = previewBitmap(preview, cols, rows),
+                        speedPercent = (_speed.value * 100f).roundToInt(),
+                        name = graphicFavoriteName(),
+                    )
+                }
+            }
+            _busy.value = false
+            _status.value = outcome.fold(
+                onSuccess = {
+                    CreateStatus("已收藏自定义图文，可在设备页「动态字幕」中调用", isError = false)
+                },
+                onFailure = {
+                    CreateStatus(it.message ?: "收藏失败", isError = true)
+                },
+            )
+        }
+    }
+
+    /** 收藏名优先取第一层文字，便于在快捷卡片上分辨。 */
+    private fun graphicFavoriteName(): String {
+        val text = _layers.value
+            .firstOrNull { it.type == GraphicLayerType.TEXT }
+            ?.text
+            ?.trim()
+            .orEmpty()
+        return if (text.isNotEmpty()) text.take(FAVORITE_NAME_MAX_LENGTH) else "自定义图文"
+    }
+
+    /** 把预览网格放大成 PNG，卡片解码后直接铺在缩略图上。 */
+    private fun previewBitmap(colors: List<Int>, cols: Int, rows: Int): Bitmap {
+        val width = (cols * PREVIEW_CELL_SCALE).coerceAtLeast(1)
+        val height = (rows * PREVIEW_CELL_SCALE).coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(width * height)
+        for (y in 0 until height) {
+            val row = (y / PREVIEW_CELL_SCALE) * cols
+            for (x in 0 until width) {
+                val packed = colors.getOrElse(row + x / PREVIEW_CELL_SCALE) { 0 }
+                pixels[y * width + x] = packed or 0xFF000000.toInt()
+            }
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        return bitmap
     }
 
     private fun currentSegment(device: DeviceWithState): Segment? =

@@ -1,5 +1,6 @@
 package ca.cgagnier.wlednativeandroid.util
 
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -59,3 +60,30 @@ fun percentToChannel(percent: Float): Int =
  */
 fun normalizedToPercent(normalized: Float): Int =
     (normalized.coerceIn(0f, 1f) * CHANNEL_PERCENT_MAX).roundToInt()
+
+/**
+ * 亮度感知曲线指数。
+ *
+ * PWM 占空比与主观亮度近似幂律关系（约 γ=2.2）：线性映射会让低百分比仍然很亮、
+ * 高百分比之间几乎看不出差别。亮度滑杆单独走这条曲线，速度/强度仍保持线性，
+ * 否则会改变它们与固件参数的既有对应关系。
+ */
+private const val BRIGHTNESS_GAMMA = 2.2
+
+/**
+ * 亮度比例（0..1）→ `bri` 通道值（0..255），带感知曲线。
+ *
+ * 例：10% ≈ 2，50% ≈ 55，80% ≈ 156，100% = 255。
+ */
+fun normalizedToBrightnessChannel(normalized: Float): Int {
+    val value = normalized.coerceIn(0f, 1f).toDouble().pow(BRIGHTNESS_GAMMA)
+    return (value * CHANNEL_MAX).roundToInt().coerceIn(0, CHANNEL_MAX)
+}
+
+/**
+ * `bri` 通道值（0..255）→ 亮度滑杆比例（0..1），[normalizedToBrightnessChannel] 的反函数。
+ */
+fun brightnessChannelToNormalized(channel: Int): Float {
+    val value = channel.coerceIn(0, CHANNEL_MAX) / CHANNEL_MAX.toDouble()
+    return value.pow(1.0 / BRIGHTNESS_GAMMA).toFloat()
+}

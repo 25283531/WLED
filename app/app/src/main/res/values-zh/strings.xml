@@ -308,6 +308,7 @@
     <string name="isle_mood_aurora">幻彩极光</string>
     <string name="isle_mood_music">音乐律动</string>
     <string name="isle_mood_text">动态字幕</string>
+    <string name="isle_no_graphic_favorites">还没有收藏的自定义图文。在「创作」里设计好后点星标即可保存到这里。</string>
     <string name="isle_sleep_light">睡眠夜灯</string>
     <string name="isle_sleep_light_applied">已切换到睡眠夜灯暖光</string>
     <string name="isle_nightlight_remaining">剩余 %1$s</string>

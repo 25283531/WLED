@@ -310,6 +310,7 @@
     <string name="isle_mood_aurora">Aurora</string>
     <string name="isle_mood_music">Musik</string>
     <string name="isle_mood_text">Text</string>
+    <string name="isle_no_graphic_favorites">Noch keine gespeicherten Texte. Erstelle einen unter „Erstellen“ und tippe auf den Stern.</string>
     <string name="isle_sleep_light">Nachtlicht</string>
     <string name="isle_sleep_light_applied">Warmes Nachtlicht aktiviert</string>
     <string name="isle_nightlight_remaining">Noch %1$s</string>
