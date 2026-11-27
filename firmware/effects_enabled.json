@@ -29,675 +29,578 @@
   "name": "Rainbow",
   "fn": null
  },
- null,
  {
-  "idx": 6,
+  "idx": 5,
   "fx": "FX_MODE_THEATER_CHASE",
   "name": "Theater",
   "fn": null
  },
  {
-  "idx": 7,
+  "idx": 6,
   "fx": "FX_MODE_RUNNING_LIGHTS",
   "name": "Running",
   "fn": null
  },
  {
-  "idx": 8,
+  "idx": 7,
   "fx": "FX_MODE_DISSOLVE",
   "name": "Dissolve",
   "fn": null
  },
  {
-  "idx": 9,
+  "idx": 8,
   "fx": "FX_MODE_MULTI_STROBE",
   "name": "Strobe Mega",
   "fn": null
  },
  {
-  "idx": 10,
+  "idx": 9,
   "fx": "FX_MODE_CHASE_COLOR",
   "name": "Chase",
   "fn": null
  },
  {
-  "idx": 11,
+  "idx": 10,
   "fx": "FX_MODE_CHASE_FLASH_RANDOM",
   "name": "Chase Flash Rnd",
   "fn": null
  },
  {
-  "idx": 12,
+  "idx": 11,
   "fx": "FX_MODE_COLORFUL",
   "name": "Colorful",
   "fn": null
  },
  {
-  "idx": 13,
+  "idx": 12,
   "fx": "FX_MODE_FIREWORKS",
   "name": "Fireworks",
   "fn": null
  },
  {
-  "idx": 14,
-  "fx": "FX_MODE_FIRE_FLICKER",
-  "name": "Fire Flicker",
-  "fn": null
- },
- {
-  "idx": 15,
+  "idx": 13,
   "fx": "FX_MODE_GRADIENT",
   "name": "Gradient",
   "fn": null
  },
  {
-  "idx": 16,
+  "idx": 14,
   "fx": "FX_MODE_ROLLINGBALLS",
   "name": "Rolling Balls",
   "fn": null
  },
  {
-  "idx": 17,
+  "idx": 15,
   "fx": "FX_MODE_FAIRY",
   "name": "Fairy",
   "fn": null
  },
  {
-  "idx": 18,
+  "idx": 16,
   "fx": "FX_MODE_IMAGE",
   "name": "Image",
   "fn": null
  },
  {
-  "idx": 19,
-  "fx": "FX_MODE_TRICOLOR_CHASE",
-  "name": "Chase 3",
-  "fn": null
- },
- {
-  "idx": 20,
-  "fx": "FX_MODE_TRICOLOR_FADE",
-  "name": "Tri Fade",
-  "fn": null
- },
- {
-  "idx": 21,
+  "idx": 17,
   "fx": "FX_MODE_JUGGLE",
   "name": "Juggle",
   "fn": null
  },
  {
-  "idx": 22,
-  "fx": "FX_MODE_PALETTE",
-  "name": "Palette",
-  "fn": null
- },
- {
-  "idx": 23,
+  "idx": 18,
   "fx": "FX_MODE_COLORWAVES",
   "name": "Colorwaves",
   "fn": null
  },
  {
-  "idx": 24,
-  "fx": "FX_MODE_FILLNOISE8",
-  "name": "Fill Noise",
-  "fn": null
- },
- {
-  "idx": 25,
+  "idx": 19,
   "fx": "FX_MODE_NOISE16_4",
   "name": "Noise 4",
   "fn": null
  },
  {
-  "idx": 26,
+  "idx": 20,
   "fx": "FX_MODE_COLORTWINKLE",
   "name": "Colortwinkles",
   "fn": null
  },
  {
-  "idx": 27,
-  "fx": "FX_MODE_LAKE",
-  "name": "Lake",
-  "fn": null
- },
- {
-  "idx": 28,
+  "idx": 21,
   "fx": "FX_MODE_METEOR",
   "name": "Meteor",
   "fn": null
  },
  {
-  "idx": 29,
+  "idx": 22,
   "fx": "FX_MODE_COPY",
   "name": "Copy Segment",
   "fn": null
  },
  {
-  "idx": 30,
+  "idx": 23,
   "fx": "FX_MODE_RAILWAY",
   "name": "Railway",
   "fn": null
  },
  {
-  "idx": 31,
+  "idx": 24,
   "fx": "FX_MODE_RIPPLE",
   "name": "Ripple",
   "fn": null
  },
  {
-  "idx": 32,
+  "idx": 25,
   "fx": "FX_MODE_TWINKLEFOX",
   "name": "Twinklefox",
   "fn": null
  },
  {
-  "idx": 33,
+  "idx": 26,
   "fx": "FX_MODE_GLITTER",
   "name": "Glitter",
   "fn": null
  },
  {
-  "idx": 34,
+  "idx": 27,
   "fx": "FX_MODE_STARBURST",
   "name": "Fireworks Starburst",
   "fn": null
  },
  {
-  "idx": 35,
+  "idx": 28,
   "fx": "FX_MODE_BOUNCINGBALLS",
   "name": "Bouncing Balls",
   "fn": null
  },
  {
-  "idx": 36,
-  "fx": "FX_MODE_POPCORN",
-  "name": "Popcorn",
-  "fn": null
- },
- {
-  "idx": 37,
-  "fx": "FX_MODE_DRIP",
-  "name": "Drip",
-  "fn": null
- },
- {
-  "idx": 38,
-  "fx": "FX_MODE_PLASMA",
-  "name": "Plasma",
-  "fn": null
- },
- {
-  "idx": 39,
+  "idx": 29,
   "fx": "FX_MODE_SUNRISE",
   "name": "Sunrise",
   "fn": null
  },
  {
-  "idx": 40,
-  "fx": "FX_MODE_PHASED",
-  "name": "Phased",
-  "fn": null
- },
- {
-  "idx": 41,
-  "fx": "FX_MODE_SINEWAVE",
-  "name": "Sine",
-  "fn": null
- },
- {
-  "idx": 42,
-  "fx": "FX_MODE_FLOW",
-  "name": "Flow",
-  "fn": null
- },
- {
-  "idx": 43,
-  "fx": "FX_MODE_CHUNCHUN",
-  "name": "Chunchun",
-  "fn": null
- },
- {
-  "idx": 44,
-  "fx": "FX_MODE_DANCING_SHADOWS",
-  "name": "Dancing Shadows",
-  "fn": null
- },
- {
-  "idx": 45,
-  "fx": "FX_MODE_WASHING_MACHINE",
-  "name": "Washing Machine",
-  "fn": null
- },
- {
-  "idx": 46,
-  "fx": "FX_MODE_BLENDS",
-  "name": "Blends",
-  "fn": null
- },
- {
-  "idx": 47,
+  "idx": 30,
   "fx": "FX_MODE_2DCRAZYBEES",
   "name": "Crazy Bees",
   "fn": null
  },
  {
-  "idx": 48,
+  "idx": 31,
   "fx": "FX_MODE_2DGHOSTRIDER",
   "name": "Ghost Rider",
   "fn": null
  },
  {
-  "idx": 49,
+  "idx": 32,
   "fx": "FX_MODE_2DBLOBS",
   "name": "Blobs",
   "fn": null
  },
  {
-  "idx": 50,
+  "idx": 33,
   "fx": "FX_MODE_2DSCROLLTEXT",
   "name": "Scrolling Text",
   "fn": null
  },
  {
-  "idx": 51,
+  "idx": 34,
   "fx": "FX_MODE_2DDISTORTIONWAVES",
   "name": "Distortion Waves",
   "fn": null
  },
  {
-  "idx": 52,
+  "idx": 35,
   "fx": "FX_MODE_2DSOAP",
   "name": "Soap",
   "fn": null
  },
  {
-  "idx": 53,
+  "idx": 36,
   "fx": "FX_MODE_2DOCTOPUS",
   "name": "Octopus",
   "fn": null
  },
  {
-  "idx": 54,
+  "idx": 37,
   "fx": "FX_MODE_2DWAVINGCELL",
   "name": "Waving Cell",
   "fn": null
  },
  {
-  "idx": 55,
+  "idx": 38,
   "fx": "FX_MODE_PIXELS",
   "name": "Pixels",
   "fn": null
  },
  {
-  "idx": 56,
+  "idx": 39,
   "fx": "FX_MODE_PIXELWAVE",
   "name": "Pixelwave",
   "fn": null
  },
  {
-  "idx": 57,
+  "idx": 40,
   "fx": "FX_MODE_JUGGLES",
   "name": "Juggles",
   "fn": null
  },
  {
-  "idx": 58,
+  "idx": 41,
   "fx": "FX_MODE_MATRIPIX",
   "name": "Matripix",
   "fn": null
  },
  {
-  "idx": 59,
+  "idx": 42,
   "fx": "FX_MODE_GRAVIMETER",
   "name": "Gravimeter",
   "fn": null
  },
  {
-  "idx": 60,
+  "idx": 43,
   "fx": "FX_MODE_PLASMOID",
   "name": "Plasmoid",
   "fn": null
  },
  {
-  "idx": 61,
+  "idx": 44,
   "fx": "FX_MODE_PUDDLES",
   "name": "Puddles",
   "fn": null
  },
  {
-  "idx": 62,
+  "idx": 45,
   "fx": "FX_MODE_MIDNOISE",
   "name": "Midnoise",
   "fn": null
  },
  {
-  "idx": 63,
+  "idx": 46,
   "fx": "FX_MODE_WATERFALL",
   "name": "Waterfall",
   "fn": null
  },
  {
-  "idx": 64,
+  "idx": 47,
   "fx": "FX_MODE_FREQPIXELS",
   "name": "Freqpixels",
   "fn": null
  },
  {
-  "idx": 65,
+  "idx": 48,
   "fx": "FX_MODE_NOISEFIRE",
   "name": "Noisefire",
   "fn": null
  },
  {
-  "idx": 66,
+  "idx": 49,
   "fx": "FX_MODE_NOISEMOVE",
   "name": "Noisemove",
   "fn": null
  },
  {
-  "idx": 67,
+  "idx": 50,
   "fx": "FX_MODE_2DNOISE",
   "name": "Noise2D",
   "fn": null
  },
  {
-  "idx": 68,
+  "idx": 51,
   "fx": "FX_MODE_PACMAN",
   "name": "PacMan",
   "fn": null
  },
  {
-  "idx": 69,
+  "idx": 52,
   "fx": "FX_MODE_2DDNA",
   "name": "DNA",
   "fn": null
  },
  {
-  "idx": 70,
+  "idx": 53,
   "fx": "FX_MODE_2DMATRIX",
   "name": "Matrix",
   "fn": null
  },
  {
-  "idx": 71,
+  "idx": 54,
   "fx": "FX_MODE_2DMETABALLS",
   "name": "Metaballs",
   "fn": null
  },
  {
-  "idx": 72,
+  "idx": 55,
   "fx": "FX_MODE_GRAVCENTER",
   "name": "Gravcenter",
   "fn": null
  },
  {
-  "idx": 73,
+  "idx": 56,
   "fx": "FX_MODE_2DFUNKYPLANK",
   "name": "Funky Plank",
   "fn": null
  },
  {
-  "idx": 74,
+  "idx": 57,
   "fx": "FX_MODE_2DPULSER",
   "name": "Pulser",
   "fn": null
  },
  {
-  "idx": 75,
+  "idx": 58,
   "fx": "FX_MODE_BLURZ",
   "name": "Blurz",
   "fn": null
  },
  {
-  "idx": 76,
+  "idx": 59,
   "fx": "FX_MODE_2DDRIFT",
   "name": "Drift",
   "fn": null
  },
  {
-  "idx": 77,
+  "idx": 60,
   "fx": "FX_MODE_2DWAVERLY",
   "name": "Waverly",
   "fn": null
  },
  {
-  "idx": 78,
+  "idx": 61,
   "fx": "FX_MODE_2DSUNRADIATION",
   "name": "Sun Radiation",
   "fn": null
  },
  {
-  "idx": 79,
+  "idx": 62,
   "fx": "FX_MODE_2DCOLOREDBURSTS",
   "name": "Colored Bursts",
   "fn": null
  },
  {
-  "idx": 80,
+  "idx": 63,
   "fx": "FX_MODE_2DJULIA",
   "name": "Julia",
   "fn": null
  },
  {
-  "idx": 81,
+  "idx": 64,
   "fx": "FX_MODE_2DGAMEOFLIFE",
   "name": "Game Of Life",
   "fn": null
  },
  {
-  "idx": 82,
+  "idx": 65,
   "fx": "FX_MODE_2DTARTAN",
   "name": "Tartan",
   "fn": null
  },
  {
-  "idx": 83,
+  "idx": 66,
   "fx": "FX_MODE_2DPOLARLIGHTS",
   "name": "Polar Lights",
   "fn": null
  },
  {
-  "idx": 84,
+  "idx": 67,
   "fx": "FX_MODE_2DSWIRL",
   "name": "Swirl",
   "fn": null
  },
  {
-  "idx": 85,
+  "idx": 68,
   "fx": "FX_MODE_2DLISSAJOUS",
   "name": "Lissajous",
   "fn": null
  },
  {
-  "idx": 86,
+  "idx": 69,
   "fx": "FX_MODE_2DFRIZZLES",
   "name": "Frizzles",
   "fn": null
  },
  {
-  "idx": 87,
+  "idx": 70,
   "fx": "FX_MODE_FLOWSTRIPE",
   "name": "Flow Stripe",
   "fn": null
  },
  {
-  "idx": 88,
+  "idx": 71,
   "fx": "FX_MODE_2DHIPHOTIC",
   "name": "Hiphotic",
   "fn": null
  },
  {
-  "idx": 89,
+  "idx": 72,
   "fx": "FX_MODE_2DSINDOTS",
   "name": "Sindots",
   "fn": null
  },
  {
-  "idx": 90,
+  "idx": 73,
   "fx": "FX_MODE_2DDNASPIRAL",
   "name": "DNA Spiral",
   "fn": null
  },
  {
-  "idx": 91,
+  "idx": 74,
   "fx": "FX_MODE_2DBLACKHOLE",
   "name": "Black Hole",
   "fn": null
  },
  {
-  "idx": 92,
+  "idx": 75,
   "fx": "FX_MODE_WAVESINS",
   "name": "Wavesins",
   "fn": null
  },
  {
-  "idx": 93,
+  "idx": 76,
   "fx": "FX_MODE_ROCKTAVES",
   "name": "Rocktaves",
   "fn": null
  },
  {
-  "idx": 94,
+  "idx": 77,
   "fx": "FX_MODE_PARTICLEVORTEX",
   "name": "PS Vortex",
   "fn": null
  },
  {
-  "idx": 95,
+  "idx": 78,
   "fx": "FX_MODE_PARTICLEPERLIN",
   "name": "PS Fuzzy Noise",
   "fn": null
  },
  {
-  "idx": 96,
+  "idx": 79,
   "fx": "FX_MODE_PARTICLEPIT",
   "name": "PS Ballpit",
   "fn": null
  },
  {
-  "idx": 97,
+  "idx": 80,
   "fx": "FX_MODE_PARTICLEBOX",
   "name": "PS Box",
   "fn": null
  },
  {
-  "idx": 98,
+  "idx": 81,
   "fx": "FX_MODE_PARTICLEATTRACTOR",
   "name": "PS Attractor",
   "fn": null
  },
  {
-  "idx": 99,
+  "idx": 82,
   "fx": "FX_MODE_PARTICLESPRAY",
   "name": "PS Spray",
   "fn": null
  },
  {
-  "idx": 100,
+  "idx": 83,
   "fx": "FX_MODE_PARTICLEGHOSTRIDER",
   "name": "PS Ghost Rider",
   "fn": null
  },
  {
-  "idx": 101,
+  "idx": 84,
   "fx": "FX_MODE_PARTICLEBLOBS",
   "name": "PS Blobs",
   "fn": null
  },
  {
-  "idx": 102,
+  "idx": 85,
   "fx": "FX_MODE_PSDANCINGSHADOWS",
   "name": "PS Dancing Shadows",
   "fn": null
  },
  {
-  "idx": 103,
+  "idx": 86,
   "fx": "FX_MODE_PSCHASE",
   "name": "PS Chase",
   "fn": null
  },
  {
-  "idx": 104,
+  "idx": 87,
   "fx": "FX_MODE_PS1DGEQ",
   "name": "PS GEQ 1D",
   "fn": null
  },
  {
-  "idx": 105,
+  "idx": 88,
   "fx": "FX_MODE_PS1DSPRINGY",
   "name": "PS Springy",
   "fn": null
  },
  {
-  "idx": 106,
+  "idx": 89,
   "fx": "FX_MODE_PARTICLEGALAXY",
   "name": "PS Galaxy",
   "fn": null
  },
  {
-  "idx": 107,
+  "idx": 90,
   "fx": "FX_MODE_COLORCLOUDS",
   "name": "Color Clouds",
   "fn": null
  },
  {
-  "idx": 108,
+  "idx": 91,
   "fx": "FX_MODE_LUMI_AURORA",
   "name": "极光之舞",
   "fn": null
  },
  {
-  "idx": 109,
+  "idx": 92,
   "fx": "FX_MODE_LUMI_FOREST",
   "name": "Lumi Forest",
   "fn": null
  },
  {
-  "idx": 110,
+  "idx": 93,
   "fx": "FX_MODE_LUMI_CAUSTICS",
   "name": "Lumi Caustics",
   "fn": null
  },
  {
-  "idx": 111,
+  "idx": 94,
   "fx": "FX_MODE_STAGELIGHT",
   "name": "Stage Light",
   "fn": null
  },
  {
-  "idx": 112,
+  "idx": 95,
   "fx": "FX_MODE_TRIBREATH",
   "name": "Tri-band Breath",
   "fn": null
  },
  {
-  "idx": 113,
+  "idx": 96,
   "fx": "FX_MODE_AUDIOSPIRAL",
   "name": "Audio Spiral",
   "fn": null
  },
  {
-  "idx": 114,
+  "idx": 97,
   "fx": "FX_MODE_SONICPULSE",
   "name": "Sonic Pulse",
   "fn": null
  },
  {
-  "idx": 115,
+  "idx": 98,
   "fx": "FX_MODE_BASSLAVA",
   "name": "Bass Lava",
   "fn": null
  },
  {
-  "idx": 116,
+  "idx": 99,
   "fx": "FX_MODE_SPECTRUMLAMP",
   "name": "Spectrum Lamp",
   "fn": null
  },
  {
-  "idx": 117,
+  "idx": 100,
   "fx": "FX_MODE_AUDIOSOLUTION",
   "name": "Audio Solution",
   "fn": null

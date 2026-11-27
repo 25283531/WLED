@@ -6,11 +6,17 @@ import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import ca.cgagnier.wlednativeandroid.di.IO_DISPATCHER
 import ca.cgagnier.wlednativeandroid.di.appModule
+import ca.cgagnier.wlednativeandroid.repository.FavoriteEffectDao
 import ca.cgagnier.wlednativeandroid.service.DeviceConnectionManager
 import ca.cgagnier.wlednativeandroid.service.WidgetStateSync
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectIdRenumber
 import ca.cgagnier.wlednativeandroid.util.AppLanguageManager
 import ca.cgagnier.wlednativeandroid.widget.WidgetPreviewPublisher
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -49,5 +55,17 @@ class DevicesApplication : Application() {
         }
 
         WidgetPreviewPublisher.publishIfNeeded(this)
+
+        // 灯效重新紧凑编号后，一次性把本地收藏里的旧 fx id 迁移到新编号
+        val appScope: CoroutineScope = koin.get()
+        val ioDispatcher: CoroutineDispatcher = koin.get(IO_DISPATCHER)
+        val favoriteEffectDao: FavoriteEffectDao = koin.get()
+        appScope.launch(ioDispatcher) {
+            try {
+                EffectIdRenumber.migrateFavorites(this@DevicesApplication, favoriteEffectDao)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                Log.w("DevicesApplication", "Favorite effect id migration failed: ${e.message}")
+            }
+        }
     }
 }

@@ -141,7 +141,11 @@ private const val SOLID_PALETTE_ID = 2
  * 多灯同步和定时收进顶部的两个微缩胶囊，点开是底部弹层 —— 它们不是每天都改的参数，不该占据主视觉。
  */
 @Composable
-fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel = koinViewModel()) {
+fun DeviceScreen(
+    modifier: Modifier = Modifier,
+    onOpenTextEditor: () -> Unit = {},
+    viewModel: DeviceHomeViewModel = koinViewModel(),
+) {
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val selectedMac by viewModel.selectedMacAddress.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -209,6 +213,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
     val hideSpeed = remember(currentEffect) { EffectTuningPolicy.hidesSpeed(currentEffect) }
     val hideIntensity = remember(currentEffect) { EffectTuningPolicy.hidesIntensity(currentEffect) }
     val hidePalette = remember(currentEffect) { EffectTuningPolicy.hidesPalette(currentEffect) }
+    val hideColorRow = remember(currentEffect) { EffectTuningPolicy.hidesColorRow(currentEffect) }
+    val hiddenPaletteIds = remember(currentEffect) { EffectTuningPolicy.hiddenPaletteIds(currentEffect) }
     val hideSolidPalette = remember(currentEffect) { EffectTuningPolicy.hidesSolidPalette(currentEffect) }
     val blinkMode = remember(currentEffect) { EffectTuningPolicy.isBlink(currentEffect) }
     val solidMode = remember(currentEffect) { EffectTuningPolicy.isSolid(currentEffect) }
@@ -306,6 +312,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
 
             item {
                 EffectTuning(
+                    effectId = currentEffect,
                     expanded = tuningExpanded,
                     speed = segment?.effectSpeed ?: 0,
                     intensity = segment?.effectIntensity ?: 0,
@@ -323,6 +330,8 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     hideSpeed = hideSpeed,
                     hideIntensity = hideIntensity,
                     hidePalette = hidePalette,
+                    hideColorRow = hideColorRow,
+                    hiddenPaletteIds = hiddenPaletteIds,
                     hideSolidPalette = hideSolidPalette,
                     blinkMode = blinkMode,
                     solidMode = solidMode,
@@ -375,6 +384,7 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                     onSelectPaletteTemplate = { template ->
                         device?.let { viewModel.applyPaletteTemplate(it, template) }
                     },
+                    onOpenTextEditor = onOpenTextEditor,
                 )
             }
 
@@ -413,6 +423,9 @@ fun DeviceScreen(modifier: Modifier = Modifier, viewModel: DeviceHomeViewModel =
                             Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.applyEffect(target, card.effect.id, card.favorite)
+                            if (EffectTuningPolicy.isScrollingText(card.effect.id)) {
+                                onOpenTextEditor()
+                            }
                         }
                     },
                     onToggleFavorite = { effect ->
@@ -760,6 +773,7 @@ private fun BrightnessRow(value: Int, onCommit: (Int) -> Unit) {
  */
 @Composable
 private fun EffectTuning(
+    effectId: Int?,
     expanded: Boolean,
     speed: Int,
     intensity: Int,
@@ -776,6 +790,8 @@ private fun EffectTuning(
     hideSpeed: Boolean,
     hideIntensity: Boolean,
     hidePalette: Boolean,
+    hideColorRow: Boolean,
+    hiddenPaletteIds: Set<Int>,
     hideSolidPalette: Boolean,
     blinkMode: Boolean,
     solidMode: Boolean,
@@ -808,21 +824,42 @@ private fun EffectTuning(
     onSpectrumPalette: (TriColorPalette) -> Unit,
     onEditSpectrumColor: (Int) -> Unit,
     onSelectPaletteTemplate: (PaletteTemplate) -> Unit,
+    onOpenTextEditor: () -> Unit,
 ) {
-    var localSpeed by remember(speed) { mutableFloatStateOf(channelToNormalized(speed)) }
-    var localIntensity by remember(intensity) {
-        mutableFloatStateOf(channelToNormalized(intensity))
+    // 复制段落等灯效的有效通道区间只占滑杆前 10%，这里用缩放系数还原成 0..100% 的直觉刻度。
+    val sliderScale = remember(effectId) { EffectTuningPolicy.sliderScale(effectId) }
+    var localSpeed by remember(speed, sliderScale) {
+        mutableFloatStateOf(EffectTuningPolicy.channelToSlider(effectId, speed))
+    }
+    var localIntensity by remember(intensity, sliderScale) {
+        mutableFloatStateOf(EffectTuningPolicy.channelToSlider(effectId, intensity))
     }
     val intensityLabelText = stringResource(
         when (intensityLabel) {
             EffectTuningPolicy.IntensityLabel.WIDTH -> R.string.isle_effect_intensity_width
             EffectTuningPolicy.IntensityLabel.STROBE_COUNT -> R.string.isle_effect_intensity_strobe_count
             EffectTuningPolicy.IntensityLabel.FIREWORK_RATE -> R.string.isle_effect_intensity_firework_rate
+            EffectTuningPolicy.IntensityLabel.SOFTNESS -> R.string.isle_effect_intensity_softness
+            EffectTuningPolicy.IntensityLabel.DOT_COUNT -> R.string.isle_effect_intensity_dot_count
+            EffectTuningPolicy.IntensityLabel.TEXT_Y_OFFSET -> R.string.isle_effect_intensity_text_y
+            EffectTuningPolicy.IntensityLabel.SMOOTHNESS -> R.string.isle_effect_intensity_smoothness
+            EffectTuningPolicy.IntensityLabel.FRAGMENTS -> R.string.isle_effect_intensity_fragments
+            EffectTuningPolicy.IntensityLabel.HUE_SHIFT -> R.string.isle_effect_intensity_hue_shift
+            EffectTuningPolicy.IntensityLabel.BALL_COUNT -> R.string.isle_effect_intensity_ball_count
             EffectTuningPolicy.IntensityLabel.DEFAULT -> R.string.isle_effect_intensity
         },
     )
+    val speedLabelText = stringResource(
+        when (EffectTuningPolicy.speedLabel(effectId)) {
+            EffectTuningPolicy.SpeedLabel.BLINK_RATE -> R.string.isle_effect_speed_blink_rate
+            EffectTuningPolicy.SpeedLabel.SCROLL_SPEED -> R.string.isle_effect_speed_scroll
+            EffectTuningPolicy.SpeedLabel.DURATION_MIN -> R.string.isle_effect_speed_duration
+            EffectTuningPolicy.SpeedLabel.SPAWN_CHANCE -> R.string.isle_effect_speed_chance
+            EffectTuningPolicy.SpeedLabel.DEFAULT -> R.string.isle_effect_speed
+        },
+    )
     // 焰火的颜色只由「颜色槽派生」的 2–5 号调色板生效，其余模板下改色块不会有任何效果。
-    val showColorRow = !colorsOnlyViaPalette || palette in 2..5
+    val showColorRow = !hideColorRow && (!colorsOnlyViaPalette || palette in 2..5)
 
     Column(modifier = Modifier.padding(top = 14.dp)) {
         Row(
@@ -859,18 +896,15 @@ private fun EffectTuning(
                         normalizedToPercent(localIntensity),
                     )
                     hideIntensity -> stringResource(
-                        R.string.isle_effect_tuning_summary_speed,
+                        R.string.isle_effect_tuning_summary_custom_single,
+                        speedLabelText,
                         normalizedToPercent(localSpeed),
-                    )
-                    intensityLabel != EffectTuningPolicy.IntensityLabel.DEFAULT -> stringResource(
-                        R.string.isle_effect_tuning_summary_custom,
-                        normalizedToPercent(localSpeed),
-                        intensityLabelText,
-                        normalizedToPercent(localIntensity),
                     )
                     else -> stringResource(
-                        R.string.isle_effect_tuning_summary,
+                        R.string.isle_effect_tuning_summary_both,
+                        speedLabelText,
                         normalizedToPercent(localSpeed),
+                        intensityLabelText,
                         normalizedToPercent(localIntensity),
                     )
                 },
@@ -973,11 +1007,11 @@ private fun EffectTuning(
                     } else {
                         if (!hideSpeed) {
                             TuningSlider(
-                                label = stringResource(R.string.isle_effect_speed),
+                                label = speedLabelText,
                                 value = localSpeed,
                                 onValueChange = { localSpeed = it },
                                 onCommit = {
-                                    onSpeed(normalizedToChannel(localSpeed))
+                                    onSpeed(EffectTuningPolicy.sliderToChannel(effectId, localSpeed))
                                 },
                             )
                         }
@@ -991,7 +1025,7 @@ private fun EffectTuning(
                                 value = localIntensity,
                                 onValueChange = { localIntensity = it },
                                 onCommit = {
-                                    onIntensity(normalizedToChannel(localIntensity))
+                                    onIntensity(EffectTuningPolicy.sliderToChannel(effectId, localIntensity))
                                 },
                             )
                             if (blinkMode) {
@@ -1004,10 +1038,21 @@ private fun EffectTuning(
                             }
                         }
 
+                        if (EffectTuningPolicy.isScrollingText(effectId)) {
+                            Text(
+                                text = stringResource(R.string.isle_text_editor_open),
+                                color = IsleColors.Cyan,
+                                fontSize = 12.5.sp,
+                                modifier = Modifier
+                                    .padding(top = 10.dp)
+                                    .clickable(onClick = onOpenTextEditor),
+                            )
+                        }
+
                         if (showColorRow) {
                             Text(
                                 text = stringResource(
-                                    if (solidMode || palette == SOLID_PALETTE_ID) {
+                                    if (solidMode || (!hidePalette && palette == SOLID_PALETTE_ID)) {
                                         R.string.isle_solid_color
                                     } else {
                                         R.string.isle_effect_color
@@ -1051,6 +1096,7 @@ private fun EffectTuning(
                                 templates = paletteTemplates,
                                 templateSlots = paletteSlots,
                                 showSolid = !hideSolidPalette,
+                                hiddenPaletteIds = hiddenPaletteIds,
                                 onSelect = onPalette,
                                 onSelectTemplate = onSelectPaletteTemplate,
                                 modifier = Modifier.padding(top = 14.dp),
@@ -1079,6 +1125,7 @@ private fun PalettePicker(
     templates: List<PaletteTemplate>,
     templateSlots: Map<String, Int>,
     showSolid: Boolean,
+    hiddenPaletteIds: Set<Int> = emptySet(),
     onSelect: (Int) -> Unit,
     onSelectTemplate: (PaletteTemplate) -> Unit,
     modifier: Modifier = Modifier,
@@ -1128,8 +1175,8 @@ private fun PalettePicker(
         else -> palettes.firstOrNull { it.id == selected }
             ?: templatePalettes.firstOrNull { it.second.id == selected }?.second
     }
-    val visiblePalettes = remember(palettes, dynamicPreviews) {
-        palettes.filterNot { it.id == SOLID_PALETTE_ID }
+    val visiblePalettes = remember(palettes, dynamicPreviews, hiddenPaletteIds) {
+        palettes.filterNot { it.id == SOLID_PALETTE_ID || it.id in hiddenPaletteIds }
             .map { dynamicPreviews[it.id] ?: it }
     }
     Column(modifier = modifier) {

@@ -69,6 +69,8 @@ fun HomeScaffold(
     openChangelogs: () -> Unit = {},
 ) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(HomeTab.DEVICE.ordinal) }
+    // 选中「动态字幕」等字画灯效时跳到创作页的自定义图文；用递增计数触发一次模式切换。
+    var composerRequest by rememberSaveable { mutableIntStateOf(0) }
     val selectedTab = HomeTab.entries[selectedTabIndex]
     val tabStateHolder = rememberSaveableStateHolder()
     val selectedDeviceStore = koinInject<SelectedDeviceStore>()
@@ -76,6 +78,11 @@ fun HomeScaffold(
     // 深链带过来的设备直接成为当前设备，其它三个页签也跟着切过去
     LaunchedEffect(initialDeviceMacAddress) {
         initialDeviceMacAddress?.let { selectedDeviceStore.select(it.macAddress) }
+    }
+
+    val openTextEditor = {
+        composerRequest++
+        selectedTabIndex = HomeTab.CREATE.ordinal
     }
 
     // 光屿是固定的深色视觉，Material 组件（弹层、涟漪、默认文字色）也必须跟着暗下来，
@@ -110,9 +117,9 @@ fun HomeScaffold(
             ) {
                 tabStateHolder.SaveableStateProvider(selectedTab.name) {
                     when (selectedTab) {
-                        HomeTab.DEVICE -> DeviceScreen()
-                        HomeTab.LIBRARY -> LibraryScreen()
-                        HomeTab.CREATE -> CreateScreen()
+                        HomeTab.DEVICE -> DeviceScreen(onOpenTextEditor = openTextEditor)
+                        HomeTab.LIBRARY -> LibraryScreen(onOpenTextEditor = openTextEditor)
+                        HomeTab.CREATE -> CreateScreen(openComposerRequest = composerRequest)
                         HomeTab.SETTINGS -> SettingsScreen()
                     }
                 }

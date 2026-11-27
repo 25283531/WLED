@@ -1,6 +1,8 @@
 package ca.cgagnier.wlednativeandroid.ui.create
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +26,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -34,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -77,11 +81,15 @@ private const val WHEEL_RING_DP = 26
 /**
  * 创作工坊：色轮调色 + 自定义图文。
  *
- * 色轮取的两色会实时压到灯上；字幕直接写进固件的滚动字幕效果；
- * 像素画板则编码成 GIF 上传到设备后用 `Image` 效果显示。
+ * 色轮取的两色会实时压到灯上；自定义图文把文字 / 时间 / 图片叠加后按灯珠矩阵
+ * 栅格化成 GIF 上传，用 `Image` 效果显示，因此中文与 Emoji 也能正常出现在灯上。
  */
 @Composable
-fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koinViewModel()) {
+fun CreateScreen(
+    modifier: Modifier = Modifier,
+    openComposerRequest: Int = 0,
+    viewModel: CreateViewModel = koinViewModel(),
+) {
     val context = LocalContext.current
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val selectedMac by viewModel.selectedMacAddress.collectAsStateWithLifecycle()
@@ -90,9 +98,8 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
     val secondary by viewModel.secondary.collectAsStateWithLifecycle()
     val saturation by viewModel.saturation.collectAsStateWithLifecycle()
     val speed by viewModel.speed.collectAsStateWithLifecycle()
-    val text by viewModel.text.collectAsStateWithLifecycle()
-    val tool by viewModel.tool.collectAsStateWithLifecycle()
-    val brushColor by viewModel.brushColor.collectAsStateWithLifecycle()
+    val layers by viewModel.layers.collectAsStateWithLifecycle()
+    val frameCount by viewModel.frameCount.collectAsStateWithLifecycle()
     val grid by viewModel.grid.collectAsStateWithLifecycle()
     val cols by viewModel.gridCols.collectAsStateWithLifecycle()
     val rows by viewModel.gridRows.collectAsStateWithLifecycle()
@@ -100,11 +107,34 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
     val status by viewModel.status.collectAsStateWithLifecycle()
     val templateColors by viewModel.templateColors.collectAsStateWithLifecycle()
     val paletteTemplates by viewModel.paletteTemplates.collectAsStateWithLifecycle()
+    val reverse by viewModel.reverse.collectAsStateWithLifecycle()
+    val trailPercent by viewModel.trailPercent.collectAsStateWithLifecycle()
+    val darkCutoff by viewModel.darkCutoff.collectAsStateWithLifecycle()
+    val background by viewModel.background.collectAsStateWithLifecycle()
     var templateColorIndex by remember { mutableIntStateOf(-1) }
+    var imageLayerId by remember { mutableStateOf<Long?>(null) }
+    var showBackgroundPicker by remember { mutableStateOf(false) }
 
     val device = devices.firstOrNull { it.device.macAddress == selectedMac }
 
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            imageLayerId?.let { id ->
+                viewModel.updateLayer(id) { it.copy(imageUri = uri.toString()) }
+            }
+        }
+        imageLayerId = null
+    }
+
     LaunchedEffect(device) { viewModel.configureGrid(device) }
+    // 从设备页/灯效库选中「动态字幕」时，自动切到自定义图文分段
+    LaunchedEffect(openComposerRequest) {
+        if (openComposerRequest > 0) viewModel.selectMode(CreateMode.PIXEL)
+    }
+    // 图层或画布尺寸变化后重新栅格化预览
+    LaunchedEffect(layers, cols, rows, speed, reverse, trailPercent, darkCutoff, background) {
+        viewModel.refreshPreview(context)
+    }
     LaunchedEffect(status) {
         status?.let {
             Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
@@ -205,18 +235,30 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                     onSpeed = viewModel::setSpeed,
                 )
 
-                CreateMode.PIXEL -> PixelPanel(
+                CreateMode.PIXEL -> GraphicPanel(
                     grid = grid,
                     cols = cols,
                     rows = rows,
-                    text = text,
-                    tool = tool,
-                    brushColor = brushColor,
-                    onPaint = viewModel::paint,
-                    onTextChange = viewModel::setText,
-                    onSelectTool = viewModel::setTool,
-                    onSelectColor = viewModel::setBrushColor,
-                    onClear = viewModel::clearGrid,
+                    layers = layers,
+                    frameCount = frameCount,
+                    speed = speed,
+                    reverse = reverse,
+                    trailPercent = trailPercent,
+                    darkCutoff = darkCutoff,
+                    background = background,
+                    onSpeed = viewModel::setSpeed,
+                    onReverse = viewModel::setReverse,
+                    onTrail = viewModel::setTrailPercent,
+                    onDarkCutoff = viewModel::setDarkCutoff,
+                    onPickBackground = { showBackgroundPicker = true },
+                    onAddLayer = viewModel::addLayer,
+                    onUpdateLayer = viewModel::updateLayer,
+                    onRemoveLayer = viewModel::removeLayer,
+                    onMoveLayer = viewModel::moveLayer,
+                    onPickImage = { id ->
+                        imageLayerId = id
+                        pickImage.launch("image/*")
+                    },
                 )
 
                 CreateMode.TEMPLATE -> TemplatePanel(
@@ -249,7 +291,7 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                         label = if (mode == CreateMode.COLOR) {
                             stringResource(R.string.isle_apply_colors)
                         } else {
-                            stringResource(R.string.isle_send_text)
+                            stringResource(R.string.isle_upload_art)
                         },
                         busy = busy,
                         modifier = Modifier.weight(1f),
@@ -260,25 +302,10 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                             } else if (mode == CreateMode.COLOR) {
                                 viewModel.applyColors(target)
                             } else {
-                                viewModel.sendText(target)
+                                viewModel.uploadGraphic(target, context)
                             }
                         },
                     )
-                    if (mode == CreateMode.PIXEL) {
-                        ActionButton(
-                            label = stringResource(R.string.isle_upload_art),
-                            busy = busy,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                val target = device
-                                if (target == null) {
-                                    Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
-                                } else {
-                                    viewModel.uploadPixelArt(target)
-                                }
-                            },
-                        )
-                    }
                 }
             }
 
@@ -303,6 +330,15 @@ fun CreateScreen(modifier: Modifier = Modifier, viewModel: CreateViewModel = koi
                 initial = templateColors[templateColorIndex],
                 onDismiss = { templateColorIndex = -1 },
                 onPick = { viewModel.setTemplateColor(templateColorIndex, it) },
+            )
+        }
+
+        if (showBackgroundPicker) {
+            ColorPickerSheet(
+                title = stringResource(R.string.isle_graphic_background),
+                initial = background,
+                onDismiss = { showBackgroundPicker = false },
+                onPick = { viewModel.setBackground(it) },
             )
         }
     }
@@ -651,18 +687,27 @@ private fun ColorWheel(
 }
 
 @Composable
-private fun PixelPanel(
+private fun GraphicPanel(
     grid: List<Int>,
     cols: Int,
     rows: Int,
-    text: String,
-    tool: PixelTool,
-    brushColor: Int,
-    onPaint: (Int) -> Unit,
-    onTextChange: (String) -> Unit,
-    onSelectTool: (PixelTool) -> Unit,
-    onSelectColor: (Int) -> Unit,
-    onClear: () -> Unit,
+    layers: List<GraphicLayer>,
+    frameCount: Int,
+    speed: Float,
+    reverse: Boolean,
+    trailPercent: Int,
+    darkCutoff: Int,
+    background: Int,
+    onSpeed: (Float) -> Unit,
+    onReverse: (Boolean) -> Unit,
+    onTrail: (Int) -> Unit,
+    onDarkCutoff: (Int) -> Unit,
+    onPickBackground: () -> Unit,
+    onAddLayer: (GraphicLayerType) -> Unit,
+    onUpdateLayer: (Long, (GraphicLayer) -> GraphicLayer) -> Unit,
+    onRemoveLayer: (Long) -> Unit,
+    onMoveLayer: (Long, Int) -> Unit,
+    onPickImage: (Long) -> Unit,
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 26.dp, padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -673,12 +718,17 @@ private fun PixelPanel(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "$cols × $rows",
+                text = if (frameCount > 1) {
+                    stringResource(R.string.isle_graphic_frames, frameCount)
+                } else {
+                    "$cols × $rows"
+                },
                 color = IsleColors.TextMuted,
                 fontSize = 11.sp,
             )
         }
 
+        // 画布只做预览，不再支持手绘；真实画面在投送时按设备矩阵栅格化。
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -692,34 +742,29 @@ private fun PixelPanel(
                 grid = grid,
                 cols = cols,
                 rows = rows,
-                onPaint = onPaint,
+                onPaint = null,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(10.dp),
             )
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-                .background(Color(0x14FFFFFF), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-        ) {
-            if (text.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.isle_text_hint),
-                    color = IsleColors.TextMuted,
-                    fontSize = 13.sp,
-                )
-            }
-            androidx.compose.foundation.text.BasicTextField(
-                value = text,
-                onValueChange = onTextChange,
-                singleLine = true,
-                textStyle = TextStyle(color = IsleColors.TextPrimary, fontSize = 13.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(IsleColors.Cyan),
-                modifier = Modifier.fillMaxWidth(),
+        Text(
+            text = stringResource(R.string.isle_graphic_layers),
+            color = IsleColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+
+        layers.forEachIndexed { index, layer ->
+            GraphicLayerCard(
+                layer = layer,
+                index = index,
+                count = layers.size,
+                onChange = { transform -> onUpdateLayer(layer.id, transform) },
+                onRemove = { onRemoveLayer(layer.id) },
+                onMove = { delta -> onMoveLayer(layer.id, delta) },
+                onPickImage = { onPickImage(layer.id) },
             )
         }
 
@@ -727,36 +772,384 @@ private fun PixelPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ToolButton(Glyph.Brush, R.string.isle_brush, tool == PixelTool.BRUSH) { onSelectTool(PixelTool.BRUSH) }
-            ToolButton(Glyph.Eraser, R.string.isle_eraser, tool == PixelTool.ERASER) { onSelectTool(PixelTool.ERASER) }
-            ToolButton(Glyph.Dropper, R.string.isle_picker, tool == PixelTool.PICKER) { onSelectTool(PixelTool.PICKER) }
-            ToolButton(Glyph.Trash, R.string.isle_clear, false) { onClear() }
+            ToolButton(Glyph.Text, R.string.isle_graphic_add_text, false) {
+                onAddLayer(GraphicLayerType.TEXT)
+            }
+            ToolButton(Glyph.Timer, R.string.isle_graphic_add_time, false) {
+                onAddLayer(GraphicLayerType.TIME)
+            }
+            ToolButton(Glyph.Sparkle, R.string.isle_graphic_add_image, false) {
+                onAddLayer(GraphicLayerType.IMAGE)
+            }
+        }
+
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_scroll_speed),
+            glyph = Glyph.Sync,
+            value = speed,
+            onChange = onSpeed,
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_trail),
+            glyph = Glyph.Sparkle,
+            value = trailPercent / 90f,
+            onChange = { value -> onTrail((value * 90).toInt()) },
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_dark_cutoff),
+            glyph = Glyph.Dropper,
+            value = darkCutoff / 255f,
+            onChange = { value -> onDarkCutoff((value * 255).toInt()) },
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MiniChip(
+                label = stringResource(R.string.isle_graphic_reverse),
+                selected = reverse,
+                onClick = { onReverse(!reverse) },
+            )
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(Color(0xFF000000.toInt() or background), CircleShape)
+                    .border(2.dp, Color(0x66FFFFFF), CircleShape)
+                    .clickable(onClick = onPickBackground),
+            )
+            Text(
+                text = stringResource(R.string.isle_graphic_background),
+                color = IsleColors.TextSecondary,
+                fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GraphicLayerCard(
+    layer: GraphicLayer,
+    index: Int,
+    count: Int,
+    onChange: ((GraphicLayer) -> GraphicLayer) -> Unit,
+    onRemove: () -> Unit,
+    onMove: (Int) -> Unit,
+    onPickImage: () -> Unit,
+) {
+    val typeLabel = when (layer.type) {
+        GraphicLayerType.TEXT -> stringResource(R.string.isle_graphic_layer_text)
+        GraphicLayerType.TIME -> stringResource(R.string.isle_graphic_layer_time)
+        GraphicLayerType.IMAGE -> stringResource(R.string.isle_graphic_layer_image)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .background(Color(0x0FFFFFFF), RoundedCornerShape(14.dp))
+            .border(1.dp, IsleColors.Stroke, RoundedCornerShape(14.dp))
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "$typeLabel ${index + 1}",
+                color = IsleColors.TextPrimary,
+                fontSize = 12.5.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "↑",
+                color = if (index > 0) IsleColors.TextSecondary else IsleColors.TextMuted,
+                fontSize = 15.sp,
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .clickable(enabled = index > 0) { onMove(-1) },
+            )
+            Text(
+                text = "↓",
+                color = if (index < count - 1) IsleColors.TextSecondary else IsleColors.TextMuted,
+                fontSize = 15.sp,
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .clickable(enabled = index < count - 1) { onMove(1) },
+            )
+            Text(
+                text = stringResource(R.string.isle_graphic_remove),
+                color = IsleColors.TextMuted,
+                fontSize = 11.5.sp,
+                modifier = Modifier.clickable(onClick = onRemove),
+            )
+        }
+
+        when (layer.type) {
+            GraphicLayerType.IMAGE -> {
+                Text(
+                    text = stringResource(
+                        if (layer.imageUri == null) {
+                            R.string.isle_graphic_pick_image
+                        } else {
+                            R.string.isle_graphic_image_selected
+                        },
+                    ),
+                    color = IsleColors.Cyan,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .clickable(onClick = onPickImage),
+                )
+            }
+
+            else -> {
+                BasicTextField(
+                    value = layer.text,
+                    onValueChange = { value ->
+                        if (value.length <= 40) onChange { it.copy(text = value) }
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(color = IsleColors.TextPrimary, fontSize = 13.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(IsleColors.Cyan),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                        .background(Color(0x14FFFFFF), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                )
+                // 常用表情：直接点选追加到文字末尾，省去切换输入法。
+                if (layer.type == GraphicLayerType.TEXT) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        GRAPHIC_EMOJIS.forEach { emoji ->
+                            Text(
+                                text = emoji,
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        if (layer.text.length + emoji.length <= 40) {
+                                            onChange { it.copy(text = it.text + emoji) }
+                                        }
+                                    },
+                            )
+                        }
+                    }
+                }
+                // 时间函数占位符：对齐 PixelForge 的 Available Tokens，点一下追加。
+                Text(
+                    text = stringResource(R.string.isle_graphic_tokens_hint),
+                    color = IsleColors.TextMuted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    GRAPHIC_TOKENS.forEach { token ->
+                        MiniChip(
+                            label = token,
+                            selected = false,
+                            onClick = {
+                                if (layer.text.length + token.length <= 40) {
+                                    onChange { it.copy(text = it.text + token) }
+                                }
+                            },
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GRAPHIC_COLORS.forEach { color ->
+                        val selected = color == layer.color
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(Color(0xFF000000.toInt() or color), CircleShape)
+                                .border(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) Color.White else Color(0x33FFFFFF),
+                                    shape = CircleShape,
+                                )
+                                .clickable { onChange { it.copy(color = color) } },
+                        )
+                    }
+                }
+            }
+        }
+
+        // 区域对应 WLED 段落的 Start/Stop X/Y：决定这一层能点亮的灯珠矩形。
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_region_start_x),
+            glyph = Glyph.ChevronRight,
+            value = layer.startXPercent / 100f,
+            onChange = { value ->
+                val next = (value * 100).toInt().coerceIn(0, layer.stopXPercent)
+                onChange { it.copy(startXPercent = next) }
+            },
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_region_stop_x),
+            glyph = Glyph.ChevronRight,
+            value = layer.stopXPercent / 100f,
+            onChange = { value ->
+                val next = (value * 100).toInt().coerceIn(layer.startXPercent, 100)
+                onChange { it.copy(stopXPercent = next) }
+            },
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_region_start_y),
+            glyph = Glyph.Timer,
+            value = layer.startYPercent / 100f,
+            onChange = { value ->
+                val next = (value * 100).toInt().coerceIn(0, layer.stopYPercent)
+                onChange { it.copy(startYPercent = next) }
+            },
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_region_stop_y),
+            glyph = Glyph.Timer,
+            value = layer.stopYPercent / 100f,
+            onChange = { value ->
+                val next = (value * 100).toInt().coerceIn(layer.startYPercent, 100)
+                onChange { it.copy(stopYPercent = next) }
+            },
+        )
+        LabeledSlider(
+            label = stringResource(R.string.isle_graphic_size),
+            glyph = Glyph.Text,
+            value = layer.sizePercent / 100f,
+            onChange = { value ->
+                onChange { it.copy(sizePercent = (value * 100).toInt().coerceAtLeast(10)) }
+            },
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.isle_graphic_rotate),
+                color = IsleColors.TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 2.dp),
+            )
+            GraphicRotation.entries.forEach { rotation ->
+                MiniChip(
+                    label = "${rotation.degrees}°",
+                    selected = layer.rotation == rotation,
+                    onClick = { onChange { it.copy(rotation = rotation) } },
+                )
+            }
+            if (layer.type != GraphicLayerType.IMAGE) {
+                MiniChip(
+                    label = stringResource(R.string.isle_graphic_gradient),
+                    selected = layer.gradientEnd != null,
+                    onClick = {
+                        onChange { it.copy(gradientEnd = if (it.gradientEnd == null) 0x8C7BFF else null) }
+                    },
+                )
+            }
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            PIXEL_PALETTE.forEach { color ->
-                val selected = color == brushColor
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(Color(0xFF000000.toInt() or color), CircleShape)
-                        .border(
-                            width = if (selected) 2.dp else 1.dp,
-                            color = if (selected) Color.White else Color(0x33FFFFFF),
-                            shape = CircleShape,
-                        )
-                        .clickable { onSelectColor(color) },
+            MiniChip(
+                label = stringResource(R.string.isle_graphic_mirror_x),
+                selected = layer.mirrorX,
+                onClick = { onChange { it.copy(mirrorX = !it.mirrorX) } },
+            )
+            MiniChip(
+                label = stringResource(R.string.isle_graphic_mirror_y),
+                selected = layer.mirrorY,
+                onClick = { onChange { it.copy(mirrorY = !it.mirrorY) } },
+            )
+            MiniChip(
+                label = stringResource(R.string.isle_graphic_transpose),
+                selected = layer.transpose,
+                onClick = { onChange { it.copy(transpose = !it.transpose) } },
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.isle_graphic_blend),
+                color = IsleColors.TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 2.dp),
+            )
+            GraphicBlend.entries.forEach { blend ->
+                MiniChip(
+                    label = blendLabel(blend),
+                    selected = layer.blend == blend,
+                    onClick = { onChange { it.copy(blend = blend) } },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun blendLabel(blend: GraphicBlend): String = stringResource(
+    when (blend) {
+        GraphicBlend.TOP -> R.string.isle_graphic_blend_top
+        GraphicBlend.ADD -> R.string.isle_graphic_blend_add
+        GraphicBlend.SCREEN -> R.string.isle_graphic_blend_screen
+        GraphicBlend.MULTIPLY -> R.string.isle_graphic_blend_multiply
+        GraphicBlend.LIGHTEN -> R.string.isle_graphic_blend_lighten
+        GraphicBlend.DARKEN -> R.string.isle_graphic_blend_darken
+        GraphicBlend.OVERLAY -> R.string.isle_graphic_blend_overlay
+    },
+)
+
+@Composable
+private fun MiniChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = if (selected) Color(0xFF08090E) else IsleColors.TextSecondary,
+        fontSize = 10.5.sp,
+        modifier = Modifier
+            .background(
+                if (selected) IsleColors.Cyan else Color(0x0FFFFFFF),
+                RoundedCornerShape(9.dp),
+            )
+            .border(
+                1.dp,
+                if (selected) IsleColors.Cyan else IsleColors.Stroke,
+                RoundedCornerShape(9.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+    )
 }
 
 @Composable
@@ -792,17 +1185,27 @@ private fun ToolButton(glyph: Glyph, labelRes: Int, selected: Boolean, onClick: 
 }
 
 @Composable
-private fun PixelGrid(grid: List<Int>, cols: Int, rows: Int, onPaint: (Int) -> Unit, modifier: Modifier = Modifier) {
+private fun PixelGrid(
+    grid: List<Int>,
+    cols: Int,
+    rows: Int,
+    onPaint: ((Int) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     Canvas(
-        modifier = modifier.pointerInput(cols, rows, grid.size) {
-            detectTapGestures { pos ->
-                val cell = minOf(size.width / cols, size.height / rows)
-                if (cell <= 0f) return@detectTapGestures
-                val offsetX = (size.width - cell * cols) / 2f
-                val offsetY = (size.height - cell * rows) / 2f
-                val col = ((pos.x - offsetX) / cell).toInt()
-                val row = ((pos.y - offsetY) / cell).toInt()
-                if (col in 0 until cols && row in 0 until rows) onPaint(row * cols + col)
+        modifier = if (onPaint == null) {
+            modifier
+        } else {
+            modifier.pointerInput(cols, rows, grid.size) {
+                detectTapGestures { pos ->
+                    val cell = minOf(size.width / cols, size.height / rows)
+                    if (cell <= 0f) return@detectTapGestures
+                    val offsetX = (size.width - cell * cols) / 2f
+                    val offsetY = (size.height - cell * rows) / 2f
+                    val col = ((pos.x - offsetX) / cell).toInt()
+                    val row = ((pos.y - offsetY) / cell).toInt()
+                    if (col in 0 until cols && row in 0 until rows) onPaint(row * cols + col)
+                }
             }
         },
     ) {

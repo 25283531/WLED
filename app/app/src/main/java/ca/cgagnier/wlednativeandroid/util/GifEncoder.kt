@@ -5,11 +5,11 @@ import java.io.ByteArrayOutputStream
 /**
  * 最小 GIF89a 编码器（单帧、全局调色板）。
  *
- * 用途：把像素画板画出来的图编码成 GIF 再上传到设备，交给固件的 `Image` 效果显示。
- * WLED 只认 GIF/图片文件，跨平台层没有可用的编码库，所以这里手写一份 ——
- * 索引色 + LZW 的编码逻辑不复杂，比引入一个大依赖可控。
+ * 用途：把创作工坊的自定义图文（文字 / 时间 / 图片叠加）编码成 GIF 上传到设备，
+ * 交给固件的 `Image` 效果显示。WLED 只认 GIF/图片文件，跨平台层没有可用的编码库，
+ * 所以这里手写一份 —— 索引色 + LZW 的编码逻辑不复杂，比引入一个大依赖可控。
  *
- * 只支持单帧：像素画板本来就是静态图，多帧动画在设备端没有入口能配置。
+ * 支持多帧（内容超出矩阵宽度时用于横向跑马灯），多帧会自动无限循环。
  */
 object GifEncoder {
 
@@ -21,12 +21,26 @@ object GifEncoder {
     private const val MAX_CODES = 1 shl MAX_CODE_SIZE
 
     /**
+     * 一帧像素数据。
+     *
+     * @param delayCentis 该帧停留时间，单位 1/100 秒；单帧图忽略。
+     */
+    data class Frame(val indices: ByteArray, val delayCentis: Int = 0)
+
+    /**
      * @param indices 逐像素的调色板下标，长度必须是 [width] * [height]，行优先。
      * @param palette 调色板，ARGB 或 RGB 均可，只用低 24 位；不足 256 色时补黑。
      */
-    fun encode(indices: ByteArray, width: Int, height: Int, palette: IntArray): ByteArray {
+    fun encode(indices: ByteArray, width: Int, height: Int, palette: IntArray): ByteArray =
+        encodeFrames(listOf(Frame(indices)), width, height, palette)
+
+    /**
+     * 多帧 GIF（自定义图文内容超宽时用于横向跑马灯），自动循环播放。
+     */
+    fun encodeFrames(frames: List<Frame>, width: Int, height: Int, palette: IntArray): ByteArray {
         require(width > 0 && height > 0) { "尺寸必须为正" }
-        require(indices.size == width * height) { "像素数量与尺寸不匹配" }
+        require(frames.isNotEmpty()) { "至少需要一帧" }
+        require(frames.all { it.indices.size == width * height }) { "像素数量与尺寸不匹配" }
         require(palette.size <= MAX_COLORS) { "调色板最多 $MAX_COLORS 色" }
 
         val out = ByteArrayOutputStream()
@@ -46,16 +60,39 @@ object GifEncoder {
             out.write(color and 0xFF)
         }
 
-        // Image Descriptor
-        out.write(0x2C)
-        writeShort(out, 0)
-        writeShort(out, 0)
-        writeShort(out, width)
-        writeShort(out, height)
-        out.write(0x00)
+        // 多帧时声明无限循环，否则播放器只放一遍
+        if (frames.size > 1) {
+            out.write(0x21)
+            out.write(0xFF)
+            out.write(0x0B)
+            out.write("NETSCAPE2.0".toByteArray(Charsets.US_ASCII))
+            out.write(0x03)
+            out.write(0x01)
+            writeShort(out, 0)
+            out.write(0x00)
+        }
 
-        out.write(MIN_CODE_SIZE)
-        writeSubBlocks(out, lzwEncode(indices))
+        frames.forEach { frame ->
+            // Graphic Control Extension：disposal=1（保留上一帧），不设透明色
+            out.write(0x21)
+            out.write(0xF9)
+            out.write(0x04)
+            out.write(0x04)
+            writeShort(out, frame.delayCentis.coerceAtLeast(0))
+            out.write(0x00)
+            out.write(0x00)
+
+            // Image Descriptor
+            out.write(0x2C)
+            writeShort(out, 0)
+            writeShort(out, 0)
+            writeShort(out, width)
+            writeShort(out, height)
+            out.write(0x00)
+
+            out.write(MIN_CODE_SIZE)
+            writeSubBlocks(out, lzwEncode(frame.indices))
+        }
         out.write(0x3B) // Trailer
         return out.toByteArray()
     }

@@ -30,4 +30,11 @@ interface FavoriteEffectDao {
 
     @Query("SELECT COUNT(*) FROM FavoriteEffect")
     suspend fun count(): Int
+
+    @Query("SELECT * FROM FavoriteEffect")
+    suspend fun getAll(): List<FavoriteEffect>
+
+    /** 固件灯效重新编号后，把收藏里的旧 fx id 迁移到新编号。 */
+    @Query("UPDATE FavoriteEffect SET effectId = :newEffectId WHERE effectId = :oldEffectId")
+    suspend fun updateEffectId(oldEffectId: Int, newEffectId: Int)
 }

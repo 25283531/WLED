@@ -1,5 +1,6 @@
 package ca.cgagnier.wlednativeandroid.ui.create
 
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,7 +14,6 @@ import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplate
 import ca.cgagnier.wlednativeandroid.ui.effects.PaletteTemplateStore
 import ca.cgagnier.wlednativeandroid.ui.effects.packRgb
-import ca.cgagnier.wlednativeandroid.ui.effects.unpackRgb
 import ca.cgagnier.wlednativeandroid.ui.isle.SelectedDeviceStore
 import ca.cgagnier.wlednativeandroid.util.GifEncoder
 import ca.cgagnier.wlednativeandroid.util.normalizedToChannel
@@ -29,19 +29,15 @@ import kotlinx.coroutines.withContext
 /** 创作工坊的三个分段：色轮调色 / 自定义图文 / 多色模板。 */
 enum class CreateMode { COLOR, PIXEL, TEMPLATE }
 
-/** 像素画板的工具。 */
-enum class PixelTool { BRUSH, ERASER, PICKER }
-
 /** 一条操作结果，交给界面弹提示。 */
 data class CreateStatus(val message: String, val isError: Boolean)
 
 /**
  * 按固件英文名反查灯效 id，取不到直接崩。
  *
- * 创作工坊依赖两个灯效：Image（显示上传的 GIF）和 Scrolling Text（渲染滚动字幕）。
- * 这两个 id 曾经被写死成数字，而固件调整效果槽位后，写死的数字会静默指向另一个效果 ——
- * 38 一度是 Image，槽位对齐后变成 Aurora（极光）；123 一度是 Scrolling Text，现在是
- * Drift Rose（玫瑰漂移）。表现是「上传的图案显示成极光」「投送的字幕变成玫瑰漂移」，
+ * 创作工坊把自定义图文编码成 GIF 上传，再用 `Image` 效果显示。
+ * 这个 id 曾经被写死成数字，而固件调整效果槽位后，写死的数字会静默指向另一个效果 ——
+ * 38 一度是 Image，槽位对齐后变成 Aurora（极光），表现是「上传的图案显示成极光」，
  * 而且不报错、很难联想到是 id 漂移。改成按名反查，槽位变更自动跟随。
  */
 private fun requireEffectId(name: String): Int =
@@ -49,16 +45,7 @@ private fun requireEffectId(name: String): Int =
         ?: error("固件灯效目录缺少「$name」，请重新运行 tools/gen_effect_catalog.py")
 
 private val IMAGE_EFFECT = requireEffectId("Image")
-private val SCROLLING_TEXT_EFFECT = requireEffectId("Scrolling Text")
 
-/** `seg.c2` = 255 时固件映射到 font 4（5×12），并启用加粗笔画。 */
-private const val SCROLLING_TEXT_BIG_FONT = 255
-
-/**
- * `seg.c3` 的字幕朝向。固件 `map(custom3, 0, 31, -2, 2)`：0 → -2（上下颠倒）、
- * 16 → 0（正常）、24 → 1（逆时针 90°）。之前写 0，实体灯上的字幕就是倒的。
- */
-private const val SCROLLING_TEXT_ROTATE_NORMAL = 16
 private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
 private const val DEFAULT_GRID_ROWS = 10
@@ -68,10 +55,19 @@ private const val UPLOAD_FILE_NAME = "isle.gif"
 /** 上传到设备后，`Image` 效果按段落名找文件，所以名字两边必须一致。 */
 private const val UPLOAD_BASENAME = "isle"
 
-/** 像素画板的默认色板（与设计稿一致：黑白 + 青紫粉绿）。 */
-val PIXEL_PALETTE: List<Int> = listOf(
-    0xFFFFFF, 0x000000, 0x5FE3E4, 0x8C7BFF,
+/** 自定义图文里文字/时间层可选的文字颜色。 */
+val GRAPHIC_COLORS: List<Int> = listOf(
+    0xFFFFFF, 0x5FE3E4, 0x8C7BFF,
     0xFF7AD0, 0x3EE08F, 0xFFC46B, 0xFF5A5A,
+)
+
+/** 自定义文字里可一键插入的常用表情（App 侧栅格化，不依赖固件字库）。 */
+val GRAPHIC_EMOJIS: List<String> = listOf("😀", "😄", "😊", "😍", "😎", "😢", "😡", "🤖", "❤️", "⭐")
+
+/** 上游 PixelForge 支持的时间函数占位符，点一下追加到文字末尾。 */
+val GRAPHIC_TOKENS: List<String> = listOf(
+    "#TIME", "#HHMM", "#DATE", "#DDMM", "#MMDD", "#YYYY", "#YY",
+    "#HH", "#MM", "#SS", "#MO", "#DD", "#MON", "#MONL", "#DAY", "#DDDD",
 )
 
 /** 多色模板「添加颜色」时的候选色，尽量不与已有色重复。 */
@@ -81,8 +77,8 @@ private val TEMPLATE_ADD_COLORS = listOf(0xFFB46B, 0x3EE08F, 0xFF7AD0, 0xFFFFFF,
  * 创作工坊。
  *
  * 色轮调色：两个锚点取色，饱和度统一压缩后再下发，避免选到过曝的纯色。
- * 自定义图文：文字直接写进 `seg.n` 交给固件的滚动字幕效果；
- * 像素画板则编码成 GIF 上传到设备，用 `Image` 效果播放。
+ * 自定义图文：文字 / 时间 / 图片按设备灯珠矩阵在 App 侧栅格化成 GIF 上传，
+ * 用固件的 `Image` 效果播放，因此中文与 Emoji 不依赖固件字库。
  */
 class CreateViewModel(
     private val deviceConnectionManager: DeviceConnectionManager,
@@ -110,14 +106,40 @@ class CreateViewModel(
     private val _speed = MutableStateFlow(0.6f)
     val speed: StateFlow<Float> = _speed.asStateFlow()
 
-    private val _text = MutableStateFlow("LumiIsle")
-    val text: StateFlow<String> = _text.asStateFlow()
+    /**
+     * 自定义图文的叠加内容。默认放一条文字层，用户可继续叠加时间与图片。
+     * 发送时按设备矩阵栅格化，不再区分「自定义文字 / 像素画板」。
+     */
+    private val _layers = MutableStateFlow(
+        listOf(
+            GraphicLayer(
+                id = 1L,
+                type = GraphicLayerType.TEXT,
+                text = "LumiIsle",
+                color = 0xFFFFFF,
+                sizePercent = 45,
+            ),
+        ),
+    )
+    val layers: StateFlow<List<GraphicLayer>> = _layers.asStateFlow()
 
-    private val _tool = MutableStateFlow(PixelTool.BRUSH)
-    val tool: StateFlow<PixelTool> = _tool.asStateFlow()
+    private var nextLayerId = 2L
 
-    private val _brushColor = MutableStateFlow(PIXEL_PALETTE[0])
-    val brushColor: StateFlow<Int> = _brushColor.asStateFlow()
+    /** 反向滚动（对应 PixelForge 的 Reverse）。 */
+    private val _reverse = MutableStateFlow(false)
+    val reverse: StateFlow<Boolean> = _reverse.asStateFlow()
+
+    /** 拖尾残影 0..90（对应 Trail）。 */
+    private val _trailPercent = MutableStateFlow(0)
+    val trailPercent: StateFlow<Int> = _trailPercent.asStateFlow()
+
+    /** 暗部裁剪阈值 0..255（对应 Dark Pixel Cutoff）。 */
+    private val _darkCutoff = MutableStateFlow(0)
+    val darkCutoff: StateFlow<Int> = _darkCutoff.asStateFlow()
+
+    /** 输出背景色（对应 Background Color）。 */
+    private val _background = MutableStateFlow(0x000000)
+    val background: StateFlow<Int> = _background.asStateFlow()
 
     private val _gridCols = MutableStateFlow(DEFAULT_GRID_COLS)
     val gridCols: StateFlow<Int> = _gridCols.asStateFlow()
@@ -125,9 +147,13 @@ class CreateViewModel(
     private val _gridRows = MutableStateFlow(DEFAULT_GRID_ROWS)
     val gridRows: StateFlow<Int> = _gridRows.asStateFlow()
 
-    /** 0 表示该格不发光。 */
+    /** 0 表示该格不发光；由 [refreshPreview] 按当前图层栅格化后写入。 */
     private val _grid = MutableStateFlow(List(DEFAULT_GRID_COLS * DEFAULT_GRID_ROWS) { 0 })
     val grid: StateFlow<List<Int>> = _grid.asStateFlow()
+
+    private val _frameCount = MutableStateFlow(1)
+    /** 发送时会生成的 GIF 帧数，>1 表示内容超宽、会上跑马灯。 */
+    val frameCount: StateFlow<Int> = _frameCount.asStateFlow()
 
     private val _status = MutableStateFlow<CreateStatus?>(null)
     val status: StateFlow<CreateStatus?> = _status.asStateFlow()
@@ -193,21 +219,69 @@ class CreateViewModel(
         _speed.value = value.coerceIn(0f, 1f)
     }
 
-    fun setText(value: String) {
-        _text.value = value.take(32)
+    fun setReverse(value: Boolean) {
+        _reverse.value = value
     }
 
-    fun setTool(tool: PixelTool) {
-        _tool.value = tool
+    fun setTrailPercent(value: Int) {
+        _trailPercent.value = value.coerceIn(0, 90)
     }
 
-    fun setBrushColor(packedRgb: Int) {
-        _brushColor.value = packedRgb
-        if (_tool.value == PixelTool.ERASER) _tool.value = PixelTool.BRUSH
+    fun setDarkCutoff(value: Int) {
+        _darkCutoff.value = value.coerceIn(0, 255)
+    }
+
+    fun setBackground(packed: Int) {
+        _background.value = packed and 0xFFFFFF
+    }
+
+    fun addLayer(type: GraphicLayerType) {
+        val layer = when (type) {
+            GraphicLayerType.TEXT -> GraphicLayer(
+                id = nextLayerId++,
+                type = type,
+                text = "文字",
+                sizePercent = 45,
+                startYPercent = 35,
+                stopYPercent = 65,
+            )
+            GraphicLayerType.TIME -> GraphicLayer(
+                id = nextLayerId++,
+                type = type,
+                text = "{time}",
+                sizePercent = 45,
+                startYPercent = 10,
+                stopYPercent = 35,
+            )
+            GraphicLayerType.IMAGE -> GraphicLayer(
+                id = nextLayerId++,
+                type = type,
+                sizePercent = 70,
+            )
+        }
+        _layers.value = _layers.value + layer
+    }
+
+    fun updateLayer(id: Long, transform: (GraphicLayer) -> GraphicLayer) {
+        _layers.value = _layers.value.map { if (it.id == id) transform(it) else it }
+    }
+
+    fun removeLayer(id: Long) {
+        _layers.value = _layers.value.filterNot { it.id == id }
+    }
+
+    fun moveLayer(id: Long, delta: Int) {
+        val current = _layers.value.toMutableList()
+        val index = current.indexOfFirst { it.id == id }
+        val target = index + delta
+        if (index < 0 || target !in current.indices) return
+        val item = current.removeAt(index)
+        current.add(target, item)
+        _layers.value = current
     }
 
     /**
-     * 画板尺寸跟随设备矩阵：圆形灯管是竖长条，画布也应该是竖的，
+     * 画布尺寸跟随设备矩阵：圆形灯管是竖长条，画布也应该是竖的，
      * 否则上传后画面会被压扁。
      */
     fun configureGrid(device: DeviceWithState?) {
@@ -217,31 +291,34 @@ class CreateViewModel(
         if (cols == _gridCols.value && rows == _gridRows.value) return
         _gridCols.value = cols
         _gridRows.value = rows
-        _grid.value = List(cols * rows) { 0 }
     }
 
-    fun paint(index: Int) {
-        val current = _grid.value
-        if (index !in current.indices) return
-        val target = when (_tool.value) {
-            PixelTool.BRUSH -> _brushColor.value and 0xFFFFFF
-            PixelTool.ERASER -> 0
-            PixelTool.PICKER -> current[index]
-        }
-        if (_tool.value == PixelTool.PICKER) {
-            if (target != 0) {
-                _brushColor.value = target
-                _tool.value = PixelTool.BRUSH
-            }
-            return
-        }
-        if (current[index] == target) return
-        _grid.value = current.toMutableList().apply { this[index] = target }
+    /** 把当前图层叠加结果重新栅格化，供预览画布显示。 */
+    fun refreshPreview(context: Context) {
+        val frames = GraphicComposer.renderFrames(
+            context = context,
+            cols = _gridCols.value,
+            rows = _gridRows.value,
+            layers = _layers.value,
+            options = graphicOptions(),
+        )
+        _frameCount.value = frames.size.coerceAtLeast(1)
+        _grid.value = GraphicComposer.renderPreview(
+            context = context,
+            cols = _gridCols.value,
+            rows = _gridRows.value,
+            layers = _layers.value,
+            options = graphicOptions(),
+        )
     }
 
-    fun clearGrid() {
-        _grid.value = List(_grid.value.size) { 0 }
-    }
+    private fun graphicOptions(): GraphicOptions = GraphicOptions(
+        scrollSpeed = _speed.value,
+        reverse = _reverse.value,
+        trailPercent = _trailPercent.value,
+        darkCutoff = _darkCutoff.value,
+        background = _background.value,
+    )
 
     fun dismissStatus() {
         _status.value = null
@@ -268,64 +345,47 @@ class CreateViewModel(
         }
     }
 
-    /** 滚动字幕：文字写进段落名，固件用它渲染。 */
-    fun sendText(device: DeviceWithState) {
-        val value = _text.value.trim()
-        if (value.isEmpty()) {
-            _status.value = CreateStatus("请先输入字幕内容", isError = true)
-            return
-        }
-        viewModelScope.launch {
-            val ok = deviceConnectionManager.sendSegmentPatch(device.device.macAddress) { segment ->
-                segment.copy(
-                    effect = SCROLLING_TEXT_EFFECT,
-                    name = value,
-                    // 纯黑底 + 单色高亮字：透过熏黑亚克力罩仍能读清
-                    colors = listOf(listOf(255, 255, 255), listOf(0, 0, 0), listOf(0, 0, 0)),
-                    effectSpeed = normalizedToChannel(_speed.value),
-                    // c2 = 255 -> 固件选中 font 4（5×12 大字），并自动启用 2 像素加粗笔画
-                    custom2 = SCROLLING_TEXT_BIG_FONT,
-                    custom3 = SCROLLING_TEXT_ROTATE_NORMAL,
-                )
-            }
-            _status.value = CreateStatus(
-                message = if (ok) "字幕已投送" else "投送失败，请检查连接",
-                isError = !ok,
-            )
-        }
-    }
-
     /**
-     * 像素画板 -> GIF -> 上传 -> 切到 Image 效果。
+     * 自定义图文 -> 多帧 GIF -> 上传 -> 切到 Image 效果。
      *
      * 固件只认设备文件系统里的图片文件，所以必须先上传；上传成功后再把段落名设成文件名。
+     * 内容比矩阵宽时生成多帧跑马灯，中文与 Emoji 都能显示。
      */
-    fun uploadPixelArt(device: DeviceWithState) {
-        val cols = _gridCols.value
-        val rows = _gridRows.value
-        val grid = _grid.value
-        if (grid.all { it == 0 }) {
-            _status.value = CreateStatus("画板还是空的", isError = true)
+    fun uploadGraphic(device: DeviceWithState, context: Context) {
+        if (_layers.value.isEmpty()) {
+            _status.value = CreateStatus("请先添加文字、时间或图片", isError = true)
             return
         }
         _busy.value = true
         viewModelScope.launch {
-            val result = runCatching {
+            val outcome = runCatching {
                 val bytes = withContext(Dispatchers.Default) {
-                    buildGif(grid, cols, rows)
+                    val frames = GraphicComposer.renderFrames(
+                        context = context,
+                        cols = _gridCols.value,
+                        rows = _gridRows.value,
+                        layers = _layers.value,
+                        options = graphicOptions(),
+                    )
+                    require(frames.any { frame -> frame.colors.any { it != 0 } }) { "内容还没有点亮任何灯珠" }
+                    buildGif(frames, _gridCols.value, _gridRows.value)
                 }
                 val api = deviceApiFactory.create(device.device)
                 api.uploadFile(bytes, UPLOAD_FILE_NAME)
-            }.getOrNull()
+            }
+            val result = outcome.getOrNull()
             val uploaded = result != null && result.code in 200..299
             val applied = uploaded && deviceConnectionManager.sendSegmentPatch(device.device.macAddress) {
                 it.copy(effect = IMAGE_EFFECT, name = UPLOAD_BASENAME)
             }
             _busy.value = false
             _status.value = when {
-                !uploaded -> CreateStatus("上传失败：设备可能关闭了文件上传", isError = true)
+                !uploaded -> CreateStatus(
+                    outcome.exceptionOrNull()?.message ?: "上传失败：设备可能关闭了文件上传",
+                    isError = true,
+                )
                 !applied -> CreateStatus("图片已上传，但切换效果失败", isError = true)
-                else -> CreateStatus("像素图已上传并显示", isError = false)
+                else -> CreateStatus("自定义图文已投送", isError = false)
             }
         }
     }
@@ -340,7 +400,7 @@ class CreateViewModel(
         }
         val name = when (_mode.value) {
             CreateMode.COLOR -> "自定义配色"
-            CreateMode.PIXEL -> "像素画 ${_gridCols.value}×${_gridRows.value}"
+            CreateMode.PIXEL -> "自定义图文 ${_gridCols.value}×${_gridRows.value}"
             CreateMode.TEMPLATE -> return
         }
         viewModelScope.launch {
@@ -387,14 +447,24 @@ class CreateViewModel(
         return packRgb(rgb[0], rgb[1], rgb[2]) ?: packed
     }
 
-    private fun buildGif(grid: List<Int>, cols: Int, rows: Int): ByteArray {
-        val palette = buildList {
-            add(0x000000)
-            grid.forEach { if (it != 0 && it !in this) add(it) }
+    private fun buildGif(frames: List<GraphicFrame>, cols: Int, rows: Int): ByteArray {
+        // GIF 只有一张全局调色板：把所有帧的像素统一压到 RGB332（≤256 色）后再建索引。
+        val palette = LinkedHashMap<Int, Int>()
+        palette[0] = 0
+        fun quantize(rgb: Int): Int {
+            val r = (rgb shr 16) and 0xE0
+            val g = (rgb shr 8) and 0xE0
+            val b = rgb and 0xC0
+            return (r shl 16) or (g shl 8) or b
         }
-        val indices = ByteArray(grid.size) { index ->
-            palette.indexOf(grid[index]).coerceAtLeast(0).toByte()
+        val encoded = frames.map { frame ->
+            val indices = ByteArray(frame.colors.size) { index ->
+                val q = quantize(frame.colors[index] and 0xFFFFFF)
+                val slot = palette.getOrPut(q) { palette.size }
+                slot.toByte()
+            }
+            GifEncoder.Frame(indices, frame.delayCentis)
         }
-        return GifEncoder.encode(indices, cols, rows, palette.toIntArray())
+        return GifEncoder.encodeFrames(encoded, cols, rows, palette.keys.toIntArray())
     }
 }

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
  * Aurora（极光）和 Drift Rose（玫瑰漂移）—— 上传的图案显示成极光、
  * 投送的字幕变成玫瑰漂移，不报错、极难联想到是 id 漂移。
  *
- * 效果表当前为 0..116，下面的断言值已按新表更新（Image=18、Scrolling Text=50、极光之舞=108）。
+ * 效果表当前为 0..100，下面的断言值已按新表更新（Image=16、Scrolling Text=33、极光之舞=91）。
  *
  * 现在一律按固件英文名反查，测试就把「反查必须落到正确的槽位」钉死。
  */
@@ -29,19 +29,19 @@ class EffectRecipeTest {
     fun byName_resolvesImageToItsRealSlotNotTheStaleOne() {
         val image = EffectCatalog.byName("Image")
         assertNotNull(image, "固件灯效目录里应有 Image")
-        assertEquals(18, image!!.id)
+        assertEquals(16, image!!.id)
     }
 
     @Test
     fun byName_resolvesScrollingTextToItsRealSlotNotTheStaleOne() {
         val scrolling = EffectCatalog.byName("Scrolling Text")
         assertNotNull(scrolling, "固件灯效目录里应有 Scrolling Text")
-        assertEquals(50, scrolling!!.id)
+        assertEquals(33, scrolling!!.id)
 
         // 旧表的 123 曾经是 Scrolling Text，槽位重排后变成 Funky Plank —— 两者必须分得开
         val funkyPlank = EffectCatalog.byName("Funky Plank")
         assertNotNull(funkyPlank)
-        assertEquals(73, funkyPlank!!.id)
+        assertEquals(56, funkyPlank!!.id)
         assertNotEquals(scrolling.id, funkyPlank.id)
     }
 
@@ -97,7 +97,7 @@ class EffectRecipeTest {
     fun curatedEffects_includeTheSignatureAuroraDanceWithItsFactoryParams() {
         val dance = EffectCatalog.byName("极光之舞")
         assertNotNull(dance, "固件里应有「极光之舞」")
-        assertEquals(108, dance!!.id)
+        assertEquals(91, dance!!.id)
 
         val recipe = CuratedEffects.find(dance.id)
         assertNotNull(recipe, "招牌灯效应收录进精选配方表")

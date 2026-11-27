@@ -48,6 +48,7 @@ import ca.cgagnier.wlednativeandroid.R
 import ca.cgagnier.wlednativeandroid.ui.effects.CuratedEffects
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectFilter
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectInfo
+import ca.cgagnier.wlednativeandroid.ui.effects.EffectTuningPolicy
 import ca.cgagnier.wlednativeandroid.ui.isle.EffectArtwork
 import ca.cgagnier.wlednativeandroid.ui.isle.Glyph
 import ca.cgagnier.wlednativeandroid.ui.isle.GlyphIcon
@@ -64,7 +65,11 @@ import org.koin.androidx.compose.koinViewModel
  * 点亮星标后该灯效会同步到首页的 2×2 快捷卡片。
  */
 @Composable
-fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = koinViewModel()) {
+fun LibraryScreen(
+    modifier: Modifier = Modifier,
+    onOpenTextEditor: () -> Unit = {},
+    viewModel: LibraryViewModel = koinViewModel(),
+) {
     val context = LocalContext.current
     val devices by viewModel.devices.collectAsStateWithLifecycle()
     val selectedMac by viewModel.selectedMacAddress.collectAsStateWithLifecycle()
@@ -203,6 +208,9 @@ fun LibraryScreen(modifier: Modifier = Modifier, viewModel: LibraryViewModel = k
                             viewModel.applyEffect(target, effect.id) { ok ->
                                 if (!ok) {
                                     Toast.makeText(context, R.string.effects_apply_failed, Toast.LENGTH_SHORT).show()
+                                } else if (EffectTuningPolicy.isScrollingText(effect.id)) {
+                                    // 字画灯效选中后直接进入创作页的自定义图文输入
+                                    onOpenTextEditor()
                                 }
                             }
                         }

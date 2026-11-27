@@ -391,7 +391,7 @@ static void decodeIR40(uint32_t code)
     case IR40_AUTO         : changeEffectIntensity(-16);                 break;
     case IR40_JUMP3        : presetFallback(1, FX_MODE_STATIC,       0); break;
     case IR40_FADE3        : presetFallback(2, FX_MODE_BREATH,       0); break;
-    case IR40_FADE7        : presetFallback(3, FX_MODE_FIRE_FLICKER, 0); break;
+    case IR40_FADE7        : presetFallback(3, FX_MODE_NOISEFIRE, 0); break;
     case IR40_FLASH        : presetFallback(4, FX_MODE_RAINBOW,      0); break;
     default: return;
   }
@@ -435,12 +435,12 @@ static void decodeIR44(uint32_t code)
     case IR44_SLOW        : changeEffectSpeed(-16);                      break;
     case IR44_DIY1        : presetFallback(1, FX_MODE_STATIC,        0); break;
     case IR44_DIY2        : presetFallback(2, FX_MODE_BREATH,        0); break;
-    case IR44_DIY3        : presetFallback(3, FX_MODE_FIRE_FLICKER,  0); break;
+    case IR44_DIY3        : presetFallback(3, FX_MODE_NOISEFIRE,  0); break;
     case IR44_DIY4        : presetFallback(4, FX_MODE_RAINBOW,       0); break;
     case IR44_DIY5        : presetFallback(5, FX_MODE_METEOR,        0); break;
     case IR44_DIY6        : presetFallback(6, FX_MODE_WATERFALL,     0); break;
     case IR44_AUTO        : changeEffect(FX_MODE_STATIC);                break;
-    case IR44_FLASH       : changeEffect(FX_MODE_PALETTE);               break;
+    case IR44_FLASH       : changeEffect(FX_MODE_COLORWAVES);            break;
     case IR44_JUMP3       : bri = 63;                                    break;
     case IR44_JUMP7       : bri = 127;                                   break;
     case IR44_FADE3       : bri = 191;                                   break;

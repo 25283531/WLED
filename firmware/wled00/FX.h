@@ -150,132 +150,115 @@ extern byte realtimeMode;           // used in getMappedPixelIndex()
 #define FX_MODE_BREATH                   2
 #define FX_MODE_RAINBOW                  3
 #define FX_MODE_RAINBOW_CYCLE            4
-#define FX_MODE_FADE                     5 // reserved: Fade effect removed, slot kept so later ids do not shift
-#define FX_MODE_THEATER_CHASE            6
-#define FX_MODE_RUNNING_LIGHTS           7
-#define FX_MODE_DISSOLVE                 8
-#define FX_MODE_MULTI_STROBE             9
-#define FX_MODE_CHASE_COLOR              10
-#define FX_MODE_CHASE_FLASH_RANDOM       11
-#define FX_MODE_COLORFUL                 12
-#define FX_MODE_FIREWORKS                13
-#define FX_MODE_FIRE_FLICKER             14
-#define FX_MODE_GRADIENT                 15
-#define FX_MODE_ROLLINGBALLS             16  //was Police before 0.14
-#define FX_MODE_FAIRY                    17  //was Police All prior to 0.13.0-b6 (use "Two Dots" with Red/Blue and full intensity)
-#define FX_MODE_IMAGE                    18
-#define FX_MODE_TRICOLOR_CHASE           19
-#define FX_MODE_TRICOLOR_FADE            20
-#define FX_MODE_JUGGLE                   21
-#define FX_MODE_PALETTE                  22
-#define FX_MODE_COLORWAVES               23
-#define FX_MODE_FILLNOISE8               24
-#define FX_MODE_NOISE16_4                25
-#define FX_MODE_COLORTWINKLE             26
-#define FX_MODE_LAKE                     27
-#define FX_MODE_METEOR                   28
+#define FX_MODE_THEATER_CHASE            5
+#define FX_MODE_RUNNING_LIGHTS           6
+#define FX_MODE_DISSOLVE                 7
+#define FX_MODE_MULTI_STROBE             8
+#define FX_MODE_CHASE_COLOR              9
+#define FX_MODE_CHASE_FLASH_RANDOM       10
+#define FX_MODE_COLORFUL                 11
+#define FX_MODE_FIREWORKS                12
+#define FX_MODE_GRADIENT                 13
+#define FX_MODE_ROLLINGBALLS             14  //was Police before 0.14
+#define FX_MODE_FAIRY                    15  //was Police All prior to 0.13.0-b6 (use "Two Dots" with Red/Blue and full intensity)
+#define FX_MODE_IMAGE                    16
+#define FX_MODE_JUGGLE                   17
+#define FX_MODE_COLORWAVES               18
+#define FX_MODE_NOISE16_4                19
+#define FX_MODE_COLORTWINKLE             20
+#define FX_MODE_METEOR                   21
 //#define FX_MODE_METEOR_SMOOTH           77  // replaced by Meteor
-#define FX_MODE_COPY                     29
-#define FX_MODE_RAILWAY                  30
-#define FX_MODE_RIPPLE                   31
-#define FX_MODE_TWINKLEFOX               32
-#define FX_MODE_GLITTER                  33
-#define FX_MODE_STARBURST                34
-#define FX_MODE_BOUNCINGBALLS            35
-#define FX_MODE_POPCORN                  36
-#define FX_MODE_DRIP                     37
-#define FX_MODE_PLASMA                   38
-#define FX_MODE_SUNRISE                  39
-#define FX_MODE_PHASED                   40
-#define FX_MODE_SINEWAVE                 41
-#define FX_MODE_FLOW                     42
-#define FX_MODE_CHUNCHUN                 43
-#define FX_MODE_DANCING_SHADOWS          44
-#define FX_MODE_WASHING_MACHINE          45
-#define FX_MODE_BLENDS                   46
+#define FX_MODE_COPY                     22
+#define FX_MODE_RAILWAY                  23
+#define FX_MODE_RIPPLE                   24
+#define FX_MODE_TWINKLEFOX               25
+#define FX_MODE_GLITTER                  26
+#define FX_MODE_STARBURST                27
+#define FX_MODE_BOUNCINGBALLS            28
+#define FX_MODE_SUNRISE                  29
 
 // new 0.14 2D effects
-#define FX_MODE_2DCRAZYBEES              47  //gap fill
-#define FX_MODE_2DGHOSTRIDER             48  //gap fill
-#define FX_MODE_2DBLOBS                  49  //gap fill
-#define FX_MODE_2DSCROLLTEXT             50  //gap fill
-#define FX_MODE_2DDISTORTIONWAVES        51  //gap fill
-#define FX_MODE_2DSOAP                   52  //gap fill
-#define FX_MODE_2DOCTOPUS                53  //gap fill
-#define FX_MODE_2DWAVINGCELL             54  //gap fill
+#define FX_MODE_2DCRAZYBEES              30  //gap fill
+#define FX_MODE_2DGHOSTRIDER             31  //gap fill
+#define FX_MODE_2DBLOBS                  32  //gap fill
+#define FX_MODE_2DSCROLLTEXT             33  //gap fill
+#define FX_MODE_2DDISTORTIONWAVES        34  //gap fill
+#define FX_MODE_2DSOAP                   35  //gap fill
+#define FX_MODE_2DOCTOPUS                36  //gap fill
+#define FX_MODE_2DWAVINGCELL             37  //gap fill
 
 // WLED-SR effects (SR compatible IDs !!!)
-#define FX_MODE_PIXELS                   55
-#define FX_MODE_PIXELWAVE                56
-#define FX_MODE_JUGGLES                  57
-#define FX_MODE_MATRIPIX                 58
-#define FX_MODE_GRAVIMETER               59
-#define FX_MODE_PLASMOID                 60
-#define FX_MODE_PUDDLES                  61
-#define FX_MODE_MIDNOISE                 62
-#define FX_MODE_WATERFALL                63
-#define FX_MODE_FREQPIXELS               64
-#define FX_MODE_NOISEFIRE                65
-#define FX_MODE_NOISEMOVE                66
-#define FX_MODE_2DNOISE                  67
+#define FX_MODE_PIXELS                   38
+#define FX_MODE_PIXELWAVE                39
+#define FX_MODE_JUGGLES                  40
+#define FX_MODE_MATRIPIX                 41
+#define FX_MODE_GRAVIMETER               42
+#define FX_MODE_PLASMOID                 43
+#define FX_MODE_PUDDLES                  44
+#define FX_MODE_MIDNOISE                 45
+#define FX_MODE_WATERFALL                46
+#define FX_MODE_FREQPIXELS               47
+#define FX_MODE_NOISEFIRE                48
+#define FX_MODE_NOISEMOVE                49
+#define FX_MODE_2DNOISE                  50
 // #define FX_MODE_2DFIRE2012             151
-#define FX_MODE_PACMAN                   68
-#define FX_MODE_2DDNA                    69
-#define FX_MODE_2DMATRIX                 70
-#define FX_MODE_2DMETABALLS              71
-#define FX_MODE_GRAVCENTER               72
-#define FX_MODE_2DFUNKYPLANK             73
+#define FX_MODE_PACMAN                   51
+#define FX_MODE_2DDNA                    52
+#define FX_MODE_2DMATRIX                 53
+#define FX_MODE_2DMETABALLS              54
+#define FX_MODE_GRAVCENTER               55
+#define FX_MODE_2DFUNKYPLANK             56
 //#define FX_MODE_2DCENTERBARS           161
-#define FX_MODE_2DPULSER                 74
-#define FX_MODE_BLURZ                    75
-#define FX_MODE_2DDRIFT                  76
-#define FX_MODE_2DWAVERLY                77
-#define FX_MODE_2DSUNRADIATION           78
-#define FX_MODE_2DCOLOREDBURSTS          79
-#define FX_MODE_2DJULIA                  80
+#define FX_MODE_2DPULSER                 57
+#define FX_MODE_BLURZ                    58
+#define FX_MODE_2DDRIFT                  59
+#define FX_MODE_2DWAVERLY                60
+#define FX_MODE_2DSUNRADIATION           61
+#define FX_MODE_2DCOLOREDBURSTS          62
+#define FX_MODE_2DJULIA                  63
 // #define FX_MODE_2DPOOLNOISE            169 //have been removed in WLED SR in the past because of low mem but should be added back
 // #define FX_MODE_2DTWISTER              170 //have been removed in WLED SR in the past because of low mem but should be added back
 // #define FX_MODE_2DCAELEMENTATY         171 //have been removed in WLED SR in the past because of low mem but should be added back
-#define FX_MODE_2DGAMEOFLIFE             81
-#define FX_MODE_2DTARTAN                 82
-#define FX_MODE_2DPOLARLIGHTS            83
-#define FX_MODE_2DSWIRL                  84
-#define FX_MODE_2DLISSAJOUS              85
-#define FX_MODE_2DFRIZZLES               86
-#define FX_MODE_FLOWSTRIPE               87
-#define FX_MODE_2DHIPHOTIC               88
-#define FX_MODE_2DSINDOTS                89
-#define FX_MODE_2DDNASPIRAL              90
-#define FX_MODE_2DBLACKHOLE              91
-#define FX_MODE_WAVESINS                 92
-#define FX_MODE_ROCKTAVES                93
+#define FX_MODE_2DGAMEOFLIFE             64
+#define FX_MODE_2DTARTAN                 65
+#define FX_MODE_2DPOLARLIGHTS            66
+#define FX_MODE_2DSWIRL                  67
+#define FX_MODE_2DLISSAJOUS              68
+#define FX_MODE_2DFRIZZLES               69
+#define FX_MODE_FLOWSTRIPE               70
+#define FX_MODE_2DHIPHOTIC               71
+#define FX_MODE_2DSINDOTS                72
+#define FX_MODE_2DDNASPIRAL              73
+#define FX_MODE_2DBLACKHOLE              74
+#define FX_MODE_WAVESINS                 75
+#define FX_MODE_ROCKTAVES                76
 
-#define FX_MODE_PARTICLEVORTEX           94
-#define FX_MODE_PARTICLEPERLIN           95
-#define FX_MODE_PARTICLEPIT              96
-#define FX_MODE_PARTICLEBOX              97
-#define FX_MODE_PARTICLEATTRACTOR        98
-#define FX_MODE_PARTICLESPRAY            99
-#define FX_MODE_PARTICLEGHOSTRIDER       100
-#define FX_MODE_PARTICLEBLOBS            101
-#define FX_MODE_PSDANCINGSHADOWS         102
-#define FX_MODE_PSCHASE                  103
-#define FX_MODE_PS1DGEQ                  104
-#define FX_MODE_PS1DSPRINGY              105
-#define FX_MODE_PARTICLEGALAXY           106
-#define FX_MODE_COLORCLOUDS              107
-#define FX_MODE_LUMI_AURORA              108  // 光屿招牌灯效「极光之舞」
-#define FX_MODE_LUMI_FOREST              109  // 林间萤光
-#define FX_MODE_LUMI_CAUSTICS            110  // 深海波光
+#define FX_MODE_PARTICLEVORTEX           77
+#define FX_MODE_PARTICLEPERLIN           78
+#define FX_MODE_PARTICLEPIT              79
+#define FX_MODE_PARTICLEBOX              80
+#define FX_MODE_PARTICLEATTRACTOR        81
+#define FX_MODE_PARTICLESPRAY            82
+#define FX_MODE_PARTICLEGHOSTRIDER       83
+#define FX_MODE_PARTICLEBLOBS            84
+#define FX_MODE_PSDANCINGSHADOWS         85
+#define FX_MODE_PSCHASE                  86
+#define FX_MODE_PS1DGEQ                  87
+#define FX_MODE_PS1DSPRINGY              88
+#define FX_MODE_PARTICLEGALAXY           89
+#define FX_MODE_COLORCLOUDS              90
+#define FX_MODE_LUMI_AURORA              91  // 光屿招牌灯效「极光之舞」
+#define FX_MODE_LUMI_FOREST              92  // 林间萤光
+#define FX_MODE_LUMI_CAUSTICS            93  // 深海波光
 
-#define FX_MODE_STAGELIGHT               111  // 舞台灯：c1 bit0..2 选择低/中/高频，col[0..2] 为对应频段颜色
-#define FX_MODE_TRIBREATH 112
-#define FX_MODE_AUDIOSPIRAL 113
-#define FX_MODE_SONICPULSE 114
-#define FX_MODE_BASSLAVA 115
-#define FX_MODE_SPECTRUMLAMP 116
-#define FX_MODE_AUDIOSOLUTION 117
-#define MODE_COUNT                     118
+#define FX_MODE_STAGELIGHT               94  // 舞台灯：c1 bit0..2 选择低/中/高频，col[0..2] 为对应频段颜色
+#define FX_MODE_TRIBREATH 95
+#define FX_MODE_AUDIOSPIRAL 96
+#define FX_MODE_SONICPULSE 97
+#define FX_MODE_BASSLAVA 98
+#define FX_MODE_SPECTRUMLAMP 99
+#define FX_MODE_AUDIOSOLUTION 100
+#define MODE_COUNT                     101
 
 
 #define TRANSITION_FADE            0x00  // universal
