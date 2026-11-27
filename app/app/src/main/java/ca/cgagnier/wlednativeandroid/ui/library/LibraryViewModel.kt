@@ -65,11 +65,11 @@ class LibraryViewModel(
 
     val visibleEffects: StateFlow<List<EffectInfo>> = combine(_filter, _query, favoriteIds) {
             filter, query, favoriteIds ->
-        filterEffects(EffectCatalog.all, filter, query, favoriteIds)
+        filterEffects(EffectCatalog.visible, filter, query, favoriteIds)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(FAVORITES_SUBSCRIPTION_TIMEOUT_MS),
-        initialValue = EffectCatalog.all,
+        initialValue = EffectCatalog.visible,
     )
 
     fun selectFilter(filter: EffectFilter) {

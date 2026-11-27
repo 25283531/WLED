@@ -10,7 +10,7 @@ enum class EffectCategory { ONE_D, TWO_D, ART }
  *
  * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。
  */
-enum class EffectMood { AURORA, MUSIC, TEXT }
+enum class EffectMood { AURORA, MUSIC }
 
 /**
  * 一个固件灯效。
@@ -22,6 +22,7 @@ enum class EffectMood { AURORA, MUSIC, TEXT }
  * @property mood 律动胶囊的分组，见 [EffectMood]。
  * @property isPopular 是否列入「常用」。
  * @property preview 预览 GIF 的资源名（assets/effect_previews/<preview>.gif），即效果 id。
+ * @property hidden 为 true 时仅保留 id 映射，不出现在灯效库、筛选与快捷卡片中。
  */
 data class EffectInfo(
     val id: Int,
@@ -31,6 +32,7 @@ data class EffectInfo(
     val mood: EffectMood,
     val isPopular: Boolean,
     val preview: String?,
+    val hidden: Boolean = false,
 ) {
     val hasPreview: Boolean get() = preview != null
 
@@ -56,7 +58,7 @@ object EffectCatalog {
         EffectInfo(13, "Gradient", "渐变", EffectCategory.ONE_D, EffectMood.AURORA, false, "13"),
         EffectInfo(14, "Rolling Balls", "逐光者", EffectCategory.ONE_D, EffectMood.AURORA, false, "14"),
         EffectInfo(15, "Fairy", "绿野迷踪", EffectCategory.ONE_D, EffectMood.AURORA, false, "15"),
-        EffectInfo(16, "Image", "自定义图片", EffectCategory.ART, EffectMood.TEXT, true, "16"),
+        EffectInfo(16, "Image", "自定义图片", EffectCategory.ART, EffectMood.AURORA, true, "16", hidden = true),
         EffectInfo(17, "Juggle", "抛球", EffectCategory.ONE_D, EffectMood.AURORA, false, "17"),
         EffectInfo(18, "Colorwaves", "色浪", EffectCategory.ONE_D, EffectMood.AURORA, false, "18"),
         EffectInfo(19, "Noise 4", "噪声 IV", EffectCategory.ONE_D, EffectMood.AURORA, false, "19"),
@@ -73,7 +75,7 @@ object EffectCatalog {
         EffectInfo(30, "Crazy Bees", "疯狂蜜蜂", EffectCategory.TWO_D, EffectMood.AURORA, false, "30"),
         EffectInfo(31, "Ghost Rider", "恶灵骑士", EffectCategory.TWO_D, EffectMood.AURORA, false, "31"),
         EffectInfo(32, "Blobs", "团块", EffectCategory.TWO_D, EffectMood.AURORA, false, "32"),
-        EffectInfo(33, "Scrolling Text", "动态字幕", EffectCategory.ART, EffectMood.TEXT, true, "33"),
+        EffectInfo(33, "Scrolling Text", "动态字幕", EffectCategory.ART, EffectMood.AURORA, true, "33", hidden = true),
         EffectInfo(34, "Distortion Waves", "扭曲波", EffectCategory.TWO_D, EffectMood.AURORA, false, "34"),
         EffectInfo(35, "Soap", "皂泡", EffectCategory.TWO_D, EffectMood.AURORA, false, "35"),
         EffectInfo(36, "Octopus", "章鱼", EffectCategory.TWO_D, EffectMood.AURORA, false, "36"),
@@ -93,7 +95,7 @@ object EffectCatalog {
         EffectInfo(50, "Noise2D", "二维噪声", EffectCategory.TWO_D, EffectMood.AURORA, false, "50"),
         EffectInfo(51, "PacMan", "吃豆人", EffectCategory.ONE_D, EffectMood.AURORA, true, "51"),
         EffectInfo(52, "DNA", "基因链", EffectCategory.TWO_D, EffectMood.AURORA, false, "52"),
-        EffectInfo(53, "Matrix", "数字雨", EffectCategory.TWO_D, EffectMood.TEXT, true, "53"),
+        EffectInfo(53, "Matrix", "数字雨", EffectCategory.TWO_D, EffectMood.AURORA, true, "53"),
         EffectInfo(54, "Metaballs", "融球", EffectCategory.TWO_D, EffectMood.AURORA, false, "54"),
         EffectInfo(55, "Gravcenter", "重力中心", EffectCategory.ONE_D, EffectMood.AURORA, false, "55"),
         EffectInfo(56, "Funky Plank", "律动板", EffectCategory.TWO_D, EffectMood.AURORA, false, "56"),
@@ -152,9 +154,12 @@ object EffectCatalog {
     /** 按固件英文名反查灯效。业务代码不写死 id —— 固件插入新效果后 id 会整体前移。 */
     fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name.trim() }
 
-    val popular: List<EffectInfo> = all.filter { it.isPopular }
+    /** 灯效库、筛选与快捷卡片只展示可见项；hidden 仅用于按名反查 id。 */
+    val visible: List<EffectInfo> = all.filter { !it.hidden }
 
-    fun byCategory(category: EffectCategory): List<EffectInfo> = all.filter { it.category == category }
+    val popular: List<EffectInfo> = visible.filter { it.isPopular }
 
-    fun byMood(mood: EffectMood): List<EffectInfo> = all.filter { it.mood == mood }
+    fun byCategory(category: EffectCategory): List<EffectInfo> = visible.filter { it.category == category }
+
+    fun byMood(mood: EffectMood): List<EffectInfo> = visible.filter { it.mood == mood }
 }

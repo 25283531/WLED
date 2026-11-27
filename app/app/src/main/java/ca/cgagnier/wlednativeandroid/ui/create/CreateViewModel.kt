@@ -50,10 +50,14 @@ private const val COLOR_SLOT_COUNT = 3
 private const val DEFAULT_GRID_COLS = 16
 private const val DEFAULT_GRID_ROWS = 10
 private const val MAX_GRID_SIDE = 40
-private const val UPLOAD_FILE_NAME = "isle.gif"
-
-/** 上传到设备后，`Image` 效果按段落名找文件，所以名字两边必须一致。 */
-private const val UPLOAD_BASENAME = "isle"
+/**
+ * 上传文件名前缀。
+ *
+ * 固件 `Image` 效果要求段落名（`seg.name`）是一个以 `.gif` 结尾的文件名，
+ * 且只在名字变化时才重新加载文件 —— 所以每次按内容拼出唯一名字，
+ * 既满足后缀要求，也能让重复投送真正刷新画面。
+ */
+private const val UPLOAD_FILE_PREFIX = "isle_"
 
 /** 自定义图文里文字/时间层可选的文字颜色。 */
 val GRAPHIC_COLORS: List<Int> = listOf(
@@ -370,13 +374,16 @@ class CreateViewModel(
                     require(frames.any { frame -> frame.colors.any { it != 0 } }) { "内容还没有点亮任何灯珠" }
                     buildGif(frames, _gridCols.value, _gridRows.value)
                 }
+                // 内容哈希保证不同图文落到不同文件名：固件按文件名判断是否重新加载，
+                // 名字不变的话再次投送会继续显示上一张图。
+                val fileName = "$UPLOAD_FILE_PREFIX${bytes.size}_${bytes.contentHashCode().toUInt().toString(16)}.gif"
                 val api = deviceApiFactory.create(device.device)
-                api.uploadFile(bytes, UPLOAD_FILE_NAME)
+                api.uploadFile(bytes, fileName) to fileName
             }
             val result = outcome.getOrNull()
-            val uploaded = result != null && result.code in 200..299
+            val uploaded = result != null && result.first.code in 200..299
             val applied = uploaded && deviceConnectionManager.sendSegmentPatch(device.device.macAddress) {
-                it.copy(effect = IMAGE_EFFECT, name = UPLOAD_BASENAME)
+                it.copy(effect = IMAGE_EFFECT, name = result?.second)
             }
             _busy.value = false
             _status.value = when {

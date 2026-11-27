@@ -325,10 +325,8 @@ private fun EffectFilter.labelRes(): Int = when (this) {
     EffectFilter.ALL -> R.string.isle_filter_all
     EffectFilter.POPULAR -> R.string.isle_filter_popular
     EffectFilter.FAVORITE -> R.string.isle_filter_favorite
-    EffectFilter.ART -> R.string.isle_filter_art
     EffectFilter.ONE_D -> R.string.isle_filter_1d
     EffectFilter.TWO_D -> R.string.isle_filter_2d
     EffectFilter.AURORA -> R.string.isle_mood_aurora
     EffectFilter.MUSIC -> R.string.isle_mood_music
-    EffectFilter.TEXT -> R.string.isle_mood_text
 }

@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test
  */
 class EffectFiltersTest {
 
-    private val all = EffectCatalog.all
+    // 灯效库只展示可见项，Image / Scrolling Text 已改为创作页投送，不再出现在库里
+    private val all = EffectCatalog.visible
 
     @Test
     fun `ALL 返回完整目录`() {
@@ -42,17 +43,6 @@ class EffectFiltersTest {
     }
 
     @Test
-    fun `ART 收录自定义图片与滚动字幕`() {
-        val art = filterEffects(all, EffectFilter.ART, "")
-        assertEquals(
-            setOf("Image", "Scrolling Text"),
-            art.map { it.name }.toSet(),
-            "「字画」应收纳 Image 与 Scrolling Text",
-        )
-        assertTrue(art.all { it.category == EffectCategory.ART })
-    }
-
-    @Test
     fun `ONE_D 与 TWO_D 按固件效果类型划分且互斥`() {
         val oneD = filterEffects(all, EffectFilter.ONE_D, "")
         val twoD = filterEffects(all, EffectFilter.TWO_D, "")
@@ -62,7 +52,7 @@ class EffectFiltersTest {
             oneD.none { it.id in twoD.map { t -> t.id } },
             "1D 与 2D 不应有交集",
         )
-        assertEquals(all.size, oneD.size + twoD.size + filterEffects(all, EffectFilter.ART, "").size)
+        assertEquals(all.size, oneD.size + twoD.size)
     }
 
     @Test
@@ -70,12 +60,25 @@ class EffectFiltersTest {
         listOf(
             EffectFilter.AURORA to EffectMood.AURORA,
             EffectFilter.MUSIC to EffectMood.MUSIC,
-            EffectFilter.TEXT to EffectMood.TEXT,
         ).forEach { (filter, mood) ->
             val result = filterEffects(all, filter, "")
             assertTrue(result.isNotEmpty(), "$filter 不应为空")
             assertTrue(result.all { it.mood == mood }, "$filter 混入了其它模式的灯效")
             assertEquals(EffectCatalog.byMood(mood).size, result.size)
+        }
+    }
+
+    @Test
+    fun `数字雨归入幻彩极光且隐藏在库外`() {
+        val matrix = EffectCatalog.byName("Matrix")
+        assertEquals(EffectMood.AURORA, matrix?.mood, "数字雨应归入幻彩极光")
+        assertTrue(filterEffects(all, EffectFilter.AURORA, "").any { it.name == "Matrix" })
+
+        // 自定义图片/动态字幕仍可按名反查 id（创作页投送要用），但不再出现在灯效库
+        listOf("Image", "Scrolling Text").forEach { name ->
+            val effect = EffectCatalog.byName(name)
+            assertTrue(effect != null && effect.hidden, "$name 应保留 id 映射并标记隐藏")
+            assertTrue(all.none { it.name == name }, "$name 不应出现在灯效库可见列表中")
         }
     }
 
@@ -112,10 +115,10 @@ class EffectFiltersTest {
 
     @Test
     fun `筛选与搜索叠加生效`() {
-        val result = filterEffects(all, EffectFilter.ART, "字幕")
+        val result = filterEffects(all, EffectFilter.AURORA, "数字雨")
         assertTrue(result.isNotEmpty())
-        assertTrue(result.all { it.category == EffectCategory.ART })
-        assertTrue(result.all { it.name.contains("字幕") || it.nameZh.contains("字幕") })
+        assertTrue(result.all { it.mood == EffectMood.AURORA })
+        assertTrue(result.all { it.name.contains("数字雨") || it.nameZh.contains("数字雨") })
     }
 
     @Test

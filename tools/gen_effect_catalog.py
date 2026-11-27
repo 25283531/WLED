@@ -7,7 +7,6 @@
 「律动模式」（mood）是 App 侧的产品分类，固件没有这个概念：
     AURORA 幻彩极光 —— 一切以色彩流动为主的氛围效果
     MUSIC  音乐律动 —— 由音频频谱驱动的效果（GEQ、频谱、声波类）
-    TEXT   动态字幕 —— 直接显示用户内容的字画（文字、图片、时钟、数字雨）
 「睡眠夜灯」不是分类，而是设备页的一键暖光动作，故不在此建模。
 分类按固件宏名（FX_MODE_*）白名单硬编码，与 id 解耦，宁可漏收也不猜。
 
@@ -32,6 +31,11 @@ TARGET = os.path.join(
 # 「字画」：自定义图片 + 自定义文字（固件里只有这两个效果直接消费用户内容）
 ART_EFFECT_NAMES = {"Image", "Scrolling Text"}
 
+# 不再进入灯效库、但仍需按名反查 id 的固件效果。
+# 自定义图文改由「创作」页直接上传 GIF + 切到 Image 播放，因此这两个效果
+# 只在目录里保留 id 映射（hidden），不出现在灯效库、筛选和快捷卡片中。
+HIDDEN_NAMES = {"Image", "Scrolling Text"}
+
 # 「常用」：按实际使用频率人工挑选，覆盖开关灯之外最常触碰的效果
 POPULAR_NAMES = {
     "Blink", "Breathe", "Colorloop", "Rainbow", "Chase",
@@ -47,11 +51,6 @@ MUSIC_IDS = {
     "FX_MODE_STAGELIGHT", "FX_MODE_TRIBREATH", "FX_MODE_AUDIOSPIRAL",
     "FX_MODE_SONICPULSE", "FX_MODE_BASSLAVA", "FX_MODE_SPECTRUMLAMP",
     "FX_MODE_AUDIOSOLUTION",
-}
-
-# 「动态字幕」：直接显示用户内容（文字、图片、时钟、数字雨）
-TEXT_IDS = {
-    "FX_MODE_IMAGE", "FX_MODE_2DSCROLLTEXT", "FX_MODE_2DMATRIX",
 }
 
 # 中文显示名。没收录的灯效直接用固件英文名，不做机器翻译。
@@ -147,10 +146,7 @@ def categorize(entry: dict) -> str:
 
 
 def mood_of(entry: dict) -> str:
-    fx = entry["fx"]
-    if fx in TEXT_IDS:
-        return "TEXT"
-    if fx in MUSIC_IDS:
+    if entry["fx"] in MUSIC_IDS:
         return "MUSIC"
     return "AURORA"
 
@@ -189,7 +185,7 @@ def main() -> int:
         " *",
         " * 固件没有这个概念，分类由 [EffectCatalog] 的 id 白名单决定。",
         " */",
-        "enum class EffectMood { AURORA, MUSIC, TEXT }",
+        "enum class EffectMood { AURORA, MUSIC }",
         "",
         "/**",
         " * 一个固件灯效。",
@@ -201,6 +197,7 @@ def main() -> int:
         " * @property mood 律动胶囊的分组，见 [EffectMood]。",
         " * @property isPopular 是否列入「常用」。",
         " * @property preview 预览 GIF 的资源名（assets/effect_previews/<preview>.gif），即效果 id。",
+        " * @property hidden 为 true 时仅保留 id 映射，不出现在灯效库、筛选与快捷卡片中。",
         " */",
         "data class EffectInfo(",
         "    val id: Int,",
@@ -210,6 +207,7 @@ def main() -> int:
         "    val mood: EffectMood,",
         "    val isPopular: Boolean,",
         "    val preview: String?,",
+        "    val hidden: Boolean = false,",
         ") {",
         "    val hasPreview: Boolean get() = preview != null",
         "",
@@ -230,10 +228,11 @@ def main() -> int:
         # 预览图以效果 id 命名，与固件 fx 值一一对应，杜绝「名字对、图不对」
         preview_literal = kotlin_string(str(idx))
         zh = NAME_ZH.get(entry["fx"], name)
+        hidden_literal = ", hidden = true" if name in HIDDEN_NAMES else ""
         lines.append(
             f"        EffectInfo({idx}, {kotlin_string(name)}, {kotlin_string(zh)}, "
             f"EffectCategory.{CATEGORY_CONST[category]}, EffectMood.{mood_of(entry)}, "
-            f"{popular}, {preview_literal}),"
+            f"{popular}, {preview_literal}{hidden_literal}),"
         )
 
     lines += [
@@ -248,11 +247,14 @@ def main() -> int:
         "    /** 按固件英文名反查灯效。业务代码不写死 id —— 固件插入新效果后 id 会整体前移。 */",
         "    fun byName(name: String): EffectInfo? = all.firstOrNull { it.name == name.trim() }",
         "",
-        "    val popular: List<EffectInfo> = all.filter { it.isPopular }",
+        "    /** 灯效库、筛选与快捷卡片只展示可见项；hidden 仅用于按名反查 id。 */",
+        "    val visible: List<EffectInfo> = all.filter { !it.hidden }",
         "",
-        "    fun byCategory(category: EffectCategory): List<EffectInfo> = all.filter { it.category == category }",
+        "    val popular: List<EffectInfo> = visible.filter { it.isPopular }",
         "",
-        "    fun byMood(mood: EffectMood): List<EffectInfo> = all.filter { it.mood == mood }",
+        "    fun byCategory(category: EffectCategory): List<EffectInfo> = visible.filter { it.category == category }",
+        "",
+        "    fun byMood(mood: EffectMood): List<EffectInfo> = visible.filter { it.mood == mood }",
         "}",
         "",
     ]

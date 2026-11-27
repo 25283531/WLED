@@ -7,21 +7,19 @@ import ca.cgagnier.wlednativeandroid.model.wledapi.Segment
  *
  * 扁平的一维筛选：任选其一即生效，不做多维交叉。
  * 之所以不做「模式 × 维度」的交叉，是因为两者会大量落空
- * （例如「幻彩极光」里没有「字画」，交叉后是空列表），
+ * （例如「音乐律动」里几乎没有 1D 灯效，交叉后接近空列表），
  * 与其在界面上解释这个规则，不如让用户一次选一个意图。
  *
- * [ONE_D] / [TWO_D] 按固件效果类型区分 1D 与 2D；[ART] 是能直接显示用户内容的字画子集。
+ * [ONE_D] / [TWO_D] 按固件效果类型区分 1D 与 2D。
  */
 enum class EffectFilter {
     ALL,
     POPULAR,
     FAVORITE,
-    ART,
     ONE_D,
     TWO_D,
     AURORA,
     MUSIC,
-    TEXT,
 }
 
 /**
@@ -42,12 +40,10 @@ fun filterEffects(
         EffectFilter.ALL -> effects
         EffectFilter.POPULAR -> effects.filter { it.isPopular }
         EffectFilter.FAVORITE -> effects.filter { it.id in favoriteIds }
-        EffectFilter.ART -> effects.filter { it.category == EffectCategory.ART }
         EffectFilter.ONE_D -> effects.filter { it.category == EffectCategory.ONE_D }
         EffectFilter.TWO_D -> effects.filter { it.category == EffectCategory.TWO_D }
         EffectFilter.AURORA -> effects.filter { it.mood == EffectMood.AURORA }
         EffectFilter.MUSIC -> effects.filter { it.mood == EffectMood.MUSIC }
-        EffectFilter.TEXT -> effects.filter { it.mood == EffectMood.TEXT }
     }
     if (trimmed.isEmpty()) return byFilter
     return byFilter.filter {

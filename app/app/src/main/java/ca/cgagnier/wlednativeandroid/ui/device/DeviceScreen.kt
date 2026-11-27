@@ -423,14 +423,13 @@ fun DeviceScreen(
                             Toast.makeText(context, R.string.effects_no_device, Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.applyEffect(target, card.effect.id, card.favorite)
-                            if (EffectTuningPolicy.isScrollingText(card.effect.id)) {
-                                onOpenTextEditor()
-                            }
                         }
                     },
                     onToggleFavorite = { effect ->
                         device?.let { viewModel.toggleFavorite(it, effect) }
                     },
+                    // 「动态字幕」已从灯效库里独立出来，快捷区保留一个动作入口直达创作页
+                    onOpenTextEditor = onOpenTextEditor,
                 )
             }
         }
@@ -1801,13 +1800,11 @@ private fun MoodTile(
 private fun EffectMood.glyph(): Glyph = when (this) {
     EffectMood.AURORA -> Glyph.Aurora
     EffectMood.MUSIC -> Glyph.Music
-    EffectMood.TEXT -> Glyph.Text
 }
 
 private fun EffectMood.labelRes(): Int = when (this) {
     EffectMood.AURORA -> R.string.isle_mood_aurora
     EffectMood.MUSIC -> R.string.isle_mood_music
-    EffectMood.TEXT -> R.string.isle_mood_text
 }
 
 /**
@@ -1843,22 +1840,68 @@ private fun QuickGrid(
     currentEffect: Int?,
     onApply: (QuickCardItem) -> Unit,
     onToggleFavorite: (EffectInfo) -> Unit,
+    onOpenTextEditor: () -> Unit,
 ) {
+    // 「动态字幕」已不再是一个灯效，而是一个直达创作页自定义图文的动作，排在快捷区首位。
+    val tileCount = cards.size + 1
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        cards.chunked(2).forEach { row ->
+        (0 until tileCount).chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { card ->
-                    QuickCard(
-                        effect = card.effect,
-                        isFavorite = card.effect.id in favoriteIds,
-                        isActive = card.effect.id == currentEffect,
-                        onClick = { onApply(card) },
-                        onToggleFavorite = { onToggleFavorite(card.effect) },
-                        modifier = Modifier.weight(1f),
-                    )
+                row.forEach { index ->
+                    if (index == 0) {
+                        QuickActionCard(
+                            glyph = Glyph.Text,
+                            label = stringResource(R.string.isle_mood_text),
+                            onClick = onOpenTextEditor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        val card = cards[index - 1]
+                        QuickCard(
+                            effect = card.effect,
+                            isFavorite = card.effect.id in favoriteIds,
+                            isActive = card.effect.id == currentEffect,
+                            onClick = { onApply(card) },
+                            onToggleFavorite = { onToggleFavorite(card.effect) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+    }
+}
+
+/** 快捷区里的动作卡片：没有灯效参数，点一下直接跳到对应创作页。 */
+@Composable
+private fun QuickActionCard(
+    glyph: Glyph,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .aspectRatio(1.55f)
+            .background(Color(0xFF101218), RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(listOf(IsleColors.Stroke, IsleColors.Stroke)),
+                shape = RoundedCornerShape(20.dp),
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            GlyphIcon(glyph = glyph, size = 26.dp, tint = IsleColors.Cyan)
+            Text(
+                text = label,
+                color = IsleColors.TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
     }
 }

@@ -577,7 +577,7 @@ class DeviceHomeViewModel(
     fun quickCards(favorites: List<FavoriteEffect>, mood: EffectMood): List<QuickCardItem> {
         val favoriteById = favorites.associateBy { it.effectId }
         val inMood = favorites.mapNotNull { fav ->
-            EffectCatalog.find(fav.effectId)?.let { QuickCardItem(it, fav) }
+            EffectCatalog.find(fav.effectId)?.takeIf { !it.hidden }?.let { QuickCardItem(it, fav) }
         }.filter { it.effect.mood == mood }
         if (inMood.size >= QUICK_CARD_COUNT) return inMood.take(QUICK_CARD_COUNT)
         val takenIds = inMood.map { it.effect.id }.toSet()
