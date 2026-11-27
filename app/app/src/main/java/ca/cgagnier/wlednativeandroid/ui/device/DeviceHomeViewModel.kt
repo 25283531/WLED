@@ -13,6 +13,7 @@ import ca.cgagnier.wlednativeandroid.service.websocket.DeviceWithState
 import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicFavorite
 import ca.cgagnier.wlednativeandroid.ui.create.CustomGraphicStore
 import ca.cgagnier.wlednativeandroid.ui.create.customGraphicFileName
+import ca.cgagnier.wlednativeandroid.ui.create.graphicSpeedFraction
 import ca.cgagnier.wlednativeandroid.ui.effects.AudioSpiral
 import ca.cgagnier.wlednativeandroid.ui.effects.CUSTOM_PALETTE_ID_BASE
 import ca.cgagnier.wlednativeandroid.ui.effects.EffectCatalog
@@ -503,7 +504,7 @@ class DeviceHomeViewModel(
             val bytes = withContext(Dispatchers.IO) { customGraphicStore.readGif(graphic) } ?: return@launch
             val imageId = EffectCatalog.byName("Image")?.id ?: return@launch
             val fileName = customGraphicFileName(bytes)
-            val speed = normalizedToChannel(graphic.speedPercent / 100f)
+            val speed = normalizedToChannel(graphicSpeedFraction(graphic.speedPercent / 100f))
             targets(device).forEach { mac ->
                 val target = devices.value.firstOrNull { it.device.macAddress == mac } ?: return@forEach
                 val uploaded = runCatching {

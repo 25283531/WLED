@@ -28,6 +28,26 @@ private const val GRAPHIC_FILE_PREFIX = "isle_"
 fun customGraphicFileName(bytes: ByteArray): String =
     "$GRAPHIC_FILE_PREFIX${bytes.size}_${bytes.contentHashCode().toUInt().toString(16)}.gif"
 
+/**
+ * 自定义图文滚动速度的有效上限。
+ *
+ * 原来滑杆 20% 的滚动速度已经足够，现在把它作为新滑杆 100% 对应的速度，
+ * 避免固定帧间隔与 `seg.sx` 双重放大后一过 20% 就快得看不清。
+ */
+private const val GRAPHIC_SPEED_CEILING = 0.2f
+
+/**
+ * 滑杆位置 → 实际滚动速度（0..[GRAPHIC_SPEED_CEILING]）。
+ *
+ * 0% 对应原来的最慢速度（接近静止），100% 对应原来的 20%；
+ * 用 smoothstep 让低速段更细腻，中段过渡平滑，不会出现速度突跳。
+ */
+fun graphicSpeedFraction(slider: Float): Float {
+    val t = slider.coerceIn(0f, 1f)
+    val eased = t * t * (3f - 2f * t)
+    return GRAPHIC_SPEED_CEILING * eased
+}
+
 /** 一条保存在手机本地的自定义图文收藏。 */
 @Serializable
 data class CustomGraphicFavorite(
@@ -40,7 +60,7 @@ data class CustomGraphicFavorite(
     val previewPath: String,
     /** 上传到设备后使用的文件名，固定由 GIF 内容推导。 */
     val deviceFileName: String,
-    /** 保存时的滚动速度百分比，调用时写回 `seg.sx`。 */
+    /** 保存时的滑杆百分比，调用时按 [graphicSpeedFraction] 换算后写回 `seg.sx`。 */
     val speedPercent: Int,
     val createdAt: Long,
 )

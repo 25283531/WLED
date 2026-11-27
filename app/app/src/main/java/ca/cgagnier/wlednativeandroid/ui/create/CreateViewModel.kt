@@ -318,7 +318,8 @@ class CreateViewModel(
     }
 
     private fun graphicOptions(): GraphicOptions = GraphicOptions(
-        scrollSpeed = _speed.value,
+        // 滑杆 0..100% 映射到原来的 0..20%，曲线见 graphicSpeedFraction
+        scrollSpeed = graphicSpeedFraction(_speed.value),
         reverse = _reverse.value,
         trailPercent = _trailPercent.value,
         darkCutoff = _darkCutoff.value,
@@ -389,7 +390,7 @@ class CreateViewModel(
                 it.copy(
                     effect = IMAGE_EFFECT,
                     name = result?.second,
-                    effectSpeed = normalizedToChannel(_speed.value),
+                    effectSpeed = normalizedToChannel(graphicSpeedFraction(_speed.value)),
                 )
             }
             _busy.value = false
