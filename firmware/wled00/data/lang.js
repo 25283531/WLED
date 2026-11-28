@@ -864,8 +864,10 @@
 		'Offset X:': 'X 偏移：',
 		'Offset Y:': 'Y 偏移：',
 		'(offset from top-left corner in # LEDs)': '（以灯珠数为单位，从左上角偏移）',
-		'Matrix Dimensions (W+H=L):': '矩阵尺寸（宽+高=长）：',
-		'Static IP (leave at 0.0.0.0 for DHCP)': '静态 IP（留 0.0.0.0 使用 DHCP）'
+		'Static IP (leave at 0.0.0.0 for DHCP)': '静态 IP（留 0.0.0.0 使用 DHCP）',
+		'Color palette not used': '未使用调色板',
+		'LED:': 'LED：',
+		'Y:': 'Y：'
 	};
 
 	function normalize(value) {
@@ -901,6 +903,7 @@
 		[/^Hardware channels used: (.+)$/, '已用硬件通道：$1'],
 		[/^#(\d+) GPIO:$/, '#$1 GPIO：'],
 		[/^Panel (\d+)$/, '面板 $1'],
+		[/^Matrix Dimensions \(W\*H=LC\): (.+)$/, '矩阵尺寸（宽×高=长）：$1'],
 		[/^Segment (\d+) opacity$/, '分段 $1 不透明度']
 	];
 
