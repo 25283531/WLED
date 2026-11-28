@@ -205,16 +205,18 @@ object GraphicComposer {
         now: Date = Date(),
     ): List<GraphicFrame> {
         if (cols <= 0 || rows <= 0) return emptyList()
-        // 纯文字/时间按灯珠分辨率栅格化，笔画正好 1 颗灯珠宽；
-        // 含图片时才用 8× 超采样保留图片细节（文字在这种情况下仍是原来的粗细）。
-        val cell = if (layers.any { it.type == GraphicLayerType.IMAGE }) SUPERSAMPLE else 1
-        val width = cols * cell
-        val height = rows * cell
-        val paints = layers.map { buildPaint(it, height, cell) }
+        val hasImage = layers.any { it.type == GraphicLayerType.IMAGE }
+        // 图片层按 8× 超采样保留细节，下采样成灯珠色块后再叠文字；
+        // 文字/时间层始终按 1 颗灯珠栅格化，笔画不会被撑粗（图文混排也一样）。
+        val imageCell = if (hasImage) SUPERSAMPLE else 1
+        val imageWidth = cols * imageCell
+        val imageHeight = rows * imageCell
+        val textPaints = layers.map { buildPaint(it, rows, 1) }
+        val imagePaints = if (hasImage) layers.map { buildPaint(it, imageHeight, imageCell) } else emptyList()
 
         val scrollCounts = layers.mapIndexed { index, layer ->
             if (layer.type == GraphicLayerType.IMAGE) 1
-            else scrollFrameCount(layer, paints[index], width, height, now, cell)
+            else scrollFrameCount(layer, textPaints[index], cols, rows, now, 1)
         }
         val animFrames = layers.filter { it.type == GraphicLayerType.IMAGE }
             .maxOfOrNull { gifFrameCount(context, it.imageUri) } ?: 1
@@ -225,19 +227,55 @@ object GraphicComposer {
 
         val delay = (12f - options.scrollSpeed.coerceIn(0f, 1f) * 8f)
             .roundToInt().coerceIn(4, 12)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val pixels = IntArray(width * height)
+        val background = 0xFF000000.toInt() or (options.background and 0xFFFFFF)
+
+        val imageBitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
+        val imageCanvas = Canvas(imageBitmap)
+        val imagePixels = IntArray(imageWidth * imageHeight)
+        val ledBitmap = Bitmap.createBitmap(cols, rows, Bitmap.Config.ARGB_8888)
+        val ledPixels = IntArray(cols * rows)
         val frames = ArrayList<GraphicFrame>(frameCount)
+
         for (frameIndex in 0 until frameCount) {
-            canvas.drawColor(0xFF000000.toInt() or (options.background and 0xFFFFFF))
+            // 1) 先把图片层画在 8× 画布上，下采样成灯珠色块
+            val base: List<Int> = if (hasImage) {
+                imageCanvas.drawColor(background)
+                layers.forEachIndexed { index, layer ->
+                    if (layer.type != GraphicLayerType.IMAGE) return@forEachIndexed
+                    val paint = imagePaints[index]
+                    paint.xfermode = layer.blend.mode?.let { PorterDuffXfermode(it) }
+                    val rect = regionOf(layer, imageWidth, imageHeight)
+                    imageCanvas.save()
+                    imageCanvas.clipRect(rect)
+                    if (layer.mirrorX || layer.mirrorY) {
+                        imageCanvas.translate(rect.centerX(), rect.centerY())
+                        imageCanvas.scale(
+                            if (layer.mirrorX) -1f else 1f,
+                            if (layer.mirrorY) -1f else 1f,
+                        )
+                        imageCanvas.translate(-rect.centerX(), -rect.centerY())
+                    }
+                    drawImage(imageCanvas, context, layer, rect, frameIndex * ANIM_FRAME_DELAY_MS, paint)
+                    imageCanvas.restore()
+                }
+                imageBitmap.getPixels(imagePixels, 0, imageWidth, 0, 0, imageWidth, imageHeight)
+                sampleGrid(imagePixels, imageWidth, rows, cols, imageCell, options)
+            } else {
+                List(cols * rows) { options.background and 0xFFFFFF }
+            }
+
+            // 2) 灯珠色块作为底，再按 1× 叠文字层
+            ledBitmap.setPixels(
+                IntArray(cols * rows) { 0xFF000000.toInt() or (base[it] and 0xFFFFFF) },
+                0, cols, 0, 0, cols, rows,
+            )
+            val ledCanvas = Canvas(ledBitmap)
             layers.forEachIndexed { index, layer ->
-                val paint = paints[index]
+                if (layer.type == GraphicLayerType.IMAGE) return@forEachIndexed
+                val paint = textPaints[index]
                 paint.xfermode = layer.blend.mode?.let { PorterDuffXfermode(it) }
-                val rect = regionOf(layer, width, height)
-                val local = if (layer.type == GraphicLayerType.IMAGE) {
-                    0
-                } else if (scrollCounts[index] > 1) {
+                val rect = regionOf(layer, cols, rows)
+                val local = if (scrollCounts[index] > 1) {
                     // 帧数超过上限时按多灯珠步进，保证内容仍能完整滚完一圈
                     val stride = ceil(scrollCounts[index] / frameCount.toFloat())
                         .toInt().coerceAtLeast(1)
@@ -246,40 +284,36 @@ object GraphicComposer {
                 } else {
                     0
                 }
-                canvas.save()
-                canvas.clipRect(rect)
+                ledCanvas.save()
+                ledCanvas.clipRect(rect)
                 if (layer.mirrorX || layer.mirrorY) {
-                    canvas.translate(rect.centerX(), rect.centerY())
-                    canvas.scale(
+                    ledCanvas.translate(rect.centerX(), rect.centerY())
+                    ledCanvas.scale(
                         if (layer.mirrorX) -1f else 1f,
                         if (layer.mirrorY) -1f else 1f,
                     )
-                    canvas.translate(-rect.centerX(), -rect.centerY())
+                    ledCanvas.translate(-rect.centerX(), -rect.centerY())
                 }
-                when (layer.type) {
-                    GraphicLayerType.IMAGE ->
-                        drawImage(canvas, context, layer, rect, frameIndex * ANIM_FRAME_DELAY_MS, paint)
-                    else ->
-                        drawText(
-                            canvas = canvas,
-                            layer = layer,
-                            paint = paint,
-                            rect = rect,
-                            offsetPx = (local + 1) * cell,
-                            reverse = options.reverse,
-                            now = now,
-                            preview = false,
-                        )
-                }
-                canvas.restore()
+                drawText(
+                    canvas = ledCanvas,
+                    layer = layer,
+                    paint = paint,
+                    rect = rect,
+                    offsetPx = local + 1,
+                    reverse = options.reverse,
+                    now = now,
+                    preview = false,
+                )
+                ledCanvas.restore()
             }
-            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            ledBitmap.getPixels(ledPixels, 0, cols, 0, 0, cols, rows)
             frames += GraphicFrame(
-                colors = sampleGrid(pixels, width, rows, cols, cell, options),
+                colors = ledPixels.map { it and 0xFFFFFF },
                 delayCentis = delay,
             )
         }
-        bitmap.recycle()
+        imageBitmap.recycle()
+        ledBitmap.recycle()
 
         return applyTrail(frames, options.trailPercent)
     }
@@ -294,46 +328,81 @@ object GraphicComposer {
         now: Date = Date(),
     ): List<Int> {
         if (cols <= 0 || rows <= 0) return emptyList()
-        val cell = if (layers.any { it.type == GraphicLayerType.IMAGE }) SUPERSAMPLE else 1
-        val width = cols * cell
-        val height = rows * cell
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(0xFF000000.toInt() or (options.background and 0xFFFFFF))
-        val paints = layers.map { buildPaint(it, height, cell) }
+        val hasImage = layers.any { it.type == GraphicLayerType.IMAGE }
+        val imageCell = if (hasImage) SUPERSAMPLE else 1
+        val imageWidth = cols * imageCell
+        val imageHeight = rows * imageCell
+        val textPaints = layers.map { buildPaint(it, rows, 1) }
+        val imagePaints = if (hasImage) layers.map { buildPaint(it, imageHeight, imageCell) } else emptyList()
+        val background = 0xFF000000.toInt() or (options.background and 0xFFFFFF)
+
+        val base: List<Int> = if (hasImage) {
+            val bitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(background)
+            layers.forEachIndexed { index, layer ->
+                if (layer.type != GraphicLayerType.IMAGE) return@forEachIndexed
+                val paint = imagePaints[index]
+                paint.xfermode = layer.blend.mode?.let { PorterDuffXfermode(it) }
+                val rect = regionOf(layer, imageWidth, imageHeight)
+                canvas.save()
+                canvas.clipRect(rect)
+                if (layer.mirrorX || layer.mirrorY) {
+                    canvas.translate(rect.centerX(), rect.centerY())
+                    canvas.scale(
+                        if (layer.mirrorX) -1f else 1f,
+                        if (layer.mirrorY) -1f else 1f,
+                    )
+                    canvas.translate(-rect.centerX(), -rect.centerY())
+                }
+                drawImage(canvas, context, layer, rect, 0, paint)
+                canvas.restore()
+            }
+            val pixels = IntArray(imageWidth * imageHeight)
+            bitmap.getPixels(pixels, 0, imageWidth, 0, 0, imageWidth, imageHeight)
+            bitmap.recycle()
+            sampleGrid(pixels, imageWidth, rows, cols, imageCell, options)
+        } else {
+            List(cols * rows) { options.background and 0xFFFFFF }
+        }
+
+        val ledBitmap = Bitmap.createBitmap(cols, rows, Bitmap.Config.ARGB_8888)
+        ledBitmap.setPixels(
+            IntArray(cols * rows) { 0xFF000000.toInt() or (base[it] and 0xFFFFFF) },
+            0, cols, 0, 0, cols, rows,
+        )
+        val ledCanvas = Canvas(ledBitmap)
         layers.forEachIndexed { index, layer ->
-            val paint = paints[index]
+            if (layer.type == GraphicLayerType.IMAGE) return@forEachIndexed
+            val paint = textPaints[index]
             paint.xfermode = layer.blend.mode?.let { PorterDuffXfermode(it) }
-            val rect = regionOf(layer, width, height)
-            canvas.save()
-            canvas.clipRect(rect)
+            val rect = regionOf(layer, cols, rows)
+            ledCanvas.save()
+            ledCanvas.clipRect(rect)
             if (layer.mirrorX || layer.mirrorY) {
-                canvas.translate(rect.centerX(), rect.centerY())
-                canvas.scale(
+                ledCanvas.translate(rect.centerX(), rect.centerY())
+                ledCanvas.scale(
                     if (layer.mirrorX) -1f else 1f,
                     if (layer.mirrorY) -1f else 1f,
                 )
-                canvas.translate(-rect.centerX(), -rect.centerY())
+                ledCanvas.translate(-rect.centerX(), -rect.centerY())
             }
-            when (layer.type) {
-                GraphicLayerType.IMAGE -> drawImage(canvas, context, layer, rect, 0, paint)
-                else -> drawText(
-                    canvas = canvas,
-                    layer = layer,
-                    paint = paint,
-                    rect = rect,
-                    offsetPx = 0,
-                    reverse = options.reverse,
-                    now = now,
-                    preview = true,
-                )
-            }
-            canvas.restore()
+            drawText(
+                canvas = ledCanvas,
+                layer = layer,
+                paint = paint,
+                rect = rect,
+                offsetPx = 0,
+                reverse = options.reverse,
+                now = now,
+                preview = true,
+            )
+            ledCanvas.restore()
         }
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        bitmap.recycle()
-        return sampleGrid(pixels, width, rows, cols, cell, options)
+        val pixels = IntArray(cols * rows)
+        ledBitmap.getPixels(pixels, 0, cols, 0, 0, cols, rows)
+        ledBitmap.recycle()
+        return pixels.map { it and 0xFFFFFF }
     }
 
     /** 图层区域：把百分比换成画布像素矩形；Transpose 交换 X/Y 的定义。 */
@@ -553,8 +622,9 @@ object GraphicComposer {
     }
 
     /**
-     * 块平均下采样；文字抗锯齿边缘取平均后会偏暗，这里补一点亮度。
+     * 图片层的 8×8 块平均下采样，补一点亮度抵消细节损失；
      * 最后应用 Dark Pixel Cutoff 与 Background Color（对应 PixelForge 的输出处理）。
+     * 文字层不走这里 —— 它是下采样之后按 1 颗灯珠直接栅格化的。
      */
     private fun sampleGrid(
         pixels: IntArray,
@@ -582,9 +652,9 @@ object GraphicComposer {
                         b += color and 0xFF
                     }
                 }
-                r = boost(r / count, cell)
-                g = boost(g / count, cell)
-                b = boost(b / count, cell)
+                r = boost(r / count)
+                g = boost(g / count)
+                b = boost(b / count)
                 val dark = r < cutoff && g < cutoff && b < cutoff
                 out[row * cols + col] = if (dark) background else (r shl 16) or (g shl 8) or b
             }
@@ -592,9 +662,6 @@ object GraphicComposer {
         return out.toList()
     }
 
-    /**
-     * 超采样时按 1.5 倍提亮，补偿 8×8 平均后细笔画变暗；
-     * 1× 栅格化没有平均损失，保持原色不变。
-     */
-    private fun boost(value: Int, cell: Int): Int = if (cell > 1) min(255, value * 3 / 2) else value
+    /** 图片层 8×8 块平均后细节会偏暗，补 1.5 倍亮度。 */
+    private fun boost(value: Int): Int = min(255, value * 3 / 2)
 }
