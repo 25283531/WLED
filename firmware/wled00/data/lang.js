@@ -848,7 +848,24 @@
 		'Touch': '触摸',
 		'Analog': '模拟',
 		'Disabled': '已禁用',
-		'Regular': '常规'
+		'Regular': '常规',
+
+		// —— 2D 与 LED 引脚 ——
+		'Data GPIO:': '数据 GPIO：',
+		'Clock GPIO:': '时钟 GPIO：',
+		'1st LED:': '首颗 LED：',
+		'Bottom': '底部',
+		'Top': '顶部',
+		'Left': '左侧',
+		'Right': '右侧',
+		'Vertical': '纵向',
+		'Horizontal': '横向',
+		'Dimensions (WxH):': '尺寸（宽x高）：',
+		'Offset X:': 'X 偏移：',
+		'Offset Y:': 'Y 偏移：',
+		'(offset from top-left corner in # LEDs)': '（以灯珠数为单位，从左上角偏移）',
+		'Matrix Dimensions (W+H=L):': '矩阵尺寸（宽+高=长）：',
+		'Static IP (leave at 0.0.0.0 for DHCP)': '静态 IP（留 0.0.0.0 使用 DHCP）'
 	};
 
 	function normalize(value) {
@@ -883,7 +900,6 @@
 		[/^\(for most effects, ~([\d.]+)A is enough\)$/, '（多数灯效约 $1A 即可）'],
 		[/^Hardware channels used: (.+)$/, '已用硬件通道：$1'],
 		[/^#(\d+) GPIO:$/, '#$1 GPIO：'],
-		[/^Button (\d+) - (.+)$/, '按键 $1 - $2'],
 		[/^Panel (\d+)$/, '面板 $1'],
 		[/^Segment (\d+) opacity$/, '分段 $1 不透明度']
 	];
@@ -897,6 +913,14 @@
 			var lead = value.match(/^\s*/)[0];
 			var trail = value.match(/\s*$/)[0];
 			return lead + DICT[key] + trail;
+		}
+		// “Button 0 - Pushbutton” 这类组合文案：编号保留，类型回查字典
+		var btn = key.match(/^Button (\d+) - (.+)$/);
+		if (btn) {
+			var leadB = value.match(/^\s*/)[0];
+			var trailB = value.match(/\s*$/)[0];
+			var typeName = Object.prototype.hasOwnProperty.call(DICT, btn[2]) ? DICT[btn[2]] : btn[2];
+			return leadB + '按键 ' + btn[1] + ' - ' + typeName + trailB;
 		}
 		for (var i = 0; i < PATTERNS.length; i++) {
 			if (PATTERNS[i][0].test(key)) {
