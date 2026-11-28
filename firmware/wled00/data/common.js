@@ -384,3 +384,12 @@ function addOption(sel, txt, val) {
 	}
 	return opt;
 }
+
+// 光屿语言层：所有引用 common.js 的页面自动挂载 lang.js（auto 模式跟随系统语言）
+(function () {
+        if (document.getElementById('wledLangScript')) return;
+        var s = document.createElement('script');
+        s.id = 'wledLangScript';
+        s.src = (typeof getURL === 'function') ? getURL('/lang.js') : '/lang.js';
+        document.head.appendChild(s);
+})();

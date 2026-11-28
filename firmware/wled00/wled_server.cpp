@@ -49,6 +49,7 @@ static const char s_cache_control[]  PROGMEM = "Cache-Control";
 static const char s_no_store[]       PROGMEM = "no-store";
 static const char s_expires[]        PROGMEM = "Expires";
 static const char _common_js[]       PROGMEM = "/common.js";
+static const char _lang_js[]         PROGMEM = "/lang.js";
 static const char _iro_js[]          PROGMEM = "/iro.js";
 #ifdef WLED_ENABLE_GIF
 static const char _omggif_js[]       PROGMEM = "/omggif.js";
@@ -366,6 +367,10 @@ void initServer()
 
   server.on(_common_js, HTTP_GET, [](AsyncWebServerRequest *request) {
     handleStaticContent(request, FPSTR(_common_js), 200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_common, JS_common_length);
+  });
+
+  server.on(_lang_js, HTTP_GET, [](AsyncWebServerRequest *request) {
+    handleStaticContent(request, FPSTR(_lang_js), 200, FPSTR(CONTENT_TYPE_JAVASCRIPT), JS_lang, JS_lang_length);
   });
 
   server.on(_iro_js, HTTP_GET, [](AsyncWebServerRequest *request) {

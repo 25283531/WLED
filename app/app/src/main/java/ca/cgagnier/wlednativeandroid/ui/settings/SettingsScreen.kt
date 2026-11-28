@@ -39,6 +39,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -94,6 +96,16 @@ fun SettingsScreen(
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showWifiPage by remember { mutableStateOf(false) }
     var showAudioSheet by remember { mutableStateOf(false) }
+    var showFirmwareDialog by remember { mutableStateOf(false) }
+
+    // 原生固件 OTA：从统一固件通道拉 manifest，用户确认后再写入设备
+    val firmwareViewModel: FirmwareUpdateViewModel = koinViewModel()
+    val firmwareState by firmwareViewModel.state.collectAsStateWithLifecycle()
+
+    // 「设备型号」连点 3 次提示、5 次进入开发者模式
+    var modelTapCount by remember { mutableIntStateOf(0) }
+    var lastModelTapAt by remember { mutableLongStateOf(0L) }
+    var developerMode by remember(context) { mutableStateOf(isleDeveloperModeEnabled(context)) }
 
     val audioViewModel: AudioSettingsViewModel = koinViewModel()
     val audioUiState by audioViewModel.uiState.collectAsStateWithLifecycle()
@@ -115,6 +127,26 @@ fun SettingsScreen(
 
     fun notYet() {
         Toast.makeText(context, R.string.isle_not_supported_toast, Toast.LENGTH_SHORT).show()
+    }
+
+    fun onModelTap() {
+        val now = System.currentTimeMillis()
+        modelTapCount = if (now - lastModelTapAt > 3000L) 1 else modelTapCount + 1
+        lastModelTapAt = now
+        if (modelTapCount == 3) {
+            Toast.makeText(context, R.string.isle_dev_mode_hint, Toast.LENGTH_SHORT).show()
+        } else if (modelTapCount >= 5) {
+            modelTapCount = 0
+            isleSetDeveloperMode(context, true)
+            developerMode = true
+            Toast.makeText(context, R.string.isle_dev_mode_enabled, Toast.LENGTH_SHORT).show()
+            openWeb()
+        }
+    }
+
+    fun openFirmwareUpdate() {
+        showFirmwareDialog = true
+        firmwareViewModel.check(device)
     }
 
     /**
@@ -353,6 +385,15 @@ fun SettingsScreen(
 
             SettingsGroup(title = stringResource(R.string.isle_settings_system)) {
                 SettingsRow(
+                    glyph = Glyph.Chip,
+                    iconTint = IsleColors.Cyan,
+                    label = stringResource(R.string.isle_device_model),
+                    value = device?.stateInfo?.info?.product?.takeIf { it.isNotBlank() }
+                        ?: device?.device?.originalName?.takeIf { it.isNotBlank() }
+                        ?: "—",
+                    onClick = ::onModelTap,
+                )
+                SettingsRow(
                     glyph = Glyph.Power,
                     iconTint = IsleColors.Cyan,
                     label = stringResource(R.string.isle_boot_state),
@@ -364,8 +405,17 @@ fun SettingsScreen(
                     iconTint = IsleColors.Violet,
                     label = stringResource(R.string.isle_firmware),
                     value = device?.stateInfo?.info?.version,
-                    onClick = { openWeb("update") },
+                    onClick = ::openFirmwareUpdate,
                 )
+                if (developerMode) {
+                    SettingsRow(
+                        glyph = Glyph.Settings,
+                        iconTint = IsleColors.TextSecondary,
+                        label = stringResource(R.string.isle_dev_mode_open_web),
+                        value = stringResource(R.string.isle_dev_mode_on),
+                        onClick = { openWeb() },
+                    )
+                }
                 SettingsRow(
                     glyph = Glyph.Text,
                     iconTint = IsleColors.TextSecondary,
@@ -422,6 +472,38 @@ fun SettingsScreen(
             onDismiss = { showAudioSheet = false },
         )
     }
+
+    if (showFirmwareDialog) {
+        FirmwareUpdateDialog(
+            state = firmwareState,
+            onStartUpdate = { firmwareViewModel.startUpdate(device) },
+            onRetry = {
+                if (firmwareState.release == null) {
+                    firmwareViewModel.check(device)
+                } else {
+                    firmwareViewModel.startUpdate(device)
+                }
+            },
+            onDismiss = {
+                firmwareViewModel.reset()
+                showFirmwareDialog = false
+            },
+        )
+    }
+}
+
+private const val DEV_MODE_PREFS = "isle_developer"
+private const val DEV_MODE_KEY = "enabled"
+
+private fun isleDeveloperModeEnabled(context: Context): Boolean =
+    context.getSharedPreferences(DEV_MODE_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(DEV_MODE_KEY, false)
+
+private fun isleSetDeveloperMode(context: Context, enabled: Boolean) {
+    context.getSharedPreferences(DEV_MODE_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(DEV_MODE_KEY, enabled)
+        .apply()
 }
 
 @Composable

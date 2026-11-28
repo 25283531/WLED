@@ -37,9 +37,29 @@
 			margin: 2vh auto 0;
 			padding: 0;
 		}
+		#langRow {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin: 2vh 20px 0;
+			font-size: clamp(0.9rem, 4vw, 1.1rem);
+		}
+		#langRow select {
+			font-size: inherit;
+			padding: 4px 8px;
+			border-radius: 8px;
+		}
 	</style>
 </head>
 <body>
+<div id="langRow">
+	<label for="wledLangSel">Language</label>
+	<select id="wledLangSel">
+		<option value="auto">Auto (follow system)</option>
+		<option value="zh">中文</option>
+		<option value="en">English</option>
+	</select>
+</div>
 <button type=submit id="b" onclick="window.location=getURL('/')">Back</button>
 <button type="submit" onclick="window.location=getURL('/settings/wifi')">WiFi & Network</button>
 <button type="submit" onclick="window.location=getURL('/settings/leds')">LED & Hardware</button>

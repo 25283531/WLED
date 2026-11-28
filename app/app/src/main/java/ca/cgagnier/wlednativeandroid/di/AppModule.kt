@@ -23,6 +23,7 @@ import ca.cgagnier.wlednativeandroid.service.NetworkConnectivityManager
 import ca.cgagnier.wlednativeandroid.service.WidgetStateSync
 import ca.cgagnier.wlednativeandroid.service.api.DeviceApiFactory
 import ca.cgagnier.wlednativeandroid.service.api.createHttpClient
+import ca.cgagnier.wlednativeandroid.service.update.FirmwareReleaseRepository
 import ca.cgagnier.wlednativeandroid.ui.ChangelogViewModel
 import ca.cgagnier.wlednativeandroid.ui.control.ControlViewModel
 import ca.cgagnier.wlednativeandroid.ui.create.CreateViewModel
@@ -34,6 +35,7 @@ import ca.cgagnier.wlednativeandroid.ui.library.LibraryViewModel
 import ca.cgagnier.wlednativeandroid.ui.MainViewModel
 import ca.cgagnier.wlednativeandroid.ui.settings.AudioSettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.settings.AudioSourcePreferenceStore
+import ca.cgagnier.wlednativeandroid.ui.settings.FirmwareUpdateViewModel
 import ca.cgagnier.wlednativeandroid.ui.settings.WifiSettingsViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.DeviceListDetailViewModel
 import ca.cgagnier.wlednativeandroid.ui.homeScreen.deviceAdd.DeviceAddViewModel
@@ -198,6 +200,16 @@ val appModule: Module = module {
             deviceApiFactory = get(),
             context = androidContext(),
             sourcePreferences = get(),
+        )
+    }
+    // 固件统一更新通道：manifest 与固件包都从 AList 拉取，OTA 写入走设备自身的 /update
+    single { FirmwareReleaseRepository(httpClient = get(), ioDispatcher = get(IO_DISPATCHER)) }
+    viewModel {
+        FirmwareUpdateViewModel(
+            repository = get(),
+            deviceApiFactory = get(),
+            appContext = androidContext(),
+            ioDispatcher = get(IO_DISPATCHER),
         )
     }
 }

@@ -330,6 +330,12 @@ writeChunks(
       filter: "js-minify",
     },
     {
+      file: "lang.js",
+      name: "JS_lang",
+      method: "gzip",
+      filter: "js-minify",
+    },
+    {
       file: "settings.htm",
       name: "PAGE_settings",
       method: "gzip",
