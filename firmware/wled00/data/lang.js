@@ -452,7 +452,7 @@
 		'Color,': '颜色、',
 		'Effects,': '灯效、',
 		'Segment options,': '分段选项、',
-		'and': '和',
+		'and': '',
 		'Palette': '调色板',
 		'bounds': '边界',
 		'Enable Sync on start:': '启动时启用同步：',
@@ -808,7 +808,47 @@
 
 		// —— 补充遗漏 ——
 		'Time:': '时间：',
-		'(input only)': '（仅输入）'
+		'(input only)': '（仅输入）',
+
+		// —— 运行时拼装文案 ——
+		'Color Wheel:': '色轮：',
+		'RGB sliders:': 'RGB 滑块：',
+		'Quick color selectors:': '快速颜色选择器：',
+		'HEX color input:': 'HEX 颜色输入：',
+		'Upload': '上传',
+		'Remove': '移除',
+		'Color Order:': '颜色顺序：',
+		'Reversed': '反向',
+		'Skip first LEDs:': '跳过前几颗 LED：',
+		'mA/LED:': 'mA/灯珠：',
+		'max. mA/LED:': '最大 mA/灯珠：',
+		'PSU:': '电源：',
+		'Swap:': '交换：',
+		'Custom': '自定义',
+		'55mA (typ. 5V WS281x)': '55mA（典型 5V WS281x）',
+		'35mA (eco WS2812)': '35mA（节能 WS2812）',
+		'30mA (typ. 12V)': '30mA（典型 12V）',
+		'12mA (WS2815)': '12mA（WS2815）',
+		'15mA (seed/fairy pixels)': '15mA（种子/仙女灯珠）',
+		'Clock': '时钟',
+		'Realtime': '实时数据',
+		'Network name (SSID, empty to not connect):': '网络名称（SSID，留空则不连接）：',
+		'Network name (SSID):': '网络名称（SSID）：',
+		'Network password:': '网络密码：',
+		'BSSID (optional):': 'BSSID（可选）：',
+		'Static IP (leave at 0.0.0.0 for DHCP):': '静态 IP（留 0.0.0.0 使用 DHCP）：',
+		'Also used by Ethernet:': '也用于以太网：',
+		'Static gateway:': '静态网关：',
+		'Static subnet mask:': '静态子网掩码：',
+		'Short press': '短按',
+		'Long press': '长按',
+		'Double press': '双击',
+		'Pushbutton': '按钮',
+		'Switch': '开关',
+		'Touch': '触摸',
+		'Analog': '模拟',
+		'Disabled': '已禁用',
+		'Regular': '常规'
 	};
 
 	function normalize(value) {
@@ -837,14 +877,35 @@
 
 	var lang = activeLang();
 
+	/** 含数值/编号的运行时拼装文案：正则 → 替换模板（$1… 为捕获组）。 */
+	var PATTERNS = [
+		[/^A power supply with total of ([\d.]+)A is required\.$/, '所需电源总电流约为 $1A。'],
+		[/^\(for most effects, ~([\d.]+)A is enough\)$/, '（多数灯效约 $1A 即可）'],
+		[/^Hardware channels used: (.+)$/, '已用硬件通道：$1'],
+		[/^#(\d+) GPIO:$/, '#$1 GPIO：'],
+		[/^Button (\d+) - (.+)$/, '按键 $1 - $2'],
+		[/^Panel (\d+)$/, '面板 $1'],
+		[/^Segment (\d+) opacity$/, '分段 $1 不透明度']
+	];
+
 	/** 命中字典时返回带原始首尾空白的译文，否则返回 null（不改动）。 */
 	function translate(value) {
 		if (!value) return null;
 		var key = normalize(value);
-		if (!key || !Object.prototype.hasOwnProperty.call(DICT, key)) return null;
-		var lead = value.match(/^\s*/)[0];
-		var trail = value.match(/\s*$/)[0];
-		return lead + DICT[key] + trail;
+		if (!key) return null;
+		if (Object.prototype.hasOwnProperty.call(DICT, key)) {
+			var lead = value.match(/^\s*/)[0];
+			var trail = value.match(/\s*$/)[0];
+			return lead + DICT[key] + trail;
+		}
+		for (var i = 0; i < PATTERNS.length; i++) {
+			if (PATTERNS[i][0].test(key)) {
+				var lead2 = value.match(/^\s*/)[0];
+				var trail2 = value.match(/\s*$/)[0];
+				return lead2 + key.replace(PATTERNS[i][0], PATTERNS[i][1]) + trail2;
+			}
+		}
+		return null;
 	}
 
 	function translateTextNode(node) {
@@ -884,6 +945,10 @@
 			translateAttr(els[i], 'title');
 			translateAttr(els[i], 'placeholder');
 			translateAttr(els[i], 'aria-label');
+		}
+		var btns = root.querySelectorAll('input[type=button][value],input[type=submit][value],input[type=reset][value]');
+		for (var j = 0; j < btns.length; j++) {
+			translateAttr(btns[j], 'value');
 		}
 	}
 
