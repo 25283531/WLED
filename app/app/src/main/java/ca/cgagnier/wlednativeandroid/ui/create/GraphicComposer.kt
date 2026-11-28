@@ -104,7 +104,10 @@ data class GraphicOptions(
  */
 object GraphicComposer {
 
-    /** 超采样倍数：每个灯珠先画成 8×8 再取平均，细笔画不容易丢。 */
+    /**
+     * 超采样倍数：含图片的帧把每个灯珠画成 8×8 再取平均，图片细节不容易丢。
+     * 纯文字/时间帧改为 1× 直接栅格化，笔画正好 1 颗灯珠宽（见 [renderFrames]）。
+     */
     private const val SUPERSAMPLE = 8
 
     /** GIF 动图采样间隔（毫秒）。 */
@@ -202,10 +205,12 @@ object GraphicComposer {
         now: Date = Date(),
     ): List<GraphicFrame> {
         if (cols <= 0 || rows <= 0) return emptyList()
-        val cell = SUPERSAMPLE
+        // 纯文字/时间按灯珠分辨率栅格化，笔画正好 1 颗灯珠宽；
+        // 含图片时才用 8× 超采样保留图片细节（文字在这种情况下仍是原来的粗细）。
+        val cell = if (layers.any { it.type == GraphicLayerType.IMAGE }) SUPERSAMPLE else 1
         val width = cols * cell
         val height = rows * cell
-        val paints = layers.map { buildPaint(it, height) }
+        val paints = layers.map { buildPaint(it, height, cell) }
 
         val scrollCounts = layers.mapIndexed { index, layer ->
             if (layer.type == GraphicLayerType.IMAGE) 1
@@ -289,13 +294,13 @@ object GraphicComposer {
         now: Date = Date(),
     ): List<Int> {
         if (cols <= 0 || rows <= 0) return emptyList()
-        val cell = SUPERSAMPLE
+        val cell = if (layers.any { it.type == GraphicLayerType.IMAGE }) SUPERSAMPLE else 1
         val width = cols * cell
         val height = rows * cell
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(0xFF000000.toInt() or (options.background and 0xFFFFFF))
-        val paints = layers.map { buildPaint(it, height) }
+        val paints = layers.map { buildPaint(it, height, cell) }
         layers.forEachIndexed { index, layer ->
             val paint = paints[index]
             paint.xfermode = layer.blend.mode?.let { PorterDuffXfermode(it) }
@@ -373,16 +378,18 @@ object GraphicComposer {
         return ceil((textWidth + rect.width()) / cell).toInt().coerceAtLeast(2)
     }
 
-    private fun buildPaint(layer: GraphicLayer, baseHeight: Int): Paint {
+    private fun buildPaint(layer: GraphicLayer, baseHeight: Int, cell: Int): Paint {
         val color = Color.rgb(
             (layer.color shr 16) and 0xFF,
             (layer.color shr 8) and 0xFF,
             layer.color and 0xFF,
         )
         val size = baseHeight * (layer.sizePercent.coerceIn(10, 100) / 100f) * 0.9f
-        return Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        return Paint().apply {
+            // 1× 栅格化时关掉抗锯齿，避免边缘半亮像素把笔画撑成 2–3 颗灯珠
+            isAntiAlias = cell > 1
             this.color = color
-            textSize = size.coerceAtLeast(8f)
+            textSize = size.coerceAtLeast(cell.toFloat()) // 至少 1 颗灯珠高（8× 时 8px）
             textAlign = Paint.Align.LEFT
             typeface = Typeface.DEFAULT // 交给系统字体回退，中文与 Emoji 都能出字形
         }
@@ -575,9 +582,9 @@ object GraphicComposer {
                         b += color and 0xFF
                     }
                 }
-                r = boost(r / count)
-                g = boost(g / count)
-                b = boost(b / count)
+                r = boost(r / count, cell)
+                g = boost(g / count, cell)
+                b = boost(b / count, cell)
                 val dark = r < cutoff && g < cutoff && b < cutoff
                 out[row * cols + col] = if (dark) background else (r shl 16) or (g shl 8) or b
             }
@@ -585,5 +592,9 @@ object GraphicComposer {
         return out.toList()
     }
 
-    private fun boost(value: Int): Int = min(255, value * 3 / 2)
+    /**
+     * 超采样时按 1.5 倍提亮，补偿 8×8 平均后细笔画变暗；
+     * 1× 栅格化没有平均损失，保持原色不变。
+     */
+    private fun boost(value: Int, cell: Int): Int = if (cell > 1) min(255, value * 3 / 2) else value
 }
